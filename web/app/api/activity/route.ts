@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { recentSpends } from "@/lib/store";
+import { findGrant, recentSpends } from "@/lib/store";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -14,7 +14,18 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "which agent?" }, { status: 400 });
   }
   try {
-    const spends = await recentSpends(tenant, label);
+    let spends = await recentSpends(tenant, label);
+
+    // Only this Grant's payments. A machine rebuilt under the same name has
+    // a new agent key and a new ceiling, and showing what its predecessor
+    // spent would attribute one agent's money to another — the same fault
+    // the asks list had. The Grant's start is the line.
+    const grant = await findGrant(tenant, label);
+    if (grant?.start) {
+      const since = Number(grant.start) * 1000;
+      spends = spends.filter((s) => new Date(s.at).getTime() >= since);
+    }
+
     return NextResponse.json(
       { spends: spends.map((s) => ({ ...s, at: s.at instanceof Date ? s.at.toISOString() : s.at })) },
       { headers: { "cache-control": "no-store" } },
