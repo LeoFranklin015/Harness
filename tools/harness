@@ -132,19 +132,25 @@ cmd_up() {
     RELAYER_PK="$(cat "$repo/x402/.relayer" 2>/dev/null)" \
         start broker 8402 node --experimental-strip-types "$repo/x402/broker.ts"
 
-    start web 3000 bash -c "cd '$repo/web' && exec npx next start -H 0.0.0.0 -p 3000"
+    # A shell in the page. It asks the chain before attaching one and keeps
+    # asking, so a revoke closes a terminal somebody is already looking at.
+    start terminal 8023 node --experimental-strip-types "$repo/terminal/server.ts"
+
+    start web 3000 bash -c "cd '$repo/web' && exec node server.mjs"
     echo
     cmd_status
 }
 
 cmd_down() {
-    for name in web broker seller; do stop "$name"; done
+    for name in web broker seller terminal; do stop "$name"; done
     # Anything that outlived its pidfile — a restart during development leaves
     # these behind, and a half-running stack is worse than either state.
     # Matched loosely on purpose: started by hand during development these carry
     # a relative path, and a pattern anchored to the repo would miss them.
+    kill_matching "web/server\.mjs"
     kill_matching "next start .*-p 3000"
     kill_matching "broker\.ts"
+    kill_matching "terminal/server\.ts"
     kill_matching "seller-express\.ts"
     # The nameserver used to run on the host, before it moved onto the mesh.
     # A box that has been up since then still has one listening on 5354.
@@ -159,7 +165,7 @@ cmd_down() {
 
 cmd_status() {
     printf '  %-8s %-6s %s\n' SERVICE PORT STATE
-    for pair in "web 3000" "broker 8402" "seller 4023"; do
+    for pair in "web 3000" "broker 8402" "terminal 8023" "seller 4023"; do
         set -- $pair
         # The broker listens per Tenant, so its port lives on a gateway address.
         if [ "$1" = broker ]; then

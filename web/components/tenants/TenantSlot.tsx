@@ -1,7 +1,10 @@
 "use client";
 
+import { useState } from "react";
+
 import { BorderBeam } from "@/components/ui/border-beam";
 import { MeshInvite } from "@/components/tenants/MeshInvite";
+import { Terminal } from "@/components/tenants/Terminal";
 import type { ProvisionRequest } from "@/components/tenants/ProvisionDialog";
 
 export type Tenant = {
@@ -79,6 +82,7 @@ function FilledSlot({
   onRevoke: (t: Tenant) => void;
   onAuthorise: (t: Tenant, operator: `0x${string}`) => Promise<void>;
 }) {
+  const [shell, setShell] = useState(false);
   const provisioning = tenant.status === "provisioning";
   const revoked = tenant.status === "revoked";
 
@@ -130,12 +134,25 @@ function FilledSlot({
 
       {tenant.status === "live" && (
         <>
+          {shell && tenant.agent && (
+            <Terminal tenant={tenant.label} agent={tenant.agent} onClose={() => setShell(false)} />
+          )}
+          <div className="mt-6 flex flex-wrap gap-2">
+            {tenant.agent && (
+              <button
+                onClick={() => setShell(true)}
+                className="rounded-full border border-neutral-700 px-4 py-1.5 text-xs text-neutral-200 transition hover:border-neutral-600 hover:bg-neutral-900/60"
+              >
+                Open a terminal
+              </button>
+            )}
           <button
             onClick={() => onRevoke(tenant)}
-            className="mt-6 rounded-full border border-red-900/60 px-4 py-1.5 text-xs text-red-400/90 transition hover:border-red-800 hover:bg-red-950/40"
+            className="rounded-full border border-red-900/60 px-4 py-1.5 text-xs text-red-400/90 transition hover:border-red-800 hover:bg-red-950/40"
           >
             Revoke
           </button>
+          </div>
           {/* The machine has no public address, so reaching it is a separate,
               deliberate act — and one that expires on its own. */}
           <MeshInvite

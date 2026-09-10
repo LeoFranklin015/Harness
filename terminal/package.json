@@ -1,0 +1,9 @@
+{
+  "name": "harness-terminal",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "ws": "^8.18.0",
+    "viem": "2.56.3"
+  }
+}
