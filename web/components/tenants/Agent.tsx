@@ -23,9 +23,15 @@ import { useId } from "react";
 
 type State = "provisioning" | "live" | "revoked";
 
-const YELLOW = "#E9B62C";
-const YELLOW_LIT = "#F5CE5B";
-const TEAL = "#1E5761";
+/*
+ * Sun-bleached, not showroom. The film's robot is dust over ochre after
+ * seven hundred years outdoors, and a saturated plastic yellow reads as clip
+ * art next to the rest of this page. Pulled down in saturation and up in
+ * warmth so it still carries "occupied" without shouting it.
+ */
+const YELLOW = "#C89A34";
+const YELLOW_LIT = "#DCB255";
+const TEAL = "#255A62";
 const DARK = "#15181C";
 const RIM = "#0C0E11";
 
