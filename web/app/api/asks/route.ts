@@ -1,7 +1,6 @@
-import { existsSync, readFileSync } from "node:fs";
-import path from "node:path";
 import { NextResponse } from "next/server";
 import { asksFor, settle } from "@/lib/pending";
+import { findGrant } from "@/lib/store";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -16,8 +15,6 @@ export const dynamic = "force-dynamic";
 
 const label = /^[a-z0-9][a-z0-9-]*$/;
 
-const GRANTS = process.env.GRANT_DIR ?? "/home/opc/hackathon/x402/grants";
-
 /**
  * What approving would need to know, so nobody has to type it.
  *
@@ -25,17 +22,10 @@ const GRANTS = process.env.GRANT_DIR ?? "/home/opc/hackathon/x402/grants";
  * machine is provisioned. Making a person copy them off a card and onto a
  * command line is two chances to get it wrong for no benefit.
  */
-function machine(tenant: string, agent: string) {
-  const file = path.join(GRANTS, `${tenant}.${agent}.json`);
-  if (!existsSync(file)) return null;
+async function machine(tenant: string, agent: string) {
   try {
-    const g = JSON.parse(readFileSync(file, "utf8")) as {
-      registry?: string;
-      cap?: string;
-      start?: number;
-      end?: number;
-    };
-    if (!g.registry) return null;
+    const g = await findGrant(tenant, agent);
+    if (!g?.registry) return null;
     return {
       registry: g.registry,
       capUsd: Number(g.cap ?? 0) / 1e6,
@@ -55,7 +45,7 @@ export async function GET(request: Request) {
     // Every ask names its agent, so the machine's details come free.
     const of = asks[0]?.label;
     return NextResponse.json(
-      { asks, machine: of ? machine(tenant, of) : null },
+      { asks, machine: of ? await machine(tenant, of) : null },
       { headers: { "cache-control": "no-store, private" } },
     );
   } catch {

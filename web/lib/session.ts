@@ -18,7 +18,6 @@ export type Authority = { address: Address; path: string; model: string };
 
 const AUTHORITY = "harness:authority";
 const SKIPPED = "harness:upgrade-declined";
-const tenantsKey = (a: Address) => `harness:tenants:${a.toLowerCase()}`;
 
 export function remembered(): Authority | null {
   try {
@@ -52,18 +51,23 @@ export function declineUpgrade(a: Address) {
 }
 
 /**
- * The machines this device holds, as last seen.
+ * The machines this device holds, as the server has them.
+ *
+ * These used to be kept in this browser, which made the slot count a number
+ * the page was trusted to respect: clearing site data reset it, and two tabs
+ * did not see each other. It is a real limit now, so it is asked for rather
+ * than remembered.
  *
  * A slot caught mid-chain by a refresh comes back waiting on a click, which is
  * the only honest state for it: the ring is done and cannot be undone, and the
  * rest can be retried.
  */
-export function loadTenants(address: Address, slots: number): (Tenant | null)[] {
+export async function loadTenants(address: Address, slots: number): Promise<(Tenant | null)[]> {
   const empty = Array<Tenant | null>(slots).fill(null);
   try {
-    const raw = localStorage.getItem(tenantsKey(address));
-    if (!raw) return empty;
-    const saved = JSON.parse(raw) as (Tenant | null)[];
+    const r = await fetch(`/api/tenants?authority=${address}`, { cache: "no-store" });
+    if (!r.ok) return empty;
+    const { slots: saved } = (await r.json()) as { slots: (Tenant | null)[] };
     return empty.map((_, i) => {
       const t = saved[i];
       if (!t) return null;
@@ -72,14 +76,37 @@ export function loadTenants(address: Address, slots: number): (Tenant | null)[] 
       return { ...t, awaiting: true, step: "Interrupted. Open Ethereum on your device, then continue." };
     });
   } catch {
+    // The store being unreachable is not the same as holding no machines, but
+    // an empty page a refresh will fix beats a page that will not render.
     return empty;
   }
 }
 
-export function saveTenants(address: Address, tenants: (Tenant | null)[]) {
+/**
+ * Records one slot.
+ *
+ * Per slot rather than the whole array, because the server owns the cap and
+ * has to be able to refuse a single one. A refusal is returned rather than
+ * thrown: the caller is usually mid-provision and the reason belongs on the
+ * slot, not in a dialog.
+ */
+export async function saveTenant(
+  address: Address,
+  slot: number,
+  tenant: Tenant | null,
+): Promise<string | null> {
+  if (!tenant) return null;
   try {
-    localStorage.setItem(tenantsKey(address), JSON.stringify(tenants));
-  } catch {}
+    const r = await fetch("/api/tenants", {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ ...tenant, authority: address, slot }),
+    });
+    if (r.ok) return null;
+    return ((await r.json()) as { error?: string }).error ?? `the store said ${r.status}`;
+  } catch (err) {
+    return (err as Error).message;
+  }
 }
 
 /**

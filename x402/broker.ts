@@ -125,7 +125,7 @@ async function whoIsAsking(ip: string): Promise<{ tenant: string; agent: string;
  * one transaction.
  */
 async function stillLive(tenant: string, agent: string) {
-  const { grant, registry, agentPk, name } = load(agent, tenant);
+  const { grant, registry, agentPk, name } = await load(agent, tenant);
   const account = privateKeyToAccount(agentPk);
   const live = (await publicClient.readContract({
     address: registry,
@@ -231,7 +231,7 @@ async function limitsFor(ip: string, door: string) {
   }
   const name = await stillLive(tenant, agent);
 
-  const { grant, registry, rootOfTree } = load(agent, tenant);
+  const { grant, registry, rootOfTree } = await load(agent, tenant);
   const room = await headroom(registry, rootOfTree, grant);
   const cap = BigInt(grant.spends[0]?.allowance ?? 0);
 
@@ -322,7 +322,7 @@ async function sendFor(ip: string, door: string, body: Record<string, unknown>) 
   }
   const amount = BigInt(Math.round(dollars * 1e6));
 
-  const { grant, registry, rootOfTree, agentPk } = load(agent, tenant);
+  const { grant, registry, rootOfTree, agentPk } = await load(agent, tenant);
   const room = await headroom(registry, rootOfTree, grant);
 
   if (amount > room.left) {
@@ -390,7 +390,7 @@ async function escalateFor(ip: string, door: string, body: Record<string, unknow
   const amount = BigInt(Math.round(dollars * 1e6));
   const why = String(body.why ?? "").slice(0, 400).trim();
 
-  const { registry } = load(agent, tenant);
+  const { registry } = await load(agent, tenant);
   const owner = (await publicClient.readContract({
     address: registry,
     abi: REGISTRY_ABI,
@@ -561,7 +561,7 @@ async function authorize(ip: string, door: string, challenge: Record<string, str
     throw Object.assign(new Error(`${tenant} may only ask at ${own}`), { status: 403 });
   }
 
-  const { grant, registry, rootOfTree, agentPk, name } = load(agent, tenant);
+  const { grant, registry, rootOfTree, agentPk, name } = await load(agent, tenant);
   const account = privateKeyToAccount(agentPk);
 
   // 2. Is the Agent still live? Revoke unregisters the name, and this returns

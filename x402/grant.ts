@@ -2,13 +2,17 @@
 //
 // A Grant lives on-chain only as a hash, so anyone who needs to act under one
 // has to resupply the struct byte for byte — timestamps included. That is what
-// makes issuing cheap, and it is why the issuer writes every Grant it signs
-// into `grants/`: the chain will not hand it back.
+// makes issuing cheap, and it is why the issuer records every Grant it signs:
+// the chain will not hand it back.
+//
+// The record used to be a file in `grants/`, which put every Agent's key,
+// ceiling and window in the repo. It is in the metadata store now; see
+// `store.ts`.
 
-import { existsSync, readFileSync } from "node:fs";
 import { keccak256, toHex, type Address, type Hex } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { agentKey } from "./keys.ts";
+import { findGrant } from "../web/lib/store.ts";
 import { USDC, type Grant } from "./harness.ts";
 
 export type Issued = {
@@ -20,14 +24,10 @@ export type Issued = {
   name: string;
 };
 
-export function load(label: string, tenant = "demo"): Issued {
-  // Two Tenants may both call an Agent `runner`, so a Grant is filed under
-  // both names. The bare name is what the scripted demo Tenants wrote before
-  // Tenants were a thing.
-  const scoped = new URL(`./grants/${tenant}.${label}.json`, import.meta.url);
-  const bare = new URL(`./grants/${label}.json`, import.meta.url);
-  const file = existsSync(scoped) ? scoped : bare;
-  const raw = JSON.parse(readFileSync(file, "utf8"));
+export async function load(label: string, tenant = "demo"): Promise<Issued> {
+  // Two Tenants may both call an Agent `runner`, so a Grant is keyed by both.
+  const raw = await findGrant(tenant, label);
+  if (!raw) throw new Error(`no Grant recorded for ${label}.${tenant}`);
 
   // The Agent's key, derived from the VPS's sealed root. See `keys.ts` for why
   // it is not derived from the ring itself.
@@ -45,7 +45,7 @@ export function load(label: string, tenant = "demo"): Issued {
       agentPk = legacy;
     } else {
       throw new Error(
-        `grants/${label}.json names ${raw.agentKey}, which this host cannot derive`,
+        `the Grant for ${label}.${tenant} names ${raw.agentKey}, which this host cannot derive`,
       );
     }
   }

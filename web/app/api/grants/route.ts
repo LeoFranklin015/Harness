@@ -1,7 +1,6 @@
-import { mkdirSync, writeFileSync } from "node:fs";
-import path from "node:path";
 import { NextResponse } from "next/server";
 import type { Address, Hex } from "viem";
+import { saveGrant } from "@/lib/store";
 
 export const runtime = "nodejs";
 
@@ -15,11 +14,10 @@ export const runtime = "nodejs";
  * is filed here on the way past.
  *
  * This is a record, not an authority: editing it grants nothing, because the
- * registry checks the hash. A wrong copy just fails to name an Agent.
+ * registry checks the hash. A wrong copy just fails to name an Agent. It went
+ * to the metadata store rather than a file in the repo because a record that
+ * grants nothing is still a list of every Agent, its key and its ceiling.
  */
-
-const GRANTS = process.env.GRANT_DIR ?? "/home/opc/hackathon/x402/grants";
-
 export async function POST(request: Request) {
   const g = (await request.json()) as {
     tenant: string;
@@ -37,11 +35,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "bad tenant or label" }, { status: 400 });
   }
 
-  mkdirSync(GRANTS, { recursive: true });
-  const file = path.join(GRANTS, `${g.tenant}.${g.label}.json`);
-  writeFileSync(
-    file,
-    JSON.stringify({
+  try {
+    await saveGrant({
+      tenant: g.tenant,
       label: g.label,
       agentKey: g.agentKey,
       start: g.start,
@@ -49,9 +45,13 @@ export async function POST(request: Request) {
       cap: g.cap,
       registry: g.registry,
       agentId: g.agentId,
-    }),
-    { mode: 0o600 },
-  );
+    });
+  } catch (err) {
+    // Losing this copy is not fatal to the transaction that just happened —
+    // the Grant is on chain — but the Agent cannot act without it, so it is
+    // not something to swallow either.
+    return NextResponse.json({ error: (err as Error).message }, { status: 503 });
+  }
 
   return NextResponse.json({ ok: true });
 }

@@ -14,7 +14,6 @@
 import { formatUnits, type Hex } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { normalize } from "viem/ens";
-import { readFileSync } from "node:fs";
 import {
   UNIVERSAL_RESOLVER,
   USDC,
@@ -22,6 +21,7 @@ import {
   wallet,
 } from "./harness.ts";
 import { load } from "./grant.ts";
+import { findGrant } from "../web/lib/store.ts";
 import { settle, transferCall } from "./settle.ts";
 
 const SELLER = process.env.SELLER ?? "http://127.0.0.1:4021";
@@ -37,10 +37,10 @@ const RELAYER_PK = process.env.RELAYER_PK as Hex;
 if (!RELAYER_PK) throw new Error("set RELAYER_PK — a burner with gas, never the Tenant's key");
 const LABEL = process.argv[2] ?? "courier";
 
-const { grant, registry, rootOfTree, agentPk, name } = load(LABEL);
-const agentId = JSON.parse(
-  readFileSync(new URL(`./grants/${LABEL}.json`, import.meta.url), "utf8"),
-).agentId as Hex;
+const { grant, registry, rootOfTree, agentPk, name } = await load(LABEL);
+const recorded = await findGrant("demo", LABEL);
+if (!recorded) throw new Error(`no Grant recorded for ${LABEL}`);
+const agentId = recorded.agentId;
 
 const REDEEM_TYPES = {
   Redemption: [

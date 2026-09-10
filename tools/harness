@@ -99,6 +99,16 @@ secret() { # NAME file
 # --- commands ---------------------------------------------------------------
 
 cmd_up() {
+    # The broker, the terminal and the dashboard all read the same metadata
+    # store, and only the dashboard picks up `web/.env` on its own. Read it
+    # once here and hand it to the two that would not find it.
+    MONGODB_URI="${MONGODB_URI:-$(secret MONGODB_URI "$repo/web/.env")}"
+    if [ -z "$MONGODB_URI" ]; then
+        log "set MONGODB_URI in web/.env — the metadata store is not optional"
+        return 1
+    fi
+    export MONGODB_URI
+
     # The nameserver runs on the mesh rather than on this host, so that a
     # visitor's `.eth` lookups have somewhere to go that the host is not part
     # of. It is also the one container with a real TUN: DNS is UDP and

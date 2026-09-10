@@ -16,7 +16,7 @@ import {
   loadTenants,
   remember,
   remembered,
-  saveTenants,
+  saveTenant,
   Session,
   upgradeDeclined,
   type Authority,
@@ -189,24 +189,52 @@ function Machines({
   onForget: () => void;
 }) {
   const { authority } = session;
-  const [tenants, setTenants] = useState<(Tenant | null)[]>(() =>
-    loadTenants(authority.address, SLOTS),
-  );
+  const [tenants, setTenants] = useState<(Tenant | null)[]>(() => Array(SLOTS).fill(null));
   const [adding, setAdding] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => saveTenants(authority.address, tenants), [authority.address, tenants]);
+  // What this device holds is the server's answer, not this tab's memory, so
+  // it is fetched rather than restored. Until it arrives the slots are empty,
+  // which is also what they look like when there is nothing in them.
+  useEffect(() => {
+    let stale = false;
+    loadTenants(authority.address, SLOTS).then((held) => {
+      if (!stale) setTenants(held);
+    });
+    return () => {
+      stale = true;
+    };
+  }, [authority.address]);
 
   const taken = tenants.filter(Boolean).map((t) => t!.label);
 
   function setSlot(i: number, next: Tenant | null) {
     setTenants((prev) => prev.map((t, j) => (j === i ? next : t)));
+    // Fire and forget: the page has already moved, and a store that refuses is
+    // reported through `record` where the answer can still change what happens.
+    void saveTenant(authority.address, i, next);
   }
   function patch(i: number, changes: Partial<Tenant>) {
-    setTenants((prev) => prev.map((t, j) => (j === i && t ? { ...t, ...changes } : t)));
+    setTenants((prev) => {
+      const next = prev.map((t, j) => (j === i && t ? { ...t, ...changes } : t));
+      void saveTenant(authority.address, i, next[i]);
+      return next;
+    });
+  }
+  /** A slot the server has to accept before the work behind it is worth doing. */
+  async function record(i: number, next: Tenant): Promise<boolean> {
+    const refused = await saveTenant(authority.address, i, next);
+    if (refused) {
+      setSlot(i, null);
+      setError(refused);
+      return false;
+    }
+    setTenants((prev) => prev.map((t, j) => (j === i ? next : t)));
+    return true;
   }
   function narrate(slot: number, step: string) {
-    patch(slot, { step });
+    // Steps are narration, not state worth a round trip on every line.
+    setTenants((prev) => prev.map((t, j) => (j === slot && t ? { ...t, step } : t)));
   }
   function fail(slot: number, err: unknown, fallback: Tenant | null = null) {
     setSlot(slot, fallback);
@@ -236,7 +264,9 @@ function Machines({
   async function startProvision(slot: number, req: ProvisionRequest) {
     setAdding(null);
     setError(null);
-    setSlot(slot, {
+    // Claim the slot first. The cap is the server's to enforce, and finding
+    // out after the Ledger has been tapped would be finding out too late.
+    const claimed = await record(slot, {
       label: req.label,
       registry: "0x" as Address,
       meshAddress: null,
@@ -246,6 +276,7 @@ function Machines({
       step: "Starting",
       request: req,
     });
+    if (!claimed) return;
     const say = (s: string) => narrate(slot, s);
 
     try {

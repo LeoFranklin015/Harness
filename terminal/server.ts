@@ -59,7 +59,7 @@ function mint(tenant: string, agent: string): string {
  */
 async function live(tenant: string, agent: string): Promise<boolean> {
   try {
-    const { grant, registry, agentPk } = load(agent, tenant);
+    const { grant, registry, agentPk } = await load(agent, tenant);
     const expected = privateKeyToAccount(agentPk).address;
     const actual = (await publicClient.readContract({
       address: registry,

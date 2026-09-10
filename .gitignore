@@ -79,3 +79,7 @@ runner/ssh_host_ed25519_key.pub
 
 # Built by dns/run-dns.sh, copied into the image. Not source.
 dns/harness-dns
+
+# Grant records live in the metadata store, not the repo: they are every
+# Agent's key, ceiling and window, and a clone should not come with a roster.
+x402/grants/

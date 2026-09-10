@@ -28,7 +28,7 @@ const ROUNDS = Number(process.argv[3] ?? 3);
 const RELAYER_PK = process.env.RELAYER_PK as Hex;
 if (!RELAYER_PK) throw new Error("set RELAYER_PK — a burner with gas, never the Tenant's key");
 
-const { grant, registry, rootOfTree, agentPk, name: NAME } = load(LABEL);
+const { grant, registry, rootOfTree, agentPk, name: NAME } = await load(LABEL);
 
 const REDEEM_TYPES = {
   Redemption: [

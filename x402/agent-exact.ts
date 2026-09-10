@@ -44,7 +44,7 @@ const ROUNDS = Number(process.argv[3] ?? 2);
 const RELAYER_PK = process.env.RELAYER_PK as Hex;
 if (!RELAYER_PK) throw new Error("set RELAYER_PK — a burner with gas, never the Tenant's key");
 
-const { grant, registry, rootOfTree, agentPk, name } = load(LABEL);
+const { grant, registry, rootOfTree, agentPk, name } = await load(LABEL);
 const account = privateKeyToAccount(agentPk);
 const usd = (v: bigint) => `$${formatUnits(v, 6)}`;
 
