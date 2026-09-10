@@ -1,11 +1,14 @@
 "use client";
 
 import { useState } from "react";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 
 import { BorderBeam } from "@/components/ui/border-beam";
 import { MeshInvite } from "@/components/tenants/MeshInvite";
 import { Terminal } from "@/components/tenants/Terminal";
 import { Asks, type Ask } from "@/components/tenants/Asks";
+import { Ceiling } from "@/components/tenants/Ceiling";
+import { RevokeCascade } from "@/components/tenants/RevokeCascade";
 import type { ProvisionRequest } from "@/components/tenants/ProvisionDialog";
 
 export type Tenant = {
@@ -48,15 +51,33 @@ export function TenantSlot({
   /** Signs a new Grant at a higher ceiling, after an agent asked for one. */
   onRaise: (t: Tenant, ask: Ask, newCapUsd: number) => Promise<void>;
 }) {
-  if (!tenant) return <EmptySlot onAdd={onAdd} />;
+  const still = useReducedMotion();
+
+  // Keyed by which machine is here, so replacing one animates rather than
+  // mutating in place. `wait` because both states occupy the same cell and
+  // crossfading two cards on top of each other reads as a glitch.
   return (
-    <FilledSlot
-      tenant={tenant}
-      onContinue={onContinue}
-      onRevoke={onRevoke}
-      onAuthorise={onAuthorise}
-      onRaise={onRaise}
-    />
+    <AnimatePresence mode="wait" initial={false}>
+      <motion.div
+        key={tenant?.label ?? "empty"}
+        initial={still ? false : { opacity: 0, y: 8, scale: 0.985 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        exit={still ? undefined : { opacity: 0, y: -8, scale: 0.985 }}
+        transition={{ duration: still ? 0 : 0.32, ease: [0.22, 1, 0.36, 1] }}
+      >
+        {tenant ? (
+          <FilledSlot
+            tenant={tenant}
+            onContinue={onContinue}
+            onRevoke={onRevoke}
+            onAuthorise={onAuthorise}
+            onRaise={onRaise}
+          />
+        ) : (
+          <EmptySlot onAdd={onAdd} />
+        )}
+      </motion.div>
+    </AnimatePresence>
   );
 }
 
@@ -132,11 +153,16 @@ function FilledSlot({
           )}
         </>
       ) : (
-        <dl className="mt-6 space-y-2.5 text-sm">
-          <Row label="Agent" value={tenant.agent ? `${tenant.agent}.${tenant.label}.harness.eth` : "—"} mono />
-          <Row label="Mesh" value={tenant.meshAddress ?? "—"} mono />
-          <Row label="Ceiling" value={tenant.cap} />
-        </dl>
+        <>
+          <dl className="mt-6 space-y-2.5 text-sm">
+            <Row label="Agent" value={tenant.agent ? `${tenant.agent}.${tenant.label}.harness.eth` : "—"} mono />
+            <Row label="Mesh" value={tenant.meshAddress ?? "—"} mono />
+          </dl>
+          {/* Not on a revoked machine: a full green bar beside "spending
+              stopped" reads as a contradiction, and the cascade is already
+              saying what the ceiling is now worth. */}
+          {!revoked && <Ceiling capUsd={capUsd(tenant)} />}
+        </>
       )}
 
       {tenant.status === "live" && (
@@ -164,7 +190,7 @@ function FilledSlot({
               deliberate act — and one that expires on its own. */}
           <Asks
             tenant={tenant.label}
-            currentCapUsd={Number(tenant.request?.capUsd ?? tenant.cap.replace(/[^0-9.]/g, "")) || 0}
+            currentCapUsd={capUsd(tenant)}
             onApprove={(ask, newCap) => onRaise(tenant, ask, newCap)}
           />
           <MeshInvite
@@ -178,13 +204,17 @@ function FilledSlot({
       )}
 
       {revoked && (
-        <p className="mt-6 text-xs leading-relaxed text-neutral-600">
-          Spending, name resolution and shell access all stopped. Nothing was
-          restarted — each of them is computed from the same fact.
-        </p>
+        <RevokeCascade
+          name={tenant.agent ? `${tenant.agent}.${tenant.label}.harness.eth` : `${tenant.label}.harness.eth`}
+        />
       )}
     </div>
   );
+}
+
+/** The ceiling in dollars. Recorded as a request, displayed as "$10/day". */
+function capUsd(t: Tenant): number {
+  return Number(t.request?.capUsd ?? t.cap.replace(/[^0-9.]/g, "")) || 0;
 }
 
 function Row({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
