@@ -62,6 +62,12 @@ sudo podman run -d \
     --label "harness.tenant=${tenant}" \
     --label "harness.agent=${agent}" \
     -v "harness-${tenant}-ts:/var/lib/tailscale" \
+    `# A real TUN. Userspace networking could not establish a path to a peer` \
+    `# out on the internet, so a visitor's connection hung rather than being` \
+    `# refused. NET_ADMIN here reaches this container's own network namespace` \
+    `# and not the host's.` \
+    --device /dev/net/tun \
+    --cap-add NET_ADMIN \
     --memory "$mem" \
     --memory-swap "$mem" \
     --cpus "$cpus" \

@@ -5,7 +5,11 @@
 # chain is asked on every connection.
 FROM docker.io/library/alpine:3.21
 
-RUN apk add --no-cache openssh-server python3 tailscale \
+# node and npm are here for Claude Code, which is what makes this a machine an
+# agent can actually think on rather than only spend from. It is installed
+# whether or not this Tenant asked for it — the image is shared, and the thing
+# that decides is whether a credential was sealed for this Agent.
+RUN apk add --no-cache openssh-server python3 tailscale nodejs npm git curl \
  && adduser -D -s /bin/sh runner \
  # `adduser -D` leaves the account locked ("!" in shadow), and sshd refuses a
  # locked account even for public-key auth. The Agent has no password at all —
@@ -43,6 +47,21 @@ RUN mkdir -p /var/lib/tailscale && chown root:root /var/lib/tailscale && chmod 7
 # crypto library — everything it would have signed with lives in the broker.
 COPY agent.py /usr/local/bin/agent
 RUN chmod 755 /usr/local/bin/agent
+
+RUN npm install -g @anthropic-ai/claude-code && npm cache clean --force
+
+COPY fetch-secrets /usr/local/bin/fetch-secrets
+RUN chmod 755 /usr/local/bin/fetch-secrets
+
+# What the Agent was given, put where a login shell will find it. The file is
+# on a tmpfs and is written at start by fetch-secrets, so it is absent until
+# the broker has said this Agent may still act — and absent again after a
+# restart if the chain has changed its mind.
+RUN printf '%s\n' \
+    '# Opened for this agent at start, from the broker, under the ring.' \
+    '[ -r /run/harness/env ] && . /run/harness/env' \
+    > /etc/profile.d/harness.sh \
+ && chmod 644 /etc/profile.d/harness.sh
 
 COPY entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod 755 /usr/local/bin/entrypoint.sh

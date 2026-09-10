@@ -7,6 +7,12 @@ export type ProvisionRequest = {
   agent: string;
   capUsd: string;
   days: string;
+  /** How Claude Code signs in, if it is wanted at all. */
+  claudeAuth: "none" | "apiKey" | "subscription";
+  /** The key or token for that choice. Sealed under the ring, never stored here. */
+  claudeSecret: string;
+  /** Anything else the agent needs, one NAME=value per line. */
+  extraSecrets: string;
 };
 
 /**
@@ -34,12 +40,19 @@ export function ProvisionDialog({
     agent: "runner",
     capUsd: "10",
     days: "30",
+    claudeAuth: "none",
+    claudeSecret: "",
+    extraSecrets: "",
   });
 
   if (!open) return null;
 
   const labelError = validateLabel(form.label, taken);
-  const ready = !labelError && form.label.length > 0 && /^[a-z0-9-]+$/.test(form.agent);
+  // A chosen sign-in with nothing typed into it would provision an agent that
+  // cannot think, and only say so on first use.
+  const needsSecret = form.claudeAuth !== "none" && form.claudeSecret.trim().length === 0;
+  const ready =
+    !labelError && form.label.length > 0 && /^[a-z0-9-]+$/.test(form.agent) && !needsSecret;
 
   return (
     <div
@@ -50,7 +63,7 @@ export function ProvisionDialog({
       aria-label="Add a machine"
     >
       <div
-        className="w-full max-w-md rounded-2xl border border-neutral-800 bg-neutral-950 p-6"
+        className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl border border-neutral-800 bg-neutral-950 p-6"
         onClick={(e) => e.stopPropagation()}
       >
         <h2 className="text-lg font-medium text-neutral-100">Add a machine</h2>
@@ -102,6 +115,74 @@ export function ProvisionDialog({
               className="w-full rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-2 font-mono text-sm text-neutral-100 outline-none focus:border-neutral-600"
             />
           </Field>
+        </div>
+
+        <div className="mt-6 border-t border-neutral-900 pt-5">
+          <p className="text-xs uppercase tracking-[0.14em] text-neutral-600">What it is given</p>
+          <p className="mt-1.5 text-[11px] leading-relaxed text-neutral-600">
+            Sealed under this Ledger&apos;s ring, next to the agent root, and
+            handed to the machine only while the chain still says it may act.
+            Nothing here is written in the clear or passed as container
+            environment.
+          </p>
+
+          <div className="mt-4 space-y-4">
+            <Field label="Claude Code" hint="how the agent signs in to think">
+              <div className="flex gap-1.5">
+                {(
+                  [
+                    ["none", "Not installed"],
+                    ["subscription", "My plan"],
+                    ["apiKey", "API key"],
+                  ] as const
+                ).map(([value, text]) => (
+                  <button
+                    key={value}
+                    onClick={() => setForm({ ...form, claudeAuth: value, claudeSecret: "" })}
+                    className={`rounded-full border px-3 py-1.5 text-xs transition ${
+                      form.claudeAuth === value
+                        ? "border-neutral-600 bg-neutral-800 text-neutral-100"
+                        : "border-neutral-800 text-neutral-500 hover:border-neutral-700"
+                    }`}
+                  >
+                    {text}
+                  </button>
+                ))}
+              </div>
+            </Field>
+
+            {form.claudeAuth !== "none" && (
+              <Field
+                label={form.claudeAuth === "apiKey" ? "Anthropic API key" : "Plan token"}
+                hint={
+                  form.claudeAuth === "apiKey"
+                    ? "billed per token against your Anthropic account"
+                    : "run `claude setup-token` where you are signed in to Pro, Max or Team"
+                }
+              >
+                <input
+                  value={form.claudeSecret}
+                  onChange={(e) => setForm({ ...form, claudeSecret: e.target.value })}
+                  type="password"
+                  autoComplete="off"
+                  spellCheck={false}
+                  placeholder={form.claudeAuth === "apiKey" ? "sk-ant-…" : "sk-ant-oat…"}
+                  className="w-full rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-2 font-mono text-sm text-neutral-100 outline-none focus:border-neutral-600"
+                />
+              </Field>
+            )}
+
+            <Field label="Anything else" hint="one NAME=value per line; optional">
+              <textarea
+                value={form.extraSecrets}
+                onChange={(e) => setForm({ ...form, extraSecrets: e.target.value })}
+                rows={3}
+                spellCheck={false}
+                placeholder={"GITHUB_TOKEN=ghp_…\nDATABASE_URL=postgres://…"}
+                className="w-full resize-none rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-2 font-mono text-xs text-neutral-100 outline-none focus:border-neutral-600"
+              />
+            </Field>
+          </div>
         </div>
 
         <div className="mt-7 flex justify-end gap-2">

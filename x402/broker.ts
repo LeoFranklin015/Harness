@@ -38,6 +38,7 @@ import { USDC_3009_ABI } from "./exact.ts";
 import { load } from "./grant.ts";
 import { headroom } from "./headroom.ts";
 import { settle, transferCall } from "./settle.ts";
+import { agentSecrets } from "./keys.ts";
 
 const exec = promisify(execFile);
 
@@ -111,6 +112,53 @@ async function whoIsAsking(ip: string): Promise<{ tenant: string; agent: string;
     if (tenant && agent && network) return { tenant, agent, network };
   }
   throw new Error(`no Runner at ${ip}`);
+}
+
+/**
+ * Refuses unless the chain still says this Agent may act.
+ *
+ * The same question the payment path asks, asked on its own, because handing
+ * over an Agent's credentials deserves the same answer as handing over its
+ * money. Revoke unregisters the name and `agentKeyOf` returns zero from that
+ * block onward — so a revoked Agent stops being able to spend, stops resolving,
+ * stops admitting an ssh key, and stops being given its secrets, all from the
+ * one transaction.
+ */
+async function stillLive(tenant: string, agent: string) {
+  const { grant, registry, agentPk, name } = load(agent, tenant);
+  const account = privateKeyToAccount(agentPk);
+  const live = (await publicClient.readContract({
+    address: registry,
+    abi: REGISTRY_ABI,
+    functionName: "agentKeyOf",
+    args: [grant.label],
+  })) as Address;
+  if (live.toLowerCase() !== account.address.toLowerCase()) {
+    throw Object.assign(new Error(`${name} has been revoked`), { status: 403 });
+  }
+  return name;
+}
+
+/**
+ * What the Agent was given at provisioning, opened for it now.
+ *
+ * The values are sealed under the Tenant's ring and are never in the container
+ * image, never in its environment as `podman inspect` would show it, and never
+ * on its disk except where the Runner puts them at start. What crosses here is
+ * the plaintext, over the Tenant's own private network, to a caller whose
+ * identity came from the socket rather than from anything it said.
+ */
+async function secretsFor(ip: string, door: string) {
+  const { tenant, agent, network } = await whoIsAsking(ip);
+  const own = await gatewayOf(network);
+  if (own && door !== own) {
+    throw Object.assign(new Error(`${tenant} may only ask at ${own}`), { status: 403 });
+  }
+  const name = await stillLive(tenant, agent);
+  const secrets = agentSecrets(tenant, agent);
+  const names = Object.keys(secrets);
+  console.log(`  ${name} <- ${names.length ? names.join(", ") : "no secrets"}`);
+  return secrets;
 }
 
 /** Refuses unless the chain still says yes, and only for as much as it says. */
@@ -194,21 +242,47 @@ async function authorize(ip: string, door: string, challenge: Record<string, str
   return { headers, agent: name, amount: amount.toString(), left: (room.left - amount).toString() };
 }
 
+/** Only a refusal this code raised is a status; an exit code is not. */
+function httpStatus(err: unknown): number {
+  const s = (err as { status?: unknown }).status;
+  return typeof s === "number" && s >= 400 && s <= 599 ? s : 500;
+}
+
 const handler = async (
   req: import("node:http").IncomingMessage,
   res: import("node:http").ServerResponse,
 ) => {
   const send = (status: number, body: unknown) => {
-    res.writeHead(status, { "content-type": "application/json" });
+    // A thrown child_process error carries `.status` too — the exit code, which
+    // is 1, which is not an HTTP status. Passing it through crashed the whole
+    // broker on the first failed decrypt, taking every Tenant's payments down
+    // with it. Anything that is not a plausible response code is a 500.
+    const code = Number.isInteger(status) && status >= 400 && status <= 599 ? status : 500;
+    res.writeHead(status === 200 ? 200 : code, { "content-type": "application/json" });
     res.end(JSON.stringify(body));
   };
-  if (req.method !== "POST" || req.url !== "/capability") return send(404, { error: "not found" });
+  if (req.method !== "POST") return send(404, { error: "not found" });
+  if (req.url !== "/capability" && req.url !== "/secrets") {
+    return send(404, { error: "not found" });
+  }
 
   // ::ffff:10.89.0.2 on a dual-stack socket. Taken from the socket, never from
   // the body or a header: a caller does not get to say who it is.
   const strip = (a: string | undefined) => (a ?? "").replace(/^::ffff:/, "");
   const ip = strip(req.socket.remoteAddress);
   const door = strip(req.socket.localAddress);
+
+  if (req.url === "/secrets") {
+    try {
+      return send(200, await secretsFor(ip, door));
+    } catch (err) {
+      const status = httpStatus(err);
+      const why = status === 500 ? explain(err) : (err as Error).message;
+      console.log(`  refused ${ip}: ${why}`);
+      return send(status, { error: why });
+    }
+  }
+
   let challenge: Record<string, string>;
   try {
     challenge = JSON.parse(await text(req));
@@ -219,7 +293,7 @@ const handler = async (
   try {
     send(200, await authorize(ip, door, challenge));
   } catch (err) {
-    const status = (err as { status?: number }).status ?? 500;
+    const status = httpStatus(err);
     // Refusals carry their own words already; anything else gets translated.
     const why = status === 500 ? explain(err) : (err as Error).message;
     console.log(`  refused ${ip}: ${why}`);

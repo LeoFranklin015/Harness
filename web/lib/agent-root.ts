@@ -30,8 +30,13 @@ const KEY_NAME = "harness-agents";
 
 const sealedPath = (tenant: string) => path.join(ENROLMENT_DIR, "roots", `${tenant}.enc`);
 
-function ring(tenant: string, op: "encrypt" | "decrypt", input: Buffer): Buffer {
-  return execFileSync(RING, [tenant, op, "--key", KEY_NAME], {
+export function ring(
+  tenant: string,
+  op: "encrypt" | "decrypt",
+  input: Buffer,
+  key: string = KEY_NAME,
+): Buffer {
+  return execFileSync(RING, [tenant, op, "--key", key], {
     input,
     stdio: ["pipe", "pipe", "pipe"],
     maxBuffer: 1 << 20,
@@ -46,6 +51,32 @@ export function agentRootFor(tenant: string): Buffer {
     const sealed = ring(tenant, "encrypt", randomBytes(32));
     writeFileSync(file, sealed, { mode: 0o600 });
   }
+  return openRoot(tenant, file);
+}
+
+/**
+ * The same root, for callers with no business creating one.
+ *
+ * Creating on first use is right during provisioning and wrong everywhere
+ * else. Asking for a visitor's key made a root for a Tenant that had never had
+ * one, which is worse than an error: every key derived from it is a key the
+ * chain has never heard of, and the file left behind makes a Tenant that
+ * cannot sign look like one that can.
+ *
+ * A Tenant with no sealed root has not been through the ring, or its root is
+ * gone. Both are worth saying out loud rather than papering over.
+ */
+export function existingAgentRootFor(tenant: string): Buffer {
+  const file = sealedPath(tenant);
+  if (!existsSync(file)) {
+    throw new Error(
+      `${tenant} has no sealed root — it has not been through the ring, so no key can be derived for it`,
+    );
+  }
+  return openRoot(tenant, file);
+}
+
+function openRoot(tenant: string, file: string): Buffer {
   const root = ring(tenant, "decrypt", readFileSync(file));
   if (root.length !== 32) throw new Error(`agent root for ${tenant} opened to ${root.length} bytes`);
   return root;

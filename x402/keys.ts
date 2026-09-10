@@ -80,3 +80,26 @@ if (import.meta.filename === process.argv[1]) {
   }
   console.log(agentAddress(tenant, label));
 }
+
+/**
+ * What an Agent was given at provisioning, opened from the same ring.
+ *
+ * Credentials the Agent needs and this system did not mint — a model API key,
+ * a token for some service. They cannot be derived the way its own key is, so
+ * somebody typed them in once and they have been wallet-cli ciphertext ever
+ * since, next to the agent root and openable by the same Ledger Key Ring.
+ *
+ * Absent is not an error. Most Agents are given nothing.
+ */
+export function agentSecrets(tenant: string, label: string): Record<string, string> {
+  const sealed = path.join(ENROLMENT_DIR, "secrets", `${tenant}.${label}.enc`);
+  if (!existsSync(sealed)) return {};
+
+  const opened = execFileSync(RING, [tenant, "decrypt", "--key", "harness-secrets"], {
+    input: readFileSync(sealed),
+    stdio: ["pipe", "pipe", "pipe"],
+  });
+
+  const parsed: unknown = JSON.parse(opened.toString("utf8"));
+  return parsed && typeof parsed === "object" ? (parsed as Record<string, string>) : {};
+}

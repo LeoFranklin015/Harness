@@ -104,7 +104,7 @@ export async function POST(request: Request) {
     // characters of base64 is pasted unread; a short command can be read, and
     // the URL it names can be opened in a browser first.
     const token = host
-      ? stash(setupScript(key.privateKey, invite.key, user, host, machine))
+      ? stash(setupScript(key.privateKey, invite.key, user, host, machine, meshAddress))
       : null;
 
     return NextResponse.json(

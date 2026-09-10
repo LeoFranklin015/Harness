@@ -14,6 +14,7 @@ import { explain } from "@/lib/explain";
 import { sepoliaTransport } from "@/lib/rpc";
 import { secret } from "@/lib/secrets";
 import { visitorKeyFor } from "@/lib/sshkey";
+import { CLAUDE_VARS, sealSecrets, validName, type ClaudeAuth } from "@/lib/vault";
 import { agentKeyFor } from "@/lib/agent-root";
 
 /**
@@ -86,6 +87,11 @@ export async function POST(req: Request) {
     /** Optional. Absent means nobody may SSH in until the device says so. */
     sshFingerprint?: string;
     device: Address;
+    /** How Claude Code signs in, and with what. Optional. */
+    claudeAuth?: ClaudeAuth;
+    claudeSecret?: string;
+    /** Anything else the Agent was given, one NAME=value per line. */
+    extraSecrets?: string;
   };
 
   if (!/^[a-z0-9][a-z0-9-]{2,}$/.test(body.label)) return new Response("bad label", { status: 400 });
@@ -201,9 +207,33 @@ export async function POST(req: Request) {
         // A caller may still name a fingerprint of their own, which wins. That
         // is the door for somebody who would rather use a key this host never
         // saw.
+        // Seal what the Agent was given, under the same ring as its root. This
+        // sits after the ring step for a reason: until the Tenant has joined,
+        // there is nothing to seal with, and a secret sitting in this process
+        // waiting for one is a secret in the wrong place.
+        const secrets: Record<string, string> = {};
+        if (body.claudeAuth && body.claudeAuth !== "none" && body.claudeSecret?.trim()) {
+          secrets[CLAUDE_VARS[body.claudeAuth]] = body.claudeSecret.trim();
+        }
+        for (const line of (body.extraSecrets ?? "").split("\n")) {
+          const at = line.indexOf("=");
+          if (at < 1) continue;
+          const name = line.slice(0, at).trim();
+          const value = line.slice(at + 1).trim();
+          // A name that is not a variable name would be pasted into a shell
+          // profile by the Runner, so it is refused rather than escaped.
+          if (!value) continue;
+          if (!validName(name)) throw new Error(`${name} is not a usable variable name`);
+          secrets[name] = value;
+        }
+        if (Object.keys(secrets).length) {
+          emit({ step: `Sealing ${Object.keys(secrets).length} secret(s) under the ring` });
+          sealSecrets(body.label, body.agent, secrets);
+        }
+
         const operator = body.sshFingerprint
           ? (`0x${Buffer.from(body.sshFingerprint.slice(7) + "=", "base64").toString("hex")}` as Hex)
-          : visitorKeyFor(body.label, body.agent).operator;
+          : visitorKeyFor(body.label, body.agent, true).operator;
 
         emit({
           step: "Waiting for the device",

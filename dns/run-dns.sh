@@ -23,6 +23,12 @@ fi
 CGO_ENABLED=0 GOOS=linux GOARCH=$(uname -m | sed 's/aarch64/arm64/;s/x86_64/amd64/') \
     go build -trimpath -ldflags="-s -w" -o harness-dns .
 
+# Rootful, like every other container here. The runners live in root's store
+# and this needs the same one — and /dev/net/tun is not something a rootless
+# container gets. Invoked bare, this silently built a second nameserver in the
+# user's store, where it could not open a TUN and exited.
+podman() { sudo -n /usr/bin/podman "$@"; }
+
 podman build -q -t harness-dns:latest -f Containerfile . >/dev/null
 
 podman rm -f harness-dns >/dev/null 2>&1 || true

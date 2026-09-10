@@ -1,6 +1,6 @@
 import { createHash, hkdfSync } from "node:crypto";
 import type { Hex } from "viem";
-import { agentRootFor } from "./agent-root";
+import { agentRootFor, existingAgentRootFor } from "./agent-root";
 import { ed25519FromSeed } from "./openssh";
 
 
@@ -44,9 +44,14 @@ export type VisitorKey = {
  * still ends spending, resolution and shell access together, which is the
  * thing being demonstrated.
  */
-export function visitorKeyFor(tenant: string, label: string): VisitorKey {
+export function visitorKeyFor(tenant: string, label: string, create = false): VisitorKey {
+  // `create` is for provisioning, which is the one moment a Tenant is supposed
+  // to acquire a root. An invite passes false, so a Tenant that never went
+  // through the ring produces an error rather than a freshly invented key that
+  // the chain has never been told about.
+  const root = create ? agentRootFor(tenant) : existingAgentRootFor(tenant);
   const seed = Buffer.from(
-    hkdfSync("sha256", agentRootFor(tenant), Buffer.alloc(0), `harness/ssh/${tenant}/${label}`, 32),
+    hkdfSync("sha256", root, Buffer.alloc(0), `harness/ssh/${tenant}/${label}`, 32),
   );
 
   const { privateKey, publicKey } = ed25519FromSeed(seed, `harness visitor ${tenant}`);
@@ -92,8 +97,28 @@ export type Platform = "linux" | "macos" | "windows";
  * It is run as the visitor, never as root, and reaches for sudo only for the
  * one command that needs it. Piping to `sudo sh` would put the key in root's
  * home, which is not where ssh will look for it.
+ *
+ * The block pins `HostName` to the address the name resolved to here, and that
+ * is worth being explicit about. The ENS name is still what a visitor types
+ * and still what the chain answers for — it was resolved through the chain to
+ * build this, which is why the address is known at all. But resolving it again
+ * on the visitor's machine means a DNS query to the nameserver on the mesh,
+ * and a visitor is only granted port 22 on an agent. Port 53 is closed to
+ * them, so the lookup does not fail — it hangs, and `ssh <name>` looks broken
+ * while never having reached the agent at all.
+ *
+ * Opening 53 to `tag:visitor` in the tailnet ACL makes live resolution work
+ * and is the better answer where somebody can edit the policy. This is the
+ * answer that works without one.
  */
-export function setupScript(key: string, authKey: string, user: string, host: string, machine: string) {
+export function setupScript(
+  key: string,
+  authKey: string,
+  user: string,
+  host: string,
+  machine: string,
+  address: string | null,
+) {
   const file = keyFilename(machine);
   const blob = Buffer.from(`${key}\n`, "utf8").toString("base64");
 
@@ -136,7 +161,7 @@ chmod 600 ~/.ssh/${file}
 # Appended, never overwritten, and only once: an ~/.ssh/config is something
 # people spend years curating.
 if ! grep -q '^Host ${host}$' ~/.ssh/config 2>/dev/null; then
-    printf '\\nHost ${host}\\n  User ${user}\\n  IdentityFile ~/.ssh/${file}\\n  IdentitiesOnly yes\\n' >> ~/.ssh/config
+    printf '\\nHost ${host}\\n${address ? `  HostName ${address}\\n` : ""}  User ${user}\\n  IdentityFile ~/.ssh/${file}\\n  IdentitiesOnly yes\\n' >> ~/.ssh/config
 fi
 
 echo

@@ -25,11 +25,26 @@ log() { printf '  %s\n' "$*"; }
 # Each one is a name, a port, and a command. Ports are here so `status` can say
 # whether the thing actually came up rather than whether we asked it to.
 
+# Is the process from a previous `up` still alive? Distinct from whether its
+# port is open, because the broker legitimately opens none: it listens on each
+# Tenant's gateway, and with no Tenants there is nothing to listen on. Judging
+# it by the port started a second broker on every `up`, and the pair then
+# fought over the gateways with EADDRINUSE once a Tenant did appear.
+alive() { # name
+    local pid
+    pid=$(cat "$run/$1.pid" 2>/dev/null) || return 1
+    [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null
+}
+
 start() { # name port command...
     local name=$1 port=$2
     shift 2
     if listening "$port"; then
         log "$name already up on :$port"
+        return
+    fi
+    if alive "$name"; then
+        log "$name already running (no port yet)"
         return
     fi
     nohup "$@" >"$run/$name.log" 2>&1 &
@@ -61,13 +76,18 @@ listening() { ss -ltn 2>/dev/null | grep -q ":$1 "; }
 # shell whose command line happens to mention the file — including the shell
 # running this script, which it then kills. Checking the executable first means
 # only a node, a next-server or the nameserver binary can be a target.
+#
+# The patterns are globs because /proc/<pid>/comm is truncated to 15 characters:
+# next-server sets its own name to "next-server (v16.3.4)", which arrives here
+# as "next-server (v1" and matched nothing. `down` was leaving the web server
+# running every time, and saying it had stopped.
 kill_matching() { # pattern
     local pid comm
     for pid in $(pgrep -f "$1" 2>/dev/null); do
         [ "$pid" = "$$" ] && continue
         comm=$(cat "/proc/$pid/comm" 2>/dev/null) || continue
         case "$comm" in
-            node | next-server | harness-dns) kill "$pid" 2>/dev/null ;;
+            node | node-* | next-server* | npm* | harness-dns*) kill "$pid" 2>/dev/null ;;
         esac
     done
 }
@@ -126,6 +146,9 @@ cmd_down() {
     kill_matching "next start .*-p 3000"
     kill_matching "broker\.ts"
     kill_matching "seller-express\.ts"
+    # The nameserver used to run on the host, before it moved onto the mesh.
+    # A box that has been up since then still has one listening on 5354.
+    kill_matching "harness-dns"
 
     for c in $(sudo -n podman ps --filter name=^harness- --format '{{.Names}}' 2>/dev/null); do
         sudo -n podman stop -t 3 "$c" >/dev/null 2>&1 && log "stopped $c"
