@@ -1,8 +1,9 @@
 @import "tailwindcss";
 
+/* Dark throughout: the device is the subject, and it reads against black. */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #08090a;
+  --foreground: #fafafa;
 }
 
 @theme inline {
@@ -12,15 +13,29 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans), system-ui, sans-serif;
+}
+
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes panelRise {
+  from { opacity: 0.35; transform: translateY(14px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes blobDrift {
+  0%   { transform: translate(-50%, -50%) translate(-9vw, -6vh) scale(1); }
+  50%  { transform: translate(-50%, -50%) translate(6vw, 4vh) scale(1.08); }
+  100% { transform: translate(-50%, -50%) translate(-3vw, 8vh) scale(0.96); }
+}
+
+@keyframes grainTick {
+  from { background-position: 0 0; }
+  to   { background-position: 8px 6px; }
 }
