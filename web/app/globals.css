@@ -235,18 +235,36 @@ body {
  * out of phase, because a rank of bolts turning in unison reads as one
  * object rotating rather than as many being driven.
  */
-@keyframes screw-turn { to { rotate: 360deg; } }
+/*
+ * Driven in and backed out again, on the spot. A screw that only spins is a
+ * wheel; one that sinks as it turns and rises as it reverses is being worked.
+ * The scale is the sinking — there is no depth to move into, so the only way
+ * to show a fastener going home is for it to get smaller as it goes.
+ */
+@keyframes screw-turn {
+  0%        { rotate: 0deg;   scale: 1; }
+  42%       { rotate: 520deg; scale: 0.78; }
+  52%       { rotate: 520deg; scale: 0.78; }
+  94%, 100% { rotate: 0deg;   scale: 1; }
+}
 .screw {
   transform-box: fill-box;
   transform-origin: center;
   animation-name: screw-turn;
-  animation-timing-function: linear;
+  animation-timing-function: cubic-bezier(0.45, 0, 0.55, 1);
   animation-iteration-count: infinite;
 }
 /* While a step is really running, they bite. */
-.screw-fast { animation-duration: 0.7s !important; }
+.screw-fast { animation-duration: 1.1s !important; }
 
 /* --- parts that have just been fitted, testing themselves --------------- */
+
+/* Tracks running. One rung of travel exactly, so the loop is seamless. */
+@keyframes rig-roll {
+  from { translate: 0 0; }
+  to   { translate: 0 9px; }
+}
+.rig-roll { animation: rig-roll 0.62s linear infinite; }
 
 /* Bolted down, so it shuffles. */
 @keyframes rig-shuffle {
@@ -298,7 +316,7 @@ body {
 .step-live { animation: step-live 1.4s ease-in-out infinite; }
 
 @media (prefers-reduced-motion: reduce) {
-  .part-landing, .step-live, .rig-plunge, .rig-turn, .rig-heat, .rig-spark,
+  .part-landing, .step-live, .screw, .rig-roll,
   .rig-shuffle, .rig-wave-inner, .rig-crane, .rig-look { animation: none; }
   .part-landing { opacity: 1; }
 }

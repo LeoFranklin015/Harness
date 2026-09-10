@@ -55,8 +55,8 @@ export const TOKENS: { symbol: string; address: Address; decimals: number }[] = 
   { symbol: "DAI", address: "0xFF34B3d4Aee8ddCd6F9AFFFB6Fe49bD371b8a357", decimals: 18 },
 ];
 
-const UNISWAP_ROUTER: Address = "0x3bFA4769FB09eefC5a80d6E87c3B9C650f7Ae48E";
-const AAVE_POOL: Address = "0x6Ae43d3271ff6888e7Fc43Fd7321a503ff738951";
+export const UNISWAP_ROUTER: Address = "0x3bFA4769FB09eefC5a80d6E87c3B9C650f7Ae48E";
+export const AAVE_POOL: Address = "0x6Ae43d3271ff6888e7Fc43Fd7321a503ff738951";
 
 export const CATALOGUE: Capability[] = [
   {
@@ -142,3 +142,76 @@ export function validateCustom(r: CustomRule): string | null {
 export function anyExecutable(ids: string[]): boolean {
   return ids.some((id) => byId(id)?.executable);
 }
+
+
+// --- composed the way a grant actually reads -------------------------------
+
+/**
+ * A rule is a contract and a function. Almost every rule anyone wants is a
+ * *token* and an *action* — so those are chosen separately and multiplied,
+ * rather than made to pick "Pay in USDC" out of a list that grows by one
+ * entry for every combination that exists.
+ *
+ * Protocols do not fit that shape: a swap is not an action on a token, it is
+ * a call on a router. They stay whole.
+ */
+
+export type Action = {
+  id: string;
+  name: string;
+  selector: Hex;
+  detail: string;
+  executable: boolean;
+};
+
+export const ACTIONS: Action[] = [
+  {
+    id: "transfer",
+    name: "Transfer",
+    selector: TRANSFER,
+    detail: "Send it to an address",
+    executable: true,
+  },
+  {
+    id: "approve",
+    name: "Approve",
+    selector: APPROVE,
+    detail: "Let a contract draw it",
+    executable: false,
+  },
+];
+
+export type Protocol = {
+  id: string;
+  name: string;
+  detail: string;
+  target: Address;
+  selector: Hex;
+  executable: boolean;
+};
+
+export const PROTOCOLS: Protocol[] = [
+  {
+    id: "uniswap-v3",
+    name: "Uniswap v3",
+    detail: "exactInputSingle",
+    target: UNISWAP_ROUTER,
+    selector: EXACT_INPUT_SINGLE,
+    executable: false,
+  },
+  {
+    id: "aave-v3",
+    name: "Aave v3",
+    detail: "supply",
+    target: AAVE_POOL,
+    selector: AAVE_SUPPLY,
+    executable: false,
+  },
+];
+
+/** What a machine starts with: move USDC, and nothing else. */
+export const DEFAULT_TOKENS = [USDC as string];
+export const DEFAULT_ACTIONS = ["transfer"];
+
+export const isAddress = (v: string) => ADDRESS.test(v);
+export const isSelector = (v: string) => SELECTOR.test(v);

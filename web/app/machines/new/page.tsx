@@ -7,12 +7,13 @@ import type { Address } from "viem";
 import { Assembly, STAGES, type AssemblyStage } from "@/components/provision/Assembly";
 import type { ProvisionRequest } from "@/components/tenants/ProvisionDialog";
 import {
-  CATALOGUE,
-  DEFAULT_CAPABILITIES,
-  anyExecutable,
-  byId,
-  validateCustom,
-  type CustomRule,
+  ACTIONS,
+  DEFAULT_ACTIONS,
+  DEFAULT_TOKENS,
+  PROTOCOLS,
+  TOKENS,
+  isAddress,
+  isSelector,
 } from "@/lib/capabilities";
 import { explain } from "@/lib/explain";
 import { RejectedOnDevice } from "@/lib/ledger";
@@ -55,7 +56,9 @@ export default function NewMachine() {
     brain: "claude-plan",
     brainSecret: "",
     extraSecrets: "",
-    capabilities: [...DEFAULT_CAPABILITIES],
+    tokens: [...DEFAULT_TOKENS],
+    actions: [...DEFAULT_ACTIONS],
+    protocols: [],
     customRules: [],
   });
 
@@ -268,21 +271,21 @@ function Capabilities({
   form: ProvisionRequest;
   set: (c: Partial<ProvisionRequest>) => void;
 }) {
-  const chosen = form.capabilities ?? [];
+  const tokens = form.tokens ?? [];
+  const actions = form.actions ?? [];
+  const protocols = form.protocols ?? [];
   const custom = form.customRules ?? [];
 
-  const toggle = (id: string) =>
-    set({ capabilities: chosen.includes(id) ? chosen.filter((c) => c !== id) : [...chosen, id] });
+  const flip = (list: string[], v: string) =>
+    list.includes(v) ? list.filter((x) => x !== v) : [...list, v];
 
-  const groups = [
-    { key: "payments" as const, title: "Payments", blurb: "Moving a token. The executor settles these." },
-    { key: "defi" as const, title: "DeFi", blurb: "Permitted by the grant; not yet settleable." },
-  ];
+  const ruleCount = tokens.length * actions.length + protocols.length + custom.length;
+  const settles = actions.some((a) => ACTIONS.find((x) => x.id === a)?.executable) && tokens.length > 0;
 
   return (
     <Section
       title="What it may do"
-      blurb="A grant is a list of (contract, function) pairs and a spending ceiling. Anything not on the list is refused on chain, not by the agent's good behaviour."
+      blurb="A rule is a contract and a function. Pick what it may touch and what it may do with it — the two multiply, so three tokens and one action is three rules."
     >
       <div className="grid gap-4 sm:grid-cols-2">
         <Field label="Ceiling" hint="US dollars per day">
@@ -303,132 +306,209 @@ function Capabilities({
         </Field>
       </div>
 
-      {/* Rows, not a grid of cards. Six boxes two-up is a wall to scan; a
-          list has one place your eye goes for the name, one for what it
-          means, and one for the rule — and the columns line up down the
-          page, which is the whole reason a table exists. */}
-      {groups.map((g) => (
-        <div key={g.key}>
-          <p className="mb-3 flex items-baseline gap-3">
-            <span className="text-xs font-medium text-neutral-300">{g.title}</span>
-            <span className="text-xs text-neutral-600">{g.blurb}</span>
-          </p>
-          <ul className="divide-y divide-neutral-900 border-y border-neutral-900">
-            {CATALOGUE.filter((c) => c.group === g.key).map((c) => {
-              const on = chosen.includes(c.id);
-              return (
-                <li key={c.id}>
-                  <button
-                    onClick={() => toggle(c.id)}
-                    className="group flex w-full items-center gap-4 py-3 text-left transition"
-                  >
-                    <span
-                      className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-sm border text-[9px] transition ${
-                        on
-                          ? "border-neutral-300 bg-neutral-200 text-neutral-950"
-                          : "border-neutral-700 group-hover:border-neutral-500"
-                      }`}
-                    >
-                      {on ? "✓" : ""}
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span className={`block text-sm ${on ? "text-neutral-100" : "text-neutral-400"}`}>
-                        {c.name}
-                      </span>
-                      <span className="block truncate text-xs text-neutral-600">{c.detail}</span>
-                    </span>
-                    <span className="hidden shrink-0 font-mono text-[10px] text-neutral-700 sm:block">
-                      {c.selector}
-                    </span>
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
-        </div>
-      ))}
+      {/* Protocols first and on one line, because they are the exception —
+          a swap is not an action on a token, it is a call on a router, and
+          pretending otherwise would force the whole grid to bend. */}
+      <Row label="Protocols" hint="whole rules of their own">
+        {PROTOCOLS.map((pr) => (
+          <Chip
+            key={pr.id}
+            on={protocols.includes(pr.id)}
+            onClick={() => set({ protocols: flip(protocols, pr.id) })}
+            sub={pr.detail}
+            warn
+          >
+            {pr.name}
+          </Chip>
+        ))}
+      </Row>
 
-      {!anyExecutable(chosen) && (
-        <p className="rounded-lg border border-amber-900/50 bg-amber-950/20 px-4 py-2.5 text-xs text-amber-300/90">
-          Nothing chosen can be carried out yet. The grant will be valid and every call will
-          revert at the executor. Add a payment capability unless that is what you meant.
-        </p>
+      <Row label="Tokens" hint="what it may touch">
+        {TOKENS.map((t) => (
+          <Chip
+            key={t.address}
+            on={tokens.includes(t.address)}
+            onClick={() => set({ tokens: flip(tokens, t.address) })}
+          >
+            {t.symbol}
+          </Chip>
+        ))}
+        {tokens
+          .filter((t) => !TOKENS.some((k) => k.address === t))
+          .map((t) => (
+            <Chip key={t} on onClick={() => set({ tokens: flip(tokens, t) })} mono>
+              {t.slice(0, 8)}…
+            </Chip>
+          ))}
+        <AddChip
+          placeholder="0x… contract"
+          check={isAddress}
+          onAdd={(v) => set({ tokens: [...tokens, v] })}
+        />
+      </Row>
+
+      <Row label="Actions" hint="what it may do with them">
+        {ACTIONS.map((a) => (
+          <Chip
+            key={a.id}
+            on={actions.includes(a.id)}
+            onClick={() => set({ actions: flip(actions, a.id) })}
+            sub={a.detail}
+            warn={!a.executable}
+          >
+            {a.name}
+          </Chip>
+        ))}
+        <AddChip
+          placeholder="0xa9059cbb"
+          check={isSelector}
+          onAdd={(v) =>
+            set({ customRules: [...custom, { target: tokens[0] ?? "", selector: v, note: "custom call" }] })
+          }
+        />
+      </Row>
+
+      {custom.length > 0 && (
+        <Row label="Custom" hint="written out by hand">
+          {custom.map((r, i) => (
+            <Chip key={i} on mono onClick={() => set({ customRules: custom.filter((_, j) => j !== i) })}>
+              {r.selector} → {r.target.slice(0, 8)}…
+            </Chip>
+          ))}
+        </Row>
       )}
 
-      <CustomRules rules={custom} onChange={(r) => set({ customRules: r })} />
+      <p className="border-t border-neutral-900 pt-4 text-xs text-neutral-500">
+        <span className="text-neutral-300">{ruleCount}</span> rule{ruleCount === 1 ? "" : "s"} on
+        the grant.{" "}
+        {settles ? (
+          <span className="text-neutral-600">The executor can settle transfers.</span>
+        ) : (
+          <span className="text-amber-400/90">
+            Nothing here can be carried out yet — the grant will be valid and every call will
+            revert at the executor.
+          </span>
+        )}
+      </p>
     </Section>
   );
 }
 
-function CustomRules({
-  rules,
-  onChange,
+/** One labelled line of choices. */
+function Row({
+  label,
+  hint,
+  children,
 }: {
-  rules: CustomRule[];
-  onChange: (r: CustomRule[]) => void;
+  label: string;
+  hint: string;
+  children: React.ReactNode;
 }) {
-  const [draft, setDraft] = useState<CustomRule>({ target: "", selector: "", note: "" });
-  const problem = draft.target || draft.selector ? validateCustom(draft) : null;
-
   return (
-    <div>
-      <p className="mb-1 text-xs font-medium text-neutral-300">Anything else</p>
-      <p className="mb-3 text-xs leading-relaxed text-neutral-600">
-        The catalogue is never complete, and the grant language does not care whether we
-        thought of your contract. A target and a 4-byte selector is the whole rule.
+    <div className="border-t border-neutral-900 pt-4">
+      <p className="mb-2.5 flex items-baseline gap-3">
+        <span className="text-xs font-medium text-neutral-300">{label}</span>
+        <span className="text-xs text-neutral-600">{hint}</span>
       </p>
-
-      {rules.length > 0 && (
-        <ul className="mb-3 space-y-1.5">
-          {rules.map((r, i) => (
-            <li
-              key={i}
-              className="flex items-center justify-between gap-3 rounded-lg border border-neutral-900 bg-neutral-950/40 px-3 py-2"
-            >
-              <span className="min-w-0">
-                <span className="block truncate font-mono text-xs text-neutral-300">
-                  {r.selector} → {r.target}
-                </span>
-                {r.note && <span className="block text-[11px] text-neutral-600">{r.note}</span>}
-              </span>
-              <button
-                onClick={() => onChange(rules.filter((_, j) => j !== i))}
-                className="shrink-0 text-xs text-neutral-600 transition hover:text-red-400"
-              >
-                remove
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
-
-      <div className="grid gap-2 sm:grid-cols-[1fr_140px_auto]">
-        <input
-          value={draft.target}
-          onChange={(e) => setDraft({ ...draft, target: e.target.value.trim() })}
-          placeholder="0x… contract"
-          className={`${input} font-mono text-xs`}
-        />
-        <input
-          value={draft.selector}
-          onChange={(e) => setDraft({ ...draft, selector: e.target.value.trim() })}
-          placeholder="0xa9059cbb"
-          className={`${input} font-mono text-xs`}
-        />
-        <button
-          onClick={() => {
-            if (validateCustom(draft)) return;
-            onChange([...rules, draft]);
-            setDraft({ target: "", selector: "", note: "" });
-          }}
-          disabled={!!validateCustom(draft)}
-          className="rounded-lg border border-neutral-800 px-4 text-xs text-neutral-300 transition hover:border-neutral-700 disabled:opacity-40"
-        >
-          Add
-        </button>
-      </div>
-      {problem && <p className="mt-2 text-xs text-amber-400/90">{problem}</p>}
+      <div className="flex flex-wrap gap-2">{children}</div>
     </div>
+  );
+}
+
+function Chip({
+  on,
+  onClick,
+  children,
+  sub,
+  mono,
+  warn,
+}: {
+  on: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+  sub?: string;
+  mono?: boolean;
+  /** Permitted by the grant, but nothing can carry it out yet. */
+  warn?: boolean;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`rounded-lg border px-3 py-2 text-left transition ${
+        on
+          ? warn
+            ? "border-amber-900/60 bg-amber-950/20"
+            : "border-neutral-500 bg-neutral-900"
+          : "border-neutral-900 bg-neutral-950/40 hover:border-neutral-700"
+      }`}
+    >
+      <span
+        className={`block text-sm ${mono ? "font-mono text-xs" : ""} ${
+          on ? "text-neutral-100" : "text-neutral-400"
+        }`}
+      >
+        {children}
+      </span>
+      {sub && <span className="mt-0.5 block text-[11px] text-neutral-600">{sub}</span>}
+    </button>
+  );
+}
+
+/** The escape hatch on every row: the list is never complete. */
+function AddChip({
+  placeholder,
+  check,
+  onAdd,
+}: {
+  placeholder: string;
+  check: (v: string) => boolean;
+  onAdd: (v: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [value, setValue] = useState("");
+
+  if (!open) {
+    return (
+      <button
+        onClick={() => setOpen(true)}
+        className="rounded-lg border border-dashed border-neutral-800 px-3 py-2 text-sm text-neutral-500 transition hover:border-neutral-600 hover:text-neutral-300"
+      >
+        + custom
+      </button>
+    );
+  }
+
+  const ok = check(value);
+  return (
+    <span className="flex items-center gap-1">
+      <input
+        autoFocus
+        value={value}
+        onChange={(e) => setValue(e.target.value.trim())}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && ok) {
+            onAdd(value);
+            setValue("");
+            setOpen(false);
+          }
+          if (e.key === "Escape") setOpen(false);
+        }}
+        placeholder={placeholder}
+        className="w-44 rounded-lg border border-neutral-700 bg-neutral-950 px-3 py-2 font-mono text-xs text-neutral-100 outline-none placeholder:text-neutral-700 focus:border-neutral-500"
+      />
+      <button
+        onClick={() => {
+          if (!ok) return;
+          onAdd(value);
+          setValue("");
+          setOpen(false);
+        }}
+        disabled={!ok}
+        className="rounded-lg border border-neutral-800 px-3 py-2 text-xs text-neutral-300 transition hover:border-neutral-600 disabled:opacity-40"
+      >
+        Add
+      </button>
+    </span>
   );
 }
 
@@ -511,7 +591,7 @@ function Build({
   onDone: () => void;
 }) {
   const [phase, setPhase] = useState<Phase>("idle");
-  const [stage, setStage] = useState<AssemblyStage>(0);
+  const [stage, setStage] = useState<AssemblyStage>(1);
   const [note, setNote] = useState("Two taps: one to make the ring, one to sign the chain.");
   const [error, setError] = useState<string | null>(null);
   const [upgraded, setUpgraded] = useState<boolean | null>(null);

@@ -4,7 +4,7 @@ import type { Address, Hex } from "viem";
 import { connectAndOpenApp } from "@/lib/device-app";
 import { runRelay } from "@/lib/relay-client";
 import type { Session } from "@/lib/session";
-import { byId, type CustomRule } from "@/lib/capabilities";
+import { ACTIONS, PROTOCOLS, type CustomRule } from "@/lib/capabilities";
 import { agentIdFrom, allowanceFor, calldata, firstGrant, USDC } from "@/lib/tenant";
 import type { ProvisionRequest } from "@/components/tenants/ProvisionDialog";
 
@@ -120,17 +120,25 @@ export type Provisioned = {
  * call nothing is not a machine, it is a name.
  */
 export function rulesFor(req: ProvisionRequest): { target: Address; selector: Hex }[] {
-  const chosen = (req.capabilities ?? [])
-    .map(byId)
-    .filter((c): c is NonNullable<typeof c> => !!c)
-    .map((c) => ({ target: c.target, selector: c.selector }));
+  // Every chosen action, on every chosen token.
+  const pairs = (req.tokens ?? []).flatMap((token) =>
+    (req.actions ?? [])
+      .map((id) => ACTIONS.find((a) => a.id === id))
+      .filter((a): a is NonNullable<typeof a> => !!a)
+      .map((a) => ({ target: token as Address, selector: a.selector })),
+  );
+
+  const protocols = (req.protocols ?? [])
+    .map((id) => PROTOCOLS.find((p) => p.id === id))
+    .filter((p): p is NonNullable<typeof p> => !!p)
+    .map((p) => ({ target: p.target, selector: p.selector }));
 
   const custom = (req.customRules ?? []).map((r: CustomRule) => ({
     target: r.target as Address,
     selector: r.selector as Hex,
   }));
 
-  const all = [...chosen, ...custom];
+  const all = [...pairs, ...protocols, ...custom];
   return all.length ? all : [{ target: USDC, selector: "0xa9059cbb" as Hex }];
 }
 

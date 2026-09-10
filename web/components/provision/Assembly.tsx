@@ -74,6 +74,13 @@ export function Assembly({
 
   return (
     <svg className={className} viewBox="8 4 284 250" aria-hidden>
+      <defs>
+        {(["l", "r"] as const).map((side) => (
+          <clipPath key={side} id={`asm-track-${side}`}>
+            <rect x={-20} y={-52} width={40} height={104} rx={19} />
+          </clipPath>
+        ))}
+      </defs>
       {/* A ghost of the whole machine, so the empty space reads as something
           unfinished rather than as nothing. */}
       <g opacity={0.07} stroke="#E8EDF5" strokeWidth={2} fill="none">
@@ -85,15 +92,24 @@ export function Assembly({
         <circle cx={188} cy={54} r={32} />
       </g>
 
-      {/* Tracks. They shuffle once they are bolted down. */}
+      {/* Tracks, and they run. This is what is moving before anything else
+          has been fitted — an empty chassis with its tracks turning is a
+          machine waiting for parts, where a still one is a diagram. */}
       <g {...part("tracks")}>
         <g className={alive("tracks", "rig-shuffle")}>
           {([
-            [52, 178, 13],
-            [248, 178, -13],
-          ] as const).map(([x, y, tilt], i) => (
-            <g key={i} transform={`translate(${x} ${y}) rotate(${tilt})`}>
+            ["l", 52, 178, 13],
+            ["r", 248, 178, -13],
+          ] as const).map(([side, x, y, tilt]) => (
+            <g key={side} transform={`translate(${x} ${y}) rotate(${tilt})`}>
               <rect x={-20} y={-52} width={40} height={104} rx={19} fill={DARK} />
+              <g clipPath={`url(#asm-track-${side})`}>
+                <g className="rig-roll">
+                  {Array.from({ length: 26 }, (_, k) => (
+                    <rect key={k} x={-20} y={-72 + k * 9} width={40} height={4.5} fill="#3A4048" />
+                  ))}
+                </g>
+              </g>
               <rect x={-20} y={-52} width={40} height={104} rx={19} fill="none" stroke={RIM} strokeWidth={3} />
             </g>
           ))}
@@ -159,7 +175,7 @@ export function Assembly({
           key={i}
           transform={`translate(${sc.x} ${sc.y})`}
           className={working ? "screw screw-fast" : "screw"}
-          style={{ animationDelay: `${(i % 5) * -0.9}s`, animationDuration: `${5 + (i % 3) * 1.6}s` }}
+          style={{ animationDelay: `${(i % 5) * -0.7}s`, animationDuration: `${3.2 + (i % 3) * 0.9}s` }}
         >
           <circle r={4.2} fill="#3A424C" stroke="#6B7681" strokeWidth={1.2} />
           <line x1={-2.4} y1={0} x2={2.4} y2={0} stroke="#C9D2DC" strokeWidth={1.3} strokeLinecap="round" />

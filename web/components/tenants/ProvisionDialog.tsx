@@ -13,8 +13,12 @@ export type ProvisionRequest = {
   brainSecret: string;
   /** Anything else the agent needs, one NAME=value per line. */
   extraSecrets: string;
-  /** Chosen from the catalogue. See `lib/capabilities`. */
-  capabilities?: string[];
+  /** Token contracts the agent may act on. See `lib/capabilities`. */
+  tokens?: string[];
+  /** Which functions it may call on them. */
+  actions?: string[];
+  /** Whole rules that are not a token-and-action: routers, pools. */
+  protocols?: string[];
   /** Rules written out by hand, because the catalogue is never complete. */
   customRules?: { target: string; selector: string; note: string }[];
 };
