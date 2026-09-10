@@ -33,7 +33,17 @@ import sys
 import urllib.error
 import urllib.request
 
-BROKER = os.environ.get("HARNESS_BROKER", "http://10.89.0.1:8402")
+BROKER = os.environ.get("HARNESS_BROKER", "")
+if not BROKER:
+    # No default. The old one named a fixed gateway, which is another tenant's
+    # door on any machine but the first — and asking at the wrong door gets a
+    # refusal that reads like a permissions problem rather than a missing
+    # variable. Saying so plainly costs one line and an hour of confusion.
+    print("harness: HARNESS_BROKER is not set, so there is no broker to ask.",
+          file=sys.stderr)
+    print("  A login shell should get it from /etc/profile.d/harness-env.sh.",
+          file=sys.stderr)
+    raise SystemExit(3)
 
 
 def request(url, method, data, headers):

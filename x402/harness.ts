@@ -128,6 +128,13 @@ export const BATCH_TYPES = {
 export const REGISTRY_ABI = [
   {
     type: "function",
+    name: "rootDevice",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "address" }],
+  },
+  {
+    type: "function",
     name: "execute",
     stateMutability: "nonpayable",
     inputs: [

@@ -271,12 +271,17 @@ async function askFor(ip: string, door: string, body: Record<string, unknown>) {
   const want = String(body.want ?? "").slice(0, 400).trim();
   const why = String(body.why ?? "").slice(0, 800).trim();
   const usd = Number(body.usd ?? 0);
+  // A transfer the Agent could not make itself. Recorded as the payment it
+  // is, so approving signs that payment rather than widening what the Agent
+  // may do — a ceiling raised to let one invoice through stays raised.
+  const to = String(body.to ?? "").trim();
+  const kind = /^0x[0-9a-fA-F]{40}$/.test(to) ? "transfer" : "note";
   if (!want) throw Object.assign(new Error("say what you need"), { status: 400 });
   if (!Number.isFinite(usd) || usd < 0 || usd > 1_000_000) {
     throw Object.assign(new Error("usd must be a number a person could plausibly approve"), { status: 400 });
   }
 
-  const id = sealAsk(tenant, agent, { want, why, usd });
+  const id = sealAsk(tenant, agent, { want, why, usd, kind, ...(kind === "transfer" ? { to } : {}) });
   console.log(`  ${name} asks for $${usd.toFixed(2)}: ${want}`);
   return {
     id,
@@ -284,6 +289,142 @@ async function askFor(ip: string, door: string, body: Record<string, unknown>) {
     agent: name,
     note: "Recorded and shown to the owner. Nothing is granted until they sign.",
   };
+}
+
+/**
+ * Sending money, on purpose, to somebody named.
+ *
+ * The Grant permits exactly one call — `transfer` on USDC — and one ceiling.
+ * So this is not a new power, it is the power the Tenant already granted,
+ * finally reachable: an Agent that can pay a 402 could always move the same
+ * money, and had no way to say so.
+ *
+ * The ceiling is read before anything is signed. The registry would refuse a
+ * transfer over it anyway, but a refusal that arrives as a revert costs gas
+ * and says little; a refusal that arrives as a number tells the Agent exactly
+ * how short it is, which is what it needs to decide whether to ask.
+ */
+async function sendFor(ip: string, door: string, body: Record<string, unknown>) {
+  const { tenant, agent, network } = await whoIsAsking(ip);
+  const own = await gatewayOf(network);
+  if (own && door !== own) {
+    throw Object.assign(new Error(`${tenant} may only ask at ${own}`), { status: 403 });
+  }
+  const name = await stillLive(tenant, agent);
+
+  const to = String(body.to ?? "");
+  if (!/^0x[0-9a-fA-F]{40}$/.test(to)) {
+    throw Object.assign(new Error("that is not an address"), { status: 400 });
+  }
+  const dollars = Number(body.usd ?? 0);
+  if (!Number.isFinite(dollars) || dollars <= 0) {
+    throw Object.assign(new Error("say how much, in dollars"), { status: 400 });
+  }
+  const amount = BigInt(Math.round(dollars * 1e6));
+
+  const { grant, registry, rootOfTree, agentPk } = load(agent, tenant);
+  const room = await headroom(registry, rootOfTree, grant);
+
+  if (amount > room.left) {
+    // Structured, because the Agent's next move depends on the numbers. The
+    // shortfall is what it would have to ask a person to approve.
+    throw Object.assign(
+      new Error(
+        `over the ceiling: ${usd(amount)} asked, ${usd(room.left)} left. ` +
+          `Ask the owner for ${usd(amount - room.left)} more.`,
+      ),
+      { status: 402, needUsd: Number(amount - room.left) / 1e6 },
+    );
+  }
+
+  const hash = await settle({
+    registry,
+    rootOfTree,
+    grant,
+    agentPk,
+    relayerPk: RELAYER_PK,
+    calls: [transferCall(USDC, to as Address, amount)],
+  });
+
+  console.log(`  ${name} -> ${usd(amount)} to ${to} (${hash.slice(0, 10)}…)`);
+  return {
+    sent: usd(amount),
+    to,
+    hash,
+    left: usd(room.left - amount),
+    agent: name,
+  };
+}
+
+/** Where the dashboard is, for putting a transaction in front of the device. */
+const DASHBOARD = process.env.HARNESS_DASHBOARD ?? "http://127.0.0.1:3000";
+
+/**
+ * Handing a payment to the device, and waiting for the answer.
+ *
+ * When the ceiling refuses, the useful next move is not to record a note and
+ * stop — it is to put the payment itself in front of whoever holds the
+ * hardware wallet, and wait. They see it, the device shows it, they press the
+ * button or they do not.
+ *
+ * The Agent gains nothing by this. It cannot sign, cannot raise its own
+ * ceiling, and cannot make anybody agree. What it gains is the ability to
+ * finish a sentence: "I could not, so I asked, and here is what they said."
+ */
+async function escalateFor(ip: string, door: string, body: Record<string, unknown>) {
+  const { tenant, agent, network } = await whoIsAsking(ip);
+  const own = await gatewayOf(network);
+  if (own && door !== own) {
+    throw Object.assign(new Error(`${tenant} may only ask at ${own}`), { status: 403 });
+  }
+  const name = await stillLive(tenant, agent);
+
+  const to = String(body.to ?? "");
+  if (!/^0x[0-9a-fA-F]{40}$/.test(to)) {
+    throw Object.assign(new Error("that is not an address"), { status: 400 });
+  }
+  const dollars = Number(body.usd ?? 0);
+  if (!Number.isFinite(dollars) || dollars <= 0) {
+    throw Object.assign(new Error("say how much, in dollars"), { status: 400 });
+  }
+  const amount = BigInt(Math.round(dollars * 1e6));
+  const why = String(body.why ?? "").slice(0, 400).trim();
+
+  const { registry } = load(agent, tenant);
+  const owner = (await publicClient.readContract({
+    address: registry,
+    abi: REGISTRY_ABI,
+    functionName: "rootDevice",
+  })) as Address;
+
+  // A plain ERC-20 transfer from the owner's own account. Not a Grant, not a
+  // raised ceiling — approving one invoice should not widen what this Agent
+  // may do tomorrow.
+  const data = ("0xa9059cbb" +
+    to.slice(2).toLowerCase().padStart(64, "0") +
+    amount.toString(16).padStart(64, "0")) as Hex;
+
+  console.log(`  ${name} -> asking the owner to send ${usd(amount)} to ${to}`);
+
+  const res = await fetch(`${DASHBOARD}/api/sign`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      tenant,
+      to: USDC,
+      data,
+      expect: owner,
+      what: `send ${usd(amount)} to ${to}${why ? ` — ${why}` : ""}`,
+    }),
+  });
+
+  const answered = (await res.json()) as { result?: { hash?: string }; error?: string };
+  if (!res.ok) {
+    throw Object.assign(new Error(answered.error ?? "the owner did not sign it"), { status: 402 });
+  }
+
+  console.log(`  ${name} <- the owner signed ${usd(amount)} to ${to}`);
+  return { paid: usd(amount), to, by: owner, hash: answered.result?.hash ?? null };
 }
 
 /** Refuses unless the chain still says yes, and only for as much as it says. */
@@ -387,7 +528,7 @@ const handler = async (
     res.end(JSON.stringify(body));
   };
   if (req.method !== "POST") return send(404, { error: "not found" });
-  const routes = ["/capability", "/secrets", "/ledger", "/limits", "/ask"];
+  const routes = ["/capability", "/secrets", "/ledger", "/limits", "/ask", "/send", "/escalate"];
   if (!routes.includes(req.url ?? "")) return send(404, { error: "not found" });
 
   // ::ffff:10.89.0.2 on a dual-stack socket. Taken from the socket, never from
@@ -396,11 +537,13 @@ const handler = async (
   const ip = strip(req.socket.remoteAddress);
   const door = strip(req.socket.localAddress);
 
-  if (req.url === "/ledger" || req.url === "/limits" || req.url === "/ask") {
+  if (req.url === "/ledger" || req.url === "/limits" || req.url === "/ask" || req.url === "/send" || req.url === "/escalate") {
     try {
       const body =
         req.url === "/limits" ? {} : ((JSON.parse((await text(req)) || "{}")) as Record<string, string>);
       if (req.url === "/ask") return send(200, await askFor(ip, door, body));
+      if (req.url === "/send") return send(200, await sendFor(ip, door, body));
+      if (req.url === "/escalate") return send(200, await escalateFor(ip, door, body));
       return send(200, req.url === "/ledger" ? await ledgerFor(ip, door, body) : await limitsFor(ip, door));
     } catch (err) {
       const status = httpStatus(err);

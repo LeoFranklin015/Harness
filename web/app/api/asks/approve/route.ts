@@ -41,23 +41,44 @@ export async function GET(request: Request) {
   const ask = asksFor(tenant).find((a) => a.id === id);
   if (!ask) return NextResponse.json({ error: "no such ask" }, { status: 404 });
 
-  const newCapUsd = currentCapUsd + ask.usd;
-
   try {
     const client = createPublicClient({ chain: sepolia, transport: sepoliaTransport() });
-
-    // Named on the registry rather than remembered, so this works for a
-    // machine provisioned by a session nobody still has open.
-    const spender = (await client.readContract({
-      address: registry,
-      abi: REGISTRY_ABI,
-      functionName: "executor",
-    })) as Address;
 
     const rootDevice = (await client.readContract({
       address: registry,
       abi: REGISTRY_ABI,
       functionName: "rootDevice",
+    })) as Address;
+
+    // A payment the Agent could not make. Approving *is* the payment: the
+    // owner sends it from their own account, once, to the address the Agent
+    // named. Raising a ceiling instead would widen what the Agent may do
+    // forever in order to let one invoice through, which is a strange price
+    // to pay for saying yes.
+    if (ask.kind === "transfer" && ask.to && /^0x[0-9a-fA-F]{40}$/.test(ask.to)) {
+      const amount = BigInt(Math.round(ask.usd * 1e6));
+      return NextResponse.json({
+        ask,
+        from: rootDevice,
+        kind: "transfer",
+        summary: `send $${ask.usd.toFixed(2)} to ${ask.to}`,
+        transactions: [
+          {
+            to: USDC,
+            data: calldata.transfer(ask.to as Address, amount),
+            what: `send $${ask.usd.toFixed(2)} USDC to ${ask.to}`,
+          },
+        ],
+      });
+    }
+
+    // Anything else is a request for more room, and that is a new Grant.
+    const newCapUsd = currentCapUsd + ask.usd;
+
+    const spender = (await client.readContract({
+      address: registry,
+      abi: REGISTRY_ABI,
+      functionName: "executor",
     })) as Address;
 
     const grant = firstGrant({
@@ -67,25 +88,21 @@ export async function GET(request: Request) {
       days,
     });
 
-    // Two calls: the token allowance has to cover the new ceiling over the
-    // Grant's whole life, and then the Grant itself.
     const calls = [
       { to: USDC, data: calldata.approve(spender, allowanceFor(newCapUsd, days)) },
       { to: registry, data: calldata.grant(grant) },
     ];
 
-    // An upgraded account does both in one transaction — a self-call carrying
-    // executeBatch, which is what the device already signs for provisioning.
-    // A plain EOA has to send them one at a time.
     const code = (await client.getCode({ address: rootDevice })) as Hex | undefined;
     const upgraded = delegateFrom(code)?.toLowerCase() === DELEGATE.toLowerCase();
 
     return NextResponse.json({
       ask,
       from: rootDevice,
+      kind: "raise",
       newCapUsd,
       upgraded,
-      // What to sign. One entry if the account is upgraded, two if not.
+      summary: `raise ${tenant} to $${newCapUsd.toFixed(2)}`,
       transactions: upgraded
         ? [{ to: rootDevice, data: batchCalldata(calls), what: `raise ${tenant} to $${newCapUsd}` }]
         : [

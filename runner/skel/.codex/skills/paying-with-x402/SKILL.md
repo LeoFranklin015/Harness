@@ -1,7 +1,50 @@
 ---
 name: paying-with-x402
-description: Pay for an HTTP API that answers 402 Payment Required. Use when a request returns 402, when the user asks to buy or fetch something paid, or when deciding whether this machine can afford a call. Covers the broker, the spending ceiling, and what a refusal means.
+description: Spend money — send USDC to an address, or pay an API that answers 402 Payment Required. Use whenever asked to send, pay, transfer or buy anything, when a request returns 402, or when working out what this machine can afford. Covers the ceiling, what a refusal means, and how to ask the owner for more.
 ---
+
+# Spending
+
+## Sending money to somebody
+
+```sh
+ledger send 0xRecipient… 20        # 20 USDC
+```
+
+The Grant permits exactly one call — `transfer` on USDC — and one ceiling, so
+this is the only way money moves and it cannot exceed what was allowed.
+
+**If it refuses, read the numbers.** Over the ceiling looks like:
+
+```
+over the ceiling: $20.00 asked, $9.00 left. Ask the owner for $11.00 more.
+```
+
+That is not a failure to work around. Do not split it into smaller transfers
+to sneak under — the window is what is limited, not the transaction, and
+trying looks exactly like what it is.
+
+`ledger send` handles the rest by itself: it puts the payment in front of
+whoever holds the hardware wallet and waits. They see it, their device shows
+it, and they either press the button or they do not. If they do, it tells you
+so — and your own ceiling is unchanged, because they paid it, not you.
+
+There is nothing further for you to run. If you want to record a request
+without a payment attached — more room in general, rather than one invoice —
+that is:
+
+```sh
+ledger ask 'send 20 USDC to 0xRecipient…' 20 'they invoiced us for the dataset'
+```
+
+Single quotes, and write the amount as `20 USDC` rather than `$20`. In double
+quotes a shell reads `$20` as the twentieth argument and puts nothing there,
+so the person reading the request sees "send 0 to 0x…" and has to guess. The
+number in the second field is what actually gets approved, but the sentence is
+what they read.
+
+Then stop and say you have asked. Somebody with the hardware wallet sees it,
+and if they agree the ceiling moves and you can continue.
 
 # Paying for something
 

@@ -23,6 +23,9 @@ export type Ask = {
   why: string;
   usd: number;
   asked: number;
+  /** "transfer" when approving is simply making the payment. */
+  kind?: "transfer" | "note";
+  to?: string;
 };
 
 export function Asks({
@@ -99,7 +102,9 @@ export function Asks({
             ${ask.usd.toFixed(2)}
             <span className="text-neutral-600">
               {" "}
-              · would raise the ceiling to ${(currentCapUsd + ask.usd).toFixed(2)}
+              {ask.kind === "transfer"
+                ? "· you send it, once, from your own account"
+                : `· would raise the ceiling to $${(currentCapUsd + ask.usd).toFixed(2)}`}
             </span>
           </p>
 
@@ -109,7 +114,11 @@ export function Asks({
               disabled={busy !== null}
               className="rounded-full border border-neutral-700 px-3 py-1 text-xs text-neutral-100 transition hover:border-neutral-500 hover:bg-neutral-900/60 disabled:opacity-40"
             >
-              {busy === ask.id ? "on the device…" : "Approve on the Ledger"}
+              {busy === ask.id
+                ? "on the device…"
+                : ask.kind === "transfer"
+                  ? "Pay it on the Ledger"
+                  : "Approve on the Ledger"}
             </button>
             <button
               onClick={() => settle(ask)}
@@ -125,8 +134,9 @@ export function Asks({
       {error && <p className="mt-3 text-[11px] leading-relaxed text-amber-400/90">{error}</p>}
 
       <p className="mt-3 text-[11px] leading-relaxed text-neutral-600">
-        Asking granted nothing. The agent is still inside the ceiling it had,
-        and only your device can change that.
+        Asking granted nothing. A payment you approve here is made by you, once
+        — the agent&apos;s ceiling does not move, so saying yes to an invoice
+        does not quietly widen what it may do tomorrow.
       </p>
     </div>
   );

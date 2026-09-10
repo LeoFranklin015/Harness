@@ -35,6 +35,10 @@ export type Ask = {
   usd: number;
   /** When it asked, epoch ms. */
   asked: number;
+  /** "transfer" when the ask is a payment somebody can simply make. */
+  kind?: "transfer" | "note";
+  /** Who the payment is for, when it is one. */
+  to?: string;
 };
 
 /** Everything one tenant's agents are waiting on, oldest first. */

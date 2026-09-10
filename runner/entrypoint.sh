@@ -78,6 +78,24 @@ if [ -d /etc/harness/skel ]; then
     chown -R runner:runner /home/runner 2>/dev/null || true
 fi
 
+# Where the broker is, for shells that arrive without an environment.
+#
+# sshd sanitises what it passes to a login shell, so a container variable set
+# by `podman run` reaches `podman exec` and not ssh. The tools then fell back
+# to a compiled-in default — another tenant's gateway — and the broker
+# correctly refused them: "bjbvjw may only ask at 10.89.1.1". A default that
+# names somebody else's door is worse than no default, but the real fix is for
+# the value to survive the trip.
+# /run, not /etc/profile.d: the root filesystem is read-only, and the login
+# profile already reads from here.
+mkdir -p /run/harness
+{
+    echo "# Written at start: sshd does not carry the container's environment."
+    echo "export HARNESS_BROKER='${HARNESS_BROKER:-}'"
+    echo "export HARNESS_SELLER='${HARNESS_SELLER:-}'"
+} > /run/harness/place
+chmod 644 /run/harness/place
+
 # What this Agent was given, opened by the broker if the chain still allows it.
 # In the background, because the broker binds a gateway that does not exist
 # until a container is running on the network — which is to say, until this one

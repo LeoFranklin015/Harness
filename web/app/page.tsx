@@ -445,55 +445,44 @@ function Machines({
   }
 
   /**
-   * Raising a ceiling, because an agent asked and you agreed.
+   * Doing what an agent asked, once you have agreed to it.
    *
-   * The only thing that ever moves a limit is this signature. The agent
-   * recorded what it needed and stopped; approving issues a fresh Grant at
-   * the higher figure, which is a new fact on chain rather than an edit to an
-   * old one — the previous ceiling is not amended, it is replaced.
+   * Two shapes, and the difference matters. A payment the agent could not
+   * make is made by you, from your own account, exactly once — approving an
+   * invoice should not widen what the agent may do tomorrow. Anything else is
+   * a request for more room, and that is a new Grant at a higher ceiling.
+   *
+   * The transaction is built server-side from the chain, so this signs what
+   * the endpoint says rather than reconstructing it and hoping the two agree.
    */
-  async function raiseCeiling(tenant: Tenant, ask: Ask, newCapUsd: number) {
+  async function approveAsk(tenant: Tenant, ask: Ask, _newCapUsd: number) {
     const i = tenants.findIndex((t) => t?.label === tenant.label);
-    if (!tenant.agent) throw new Error("this machine has no agent to grant to");
     setError(null);
 
-    const days = Number(tenant.request?.days ?? 30);
     try {
-      const dev = await session.device((s) => narrate(i, s));
+      const plan = await fetch(
+        `/api/asks/approve?${new URLSearchParams({
+          tenant: tenant.label,
+          id: ask.id,
+          registry: tenant.registry,
+          cap: String(Number(tenant.request?.capUsd ?? 0)),
+          days: String(Number(tenant.request?.days ?? 30)),
+        })}`,
+      ).then((r) => r.json());
+      if (plan.error) throw new Error(plan.error);
 
-      // The executor is named on the registry itself, so a raise does not
-      // depend on remembering what provisioning happened to see.
-      const pub = createPublicClient({ chain: sepolia, transport: sepoliaTransport() });
-      const spender = (await pub.readContract({
-        address: tenant.registry,
-        abi: REGISTRY_ABI,
-        functionName: "executor",
-      })) as Address;
+      const dev = await session.device((step) => narrate(i, step));
+      let receipt;
+      for (const t of plan.transactions as Array<{ to: Address; data: Hex; what: string }>) {
+        narrate(i, `Ledger — ${t.what}`);
+        receipt = await dev.send({ to: t.to, data: t.data }, (step) => narrate(i, step));
+      }
 
-      const ready = await fetch("/api/agent-key", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ label: tenant.label, agent: tenant.agent }),
-      }).then((r) => r.json());
-      if (!ready.agentKey) throw new Error(ready.error ?? "could not derive the agent key");
-
-      const grant = firstGrant({
-        label: tenant.agent,
-        agentKey: ready.agentKey,
-        capUsd: newCapUsd,
-        days,
-      });
-
-      narrate(i, `Ledger — raise ${tenant.label} to $${newCapUsd.toFixed(2)}`);
-      const receipt = await dev.sendBatch(
-        [
-          // The token allowance has to cover the new ceiling over the whole
-          // life of the Grant, or the executor cannot draw what was permitted.
-          { to: USDC, data: calldata.approve(spender, allowanceFor(newCapUsd, days)) },
-          { to: tenant.registry, data: calldata.grant(grant) },
-        ],
-        (s) => narrate(i, s),
-      );
+      if (plan.kind === "transfer") {
+        // Nothing about the machine changed; you simply paid something.
+        setSlot(i, { ...tenant, status: "live" });
+        return;
+      }
 
       const agentId = receipt ? agentIdFrom(receipt.logs) : null;
       await fetch("/api/grants", {
@@ -501,11 +490,15 @@ function Machines({
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           tenant: tenant.label,
-          label: tenant.agent,
-          agentKey: ready.agentKey,
-          start: Number(grant.start),
-          end: Number(grant.end),
-          cap: grant.spends[0]!.allowance.toString(),
+          label: ask.label,
+          agentKey: (await fetch("/api/agent-key", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ label: tenant.label, agent: ask.label }),
+          }).then((r) => r.json())).agentKey,
+          start: Math.floor(Date.now() / 1000) - 60,
+          end: Math.floor(Date.now() / 1000) + Number(tenant.request?.days ?? 30) * 86400,
+          cap: String(Math.round(plan.newCapUsd * 1_000_000)),
           registry: tenant.registry,
           agentId,
         }),
@@ -515,8 +508,10 @@ function Machines({
         ...tenant,
         status: "live",
         agentId: (agentId ?? tenant.agentId) as `0x${string}` | undefined,
-        cap: `$${newCapUsd.toFixed(0)}/day`,
-        request: tenant.request ? { ...tenant.request, capUsd: String(newCapUsd) } : tenant.request,
+        cap: `$${plan.newCapUsd.toFixed(0)}/day`,
+        request: tenant.request
+          ? { ...tenant.request, capUsd: String(plan.newCapUsd) }
+          : tenant.request,
       });
     } catch (err) {
       fail(i, err, { ...tenant, status: "live" });
@@ -599,7 +594,7 @@ function Machines({
             onContinue={continueProvision}
             onRevoke={revoke}
             onAuthorise={authorise}
-            onRaise={raiseCeiling}
+            onRaise={approveAsk}
           />
         ))}
       </div>

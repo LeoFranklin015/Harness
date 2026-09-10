@@ -210,6 +210,16 @@ export function firstGrant(opts: {
 const ERC20_ABI = [
   {
     type: "function",
+    name: "transfer",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "to", type: "address" },
+      { name: "value", type: "uint256" },
+    ],
+    outputs: [{ name: "", type: "bool" }],
+  },
+  {
+    type: "function",
     name: "approve",
     stateMutability: "nonpayable",
     inputs: [
@@ -226,6 +236,9 @@ export function allowanceFor(capUsd: number, days: number): bigint {
 }
 
 export const calldata = {
+  /** A plain ERC-20 transfer, for when the owner pays something themselves. */
+  transfer: (to: Address, value: bigint) =>
+    encodeFunctionData({ abi: ERC20_ABI, functionName: "transfer", args: [to, value] }),
   approve: (executor: Address, value: bigint) =>
     encodeFunctionData({ abi: ERC20_ABI, functionName: "approve", args: [executor, value] }),
   setExecutor: (executor: Address) =>

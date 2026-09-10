@@ -2,6 +2,10 @@
 #
 # Sourced by every login shell — ssh and the dashboard terminal alike.
 
+# Where the broker is. sshd does not carry the container's environment, so a
+# login shell would otherwise have no idea which door is its own.
+[ -r /run/harness/place ] && . /run/harness/place
+
 # Opened for this agent at start, from the broker, under the ring. If a shell
 # arrives before that finished, ask now rather than start blind.
 [ -s /run/harness/env ] || /usr/local/bin/fetch-secrets >/dev/null 2>&1

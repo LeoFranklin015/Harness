@@ -19,6 +19,19 @@ You are on a network with one other thing on it: the broker's gateway. You
 cannot reach another tenant's machine, and nothing on the internet can reach
 you except through the mesh.
 
+## Sending money
+
+```sh
+ledger send 0xRecipient… 20        # 20 USDC, if the ceiling allows
+```
+
+Over the ceiling, it says by how much. That is a number to put in front of a
+person, not an obstacle to route around:
+
+```sh
+ledger ask 'send 20 USDC to 0xRecipient…' 20 'they invoiced us for the dataset'
+```
+
 ## How you pay for things
 
 Some HTTP APIs answer `402 Payment Required` instead of serving. That is
