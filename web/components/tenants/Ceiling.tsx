@@ -32,7 +32,10 @@ export function Ceiling({
   const polled = useSpend(tenant, agent);
   const spent = spentUsd ?? polled;
   const known = typeof spent === "number" && capUsd > 0;
-  const fraction = known ? Math.min(1, spent! / capUsd) : 1;
+  // Unknown is not the same as full. A filled track while the answer is
+  // still in flight states a number nobody has checked, and states it in the
+  // reassuring direction; an empty one only understates for a moment.
+  const fraction = known ? Math.min(1, spent! / capUsd) : 0;
 
   // Springs rather than tweens: a limit filling up should settle, not arrive.
   const progress = useSpring(0, { stiffness: 90, damping: 20, mass: 0.6 });
@@ -43,11 +46,15 @@ export function Ceiling({
   useEffect(() => {
     if (still) {
       progress.jump(fraction);
-      counter.jump(known ? spent! : capUsd);
+      counter.jump(capUsd);
       return;
     }
     progress.set(fraction);
     const to = known ? spent! : capUsd;
+    if (!known) {
+      counter.jump(capUsd);
+      return;
+    }
     // Counting is tied to the same spring so the number and the bar cannot
     // disagree, which is what makes it read as one quantity.
     return progress.on("change", (v) => counter.set(fraction === 0 ? to : (v / fraction) * to));
@@ -63,11 +70,15 @@ export function Ceiling({
         </span>
       </div>
 
-      <div className="mt-2 h-1 w-full overflow-hidden rounded-full bg-neutral-900">
+      <div
+        className={`mt-2 h-1 w-full overflow-hidden rounded-full bg-neutral-900 ${
+          known ? "" : "animate-pulse"
+        }`}
+      >
         <motion.div
           style={{ width }}
           className={`h-full rounded-full ${
-            known && fraction > 0.85 ? "bg-amber-500/80" : "bg-emerald-500/70"
+            fraction > 0.85 ? "bg-amber-500/80" : "bg-emerald-500/70"
           }`}
         />
       </div>

@@ -8,6 +8,7 @@ import { MeshInvite } from "@/components/tenants/MeshInvite";
 import { Terminal } from "@/components/tenants/Terminal";
 import { Asks, type Ask } from "@/components/tenants/Asks";
 import { Ceiling } from "@/components/tenants/Ceiling";
+import { Machine } from "@/components/tenants/Machine";
 import { RevokeCascade } from "@/components/tenants/RevokeCascade";
 import type { ProvisionRequest } from "@/components/tenants/ProvisionDialog";
 
@@ -118,12 +119,23 @@ function FilledSlot({
     <div className="relative min-h-[280px] w-full overflow-hidden rounded-2xl border border-neutral-800 bg-neutral-950/60 p-6">
       {provisioning && <BorderBeam size={220} duration={7} />}
 
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <p className="font-mono text-sm text-neutral-300">
+      {/* Sat in the corner rather than bled off it: half a mechanism reads
+          as a smudge, and the whole point is that it is legibly turning.
+          Behind the content, which is what anyone is here to read. */}
+      <Machine
+        state={tenant.status}
+        className="pointer-events-none absolute bottom-3 right-3 h-32 w-32 select-none"
+      />
+
+      <div className="relative flex items-start justify-between gap-4">
+        <div className="min-w-0">
+          <p className="truncate font-mono text-sm text-neutral-300">
             {tenant.label}.harness.eth
           </p>
-          <p className="mt-1 text-xs text-neutral-600">{tenant.registry}</p>
+          {/* Truncated, because it is a reference rather than something read:
+              at a narrow width an untruncated address pushes the status pill
+              off the edge of the card. */}
+          <p className="truncate text-xs text-neutral-600">{tenant.registry}</p>
         </div>
         <StatusPill status={tenant.status} />
       </div>
@@ -153,7 +165,8 @@ function FilledSlot({
           )}
         </>
       ) : (
-        <>
+        // Above the machine turning behind it.
+        <div className="relative">
           <dl className="mt-6 space-y-2.5 text-sm">
             <Row label="Agent" value={tenant.agent ? `${tenant.agent}.${tenant.label}.harness.eth` : "—"} mono />
             <Row label="Mesh" value={tenant.meshAddress ?? "—"} mono />
@@ -164,7 +177,7 @@ function FilledSlot({
           {!revoked && (
             <Ceiling capUsd={capUsd(tenant)} tenant={tenant.label} agent={tenant.agent} />
           )}
-        </>
+        </div>
       )}
 
       {tenant.status === "live" && (
@@ -172,7 +185,7 @@ function FilledSlot({
           {shell && tenant.agent && (
             <Terminal tenant={tenant.label} agent={tenant.agent} onClose={() => setShell(false)} />
           )}
-          <div className="mt-6 flex flex-wrap gap-2">
+          <div className="relative mt-6 flex flex-wrap gap-2">
             {tenant.agent && (
               <button
                 onClick={() => setShell(true)}
