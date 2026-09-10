@@ -17,7 +17,16 @@ import { settle, transferCall } from "./settle.ts";
 const SELLER = process.env.SELLER ?? "http://127.0.0.1:4021";
 const LABEL = process.argv[2] ?? "research";
 const ROUNDS = Number(process.argv[3] ?? 3);
-const RELAYER_PK = process.env.PRIVATE_KEY as Hex;
+/**
+ * A burner that pays gas and nothing else.
+ *
+ * Deliberately not the Tenant's key. An Agent that held that could call
+ * `transfer` on the token directly and empty the account, never touching the
+ * registry — the ceiling would be decorative. This key holds no authority: the
+ * worst an Agent can do with it is waste its own gas.
+ */
+const RELAYER_PK = process.env.RELAYER_PK as Hex;
+if (!RELAYER_PK) throw new Error("set RELAYER_PK — a burner with gas, never the Tenant's key");
 
 const { grant, registry, rootOfTree, agentPk, name: NAME } = load(LABEL);
 

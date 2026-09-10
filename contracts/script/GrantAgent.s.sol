@@ -20,7 +20,9 @@ contract GrantAgent is Script {
         AgentRegistry registry = AgentRegistry(vm.envAddress("REGISTRY"));
         string memory label = vm.envString("LABEL");
         uint160 cap = uint160(vm.envUint("CAP"));
-        address agentKey = vm.addr(uint256(keccak256(bytes(vm.envString("AGENT_SEED")))));
+        // The Agent's address, computed by the VPS from its sealed root before
+        // the container exists. The device signs for a key it never holds.
+        address agentKey = vm.envAddress("AGENT_KEY");
 
         uint48 start = uint48(block.timestamp - 60);
         uint48 end = uint48(block.timestamp) + 30 days;

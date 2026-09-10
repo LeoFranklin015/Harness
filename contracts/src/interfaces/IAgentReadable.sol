@@ -17,4 +17,7 @@ interface IAgentReadable {
 
     /// The ed25519 SSH host key that host answers with.
     function selfHostKey() external view returns (bytes32);
+
+    /// SHA-256 fingerprint of the key allowed to log into that host.
+    function selfOperator() external view returns (bytes32);
 }

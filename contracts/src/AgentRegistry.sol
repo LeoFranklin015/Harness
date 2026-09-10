@@ -123,6 +123,18 @@ contract AgentRegistry is PermissionedRegistry {
     bytes4 public selfEndpoint;
     bytes32 public selfHostKey;
 
+    /// The SHA-256 fingerprint of the key allowed to log into this host.
+    ///
+    /// The fingerprint, not the key. Publishing the key would publish a roster:
+    /// who may log in, and precisely which private key is worth stealing. A
+    /// fingerprint verifies a key that is offered without naming one that is
+    /// not — sshd hands `AuthorizedKeysCommand` the key the client presents, so
+    /// nothing here ever has to enumerate.
+    ///
+    /// Its own host key is the opposite case and is published whole: there the
+    /// machine is identifying itself, which is what SSHFP is for.
+    bytes32 public selfOperator;
+
     /// Consumption per Agent, per SpendLimit, within the current window.
     mapping(bytes32 agentId => mapping(bytes32 limitId => PeriodSpend)) internal _spent;
 
@@ -241,10 +253,11 @@ contract AgentRegistry is PermissionedRegistry {
     ///      first leaves the name pointing at the new machine while the key
     ///      still names the old one — which is indistinguishable, to whoever
     ///      connects, from being handed the wrong host.
-    function setHost(bytes4 ipv4, bytes32 sshHostKey) external {
+    function setHost(bytes4 ipv4, bytes32 sshHostKey, bytes32 operator) external {
         if (msg.sender != rootDevice) revert NotRootDevice();
         selfEndpoint = ipv4;
         selfHostKey = sshHostKey;
+        selfOperator = operator;
     }
 
     /// @notice An Agent's key, or zero if it may not act.

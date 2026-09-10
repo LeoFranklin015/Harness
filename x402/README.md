@@ -17,8 +17,75 @@ node --experimental-strip-types agent.ts scout 4
 node --experimental-strip-types revoke-demo.ts
 ```
 
-`PRIVATE_KEY` relays and pays gas. Agent keys are derived from a public string,
-so they are reproducible and deliberately worth nothing.
+## What runs where
+
+Everything under `x402/` except the seller runs **inside the Agent's container**.
+What must not is the point:
+
+| in the container | outside it |
+|---|---|
+| the Agent process | the Tenant's key — holds the funds, gave the allowance |
+| the Agent Key — signs batches and EIP-3009 authorizations | the device — a Ledger, physically elsewhere |
+| a **burner** relayer key, with gas and no authority | the seller and the facilitator — other people entirely |
+| the Grant JSON, an RPC URL, outbound HTTPS | |
+
+`RELAYER_PK` is deliberately a burner. An Agent holding the Tenant's key could
+call `transfer` on the token directly and empty the account without ever
+touching the registry — the ceiling would be decorative. The burner holds no
+authority at all; the worst an Agent can do with it is waste its own gas.
+
+Proven by running the Agent with the Tenant's key absent from its environment:
+
+```
+env -u PRIVATE_KEY RELAYER_PK=$(cat .relayer) node … agent-exact.ts research 1
+
+funding tx  from 0x263Bdf219e649d8b8c05aa311C2b0086b082A43B   ← the burner
+            USDC 0xe08224b2…(the Tenant) → 0xd98ec625…(the Agent)  0.25
+```
+
+The Tenant's money moved without the Tenant's key being anywhere near the
+container. That is what the allowance and the registry are for.
+
+The container also holds USDC between funding and settlement — one payment's
+worth, briefly. That is the exposure named under *Why `exact` needs funding*,
+and it is why the Agent is funded one payment at a time.
+
+## Where an Agent Key comes from
+
+Not from the Ledger Key Ring directly, though that is the tempting shape. The
+ring shares one root across every member, so `HKDF(ringRoot, label)` would let
+any member derive **every** Agent's key — a compromised `research` container
+could then act as `scout`, up to scout's Grant. Siblings must not be able to
+impersonate each other; that isolation is most of what the hierarchy is for.
+
+So the ring seals and a separate root derives (`keys.ts`):
+
+| | |
+|---|---|
+| ring membership | the VPS — the USB-less enrolment |
+| agent root secret | held by the VPS, sealed at rest by the ring, so it survives reboots and is recoverable from the Ledger seed |
+| an Agent's key | `HKDF(root, "harness/agent/<tenant>/<label>")` |
+| the container | gets only its own key, never the root — so it can derive nothing but itself |
+
+This also settles an ordering problem. Because the VPS holds the root, it can
+compute an Agent's address **before its container exists**, so the device signs
+a Grant for a key it never holds and never has to wait for a container to start:
+
+```
+$ node --experimental-strip-types keys.ts demo newsdesk
+0x713C90e9C29Add4Fb6c1ecbCD74FD1675F487d4F
+
+$ AGENT_KEY=0x713C… forge script script/GrantAgent.s.sol …
+```
+
+Agents granted before `keys.ts` existed carry keys derived from a public string
+— `keccak256("research-agent-key")` — which anyone reading this repo can
+compute. They are worth nothing by construction, and `load()` says so out loud
+rather than treating them as real:
+
+```
+  ! research uses a publicly derivable demo key — anyone can compute it
+```
 
 ## The choice
 

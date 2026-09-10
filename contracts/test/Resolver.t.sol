@@ -36,6 +36,7 @@ contract ResolverTest is Test {
     bytes constant DEMO = hex"0464656d6f076861726e6573730365746800";
 
     /// The ed25519 host key of the box serving the demo Agent.
+    bytes32 constant OPERATOR = 0xcd44cf1d7609fb909293929ccafa0b477b2eb86dfd3691eb12770d5881865b2f;
     bytes32 constant HOST_KEY =
         0x4d86674e02de300f905ceb0b712f3323a14447fa7516dbad2094dca747e1cb74;
 
@@ -70,7 +71,7 @@ contract ResolverTest is Test {
 
         vm.startPrank(device);
         // The machine publishes where it is and how to recognise it, once.
-        demoReg.setHost(bytes4(hex"8d94d14d"), HOST_KEY); // 141.148.209.77
+        demoReg.setHost(bytes4(hex"8d94d14d"), HOST_KEY, OPERATOR); // 141.148.209.77
 
         Grant memory research = _grant(bytes32(0), "research", researchKey, 10e6);
         Grant memory none;
@@ -180,6 +181,21 @@ contract ResolverTest is Test {
             _text(RESEARCH, "ssh-hostkey"), _text(DEMO, "ssh-hostkey"), "one key, one machine"
         );
         assertEq(_text(RESEARCH, "url"), _text(DEMO, "url"), "and one address");
+    }
+
+    /// The exact string `ssh-keygen -lf` prints for the operator's key, which is
+    /// also what sshd hands AuthorizedKeysCommand as `%f`.
+    function test_publishes_the_operator_fingerprint_not_the_key() public view {
+        assertEq(
+            _text(RESEARCH, "ssh-operator"),
+            "SHA256:zUTPHXYJ+5CSk5KcyvoLR3suuG39NpHrEncNWIGGWy8"
+        );
+    }
+
+    function test_a_revoked_agent_names_no_operator() public {
+        vm.prank(device);
+        demoReg.revoke(researchId);
+        assertEq(_text(RESEARCH, "ssh-operator"), "", "nobody may log in to it");
     }
 
     function test_declares_ensip10() public view {

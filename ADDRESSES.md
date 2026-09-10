@@ -14,11 +14,11 @@ not see each other's names.
 
 | Ours | |
 |---|---|
-| `PlatformRegistry` — what `harness.eth` points at | `0x7d2f806171C046833526841094A2179e526CE6DE` |
-| `AgentResolver` | `0x90d7dB16B49D62013C037876b765C2284Fc8e292` |
-| `AgentRegistry` implementation (cloned per Tenant) | `0xfFEfe4Fd6a89863e74E874C2281E06cd7912E339` |
-| `demo`'s registry | `0x7F3a14C1DF064db0969fC4C1cF7a017C802809a2` |
-| `demo`'s executor | `0xE44A5a2C4670aFac462c3B49941f596f9c6b2BD7` |
+| `PlatformRegistry` — what `harness.eth` points at | `0xbDF56e17F8956268Fc018B77Dac2ebEa7b3928F7` |
+| `AgentResolver` | `0x3735923a7e3CeCdc37F99eDdD8f22df70BB7e93f` |
+| `AgentRegistry` implementation (cloned per Tenant) | `0x74dBF4a7a2C2b46b7a1C3F0e1F4d8B0aD5fC2E11` |
+| `demo`'s registry | `0xfE21595f2A1D586B8d098117799c62619707BE59` |
+| `demo`'s executor | `0x923C84Fb1A012eB8B45EC086500A7E194C895953` |
 | owner / root device | `0xE08224B2CfaF4f27E2DC7cB3f6B99AcC68Cf06c0` |
 | `research` Agent Key | `0xD98eC6253526E9b690597bD3B5f871eF7200086E` |
 
@@ -106,3 +106,62 @@ STAGE=register PLATFORM=… RESOLVER=… forge script script/Hackathon.s.sol --r
 `--slow` is required: the deployer carries an EIP-7702 delegation, and public
 RPCs reject more than one pending transaction from a delegated account
 (`gapped-nonce tx from delegated accounts`).
+
+## SSH, in both directions
+
+The client checks the host against ENS, and the host checks the client. Together
+a connection is only possible while both ends still hold authority.
+
+| | who checks whom | hook |
+|---|---|---|
+| client side | is this really the host? | `KnownHostsCommand` → `tools/harness-known-hosts` |
+| host side | may this key log in? | `AuthorizedKeysCommand` → `tools/harness-authorized-keys` |
+
+```
+Match User agent
+    AuthorizedKeysCommand /usr/local/bin/harness-authorized-keys %u %f %k %t
+    AuthorizedKeysCommandUser nobody
+    AuthorizedKeysFile none
+    PasswordAuthentication no
+```
+
+`harness-authorized-keys` is pure `python3` — standard library only, no
+Foundry, no pip. It runs inside sshd's login path on every connection, so it
+depends on nothing that has to be installed and nothing that could be missing
+when someone needs to get in. It includes a Keccak-256 implementation for that
+reason: `hashlib` has SHA3-256, whose padding byte differs, and ENS needs
+Keccak. About 230ms per login, almost all of it the RPC round trip.
+
+**ENS holds a fingerprint, never the key.** sshd hands `AuthorizedKeysCommand`
+the key the client is offering (`%k`, `%f`), so the script only has to verify a
+key, never enumerate one. Publishing the authorized key itself would publish an
+access roster — who may log in, and precisely which private key is worth
+stealing — permanently and globally indexed. A fingerprint verifies a key that is
+offered without naming one that is not. The Runner's *host* key is the opposite
+case and is published whole: there the machine identifies itself, which is what
+SSHFP exists for.
+
+| | verdict |
+|---|---|
+| live agent, the authorised key | **allowed** |
+| live agent, some other key | refused |
+| revoked agent, the same key | refused |
+| an agent that never existed | refused |
+| chain unreachable | refused, non-zero exit — sshd terminates the connection |
+
+The last row is the one to get right: an unreachable chain must not become an
+open door.
+
+Revocation ends everything at once. `newsdesk.demo.harness.eth`, one
+transaction:
+
+```
+same key, same host, after revocation
+  newsdesk.demo.harness.eth authorises nobody — revoked, expired, or no runner
+  dig  : []
+  known-hosts: publishes no host key — revoked, expired, or no runner
+```
+
+Spending stops, the name stops resolving, and the host refuses the login —
+without evicting anything from the mesh, and without the machine being told that
+a revocation happened. All three are computed from the same fact.

@@ -113,4 +113,8 @@ contract PlatformRegistry is PermissionedRegistry, IAgentReadable {
     function selfHostKey() external pure returns (bytes32) {
         return bytes32(0);
     }
+
+    function selfOperator() external pure returns (bytes32) {
+        return bytes32(0);
+    }
 }

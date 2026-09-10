@@ -1,0 +1,37 @@
+# A Runner: the container an Agent actually lives in.
+#
+# Its sshd asks ENS who may log in, so shell access answers to the same
+# authority as spending. Nothing here holds a list of authorized keys — the
+# chain is asked on every connection.
+FROM docker.io/library/alpine:3.21
+
+RUN apk add --no-cache openssh-server python3 \
+ && adduser -D -s /bin/sh runner \
+ # `adduser -D` leaves the account locked ("!" in shadow), and sshd refuses a
+ # locked account even for public-key auth. The Agent has no password at all —
+ # "*" says exactly that, where "!" says "disabled".
+ && sed -i 's/^runner:!/runner:*/' /etc/shadow \
+ && mkdir -p /etc/harness
+
+# The hook runs inside sshd's login path, so it is stdlib-only python: nothing
+# to install, nothing that can be missing when someone needs to get in.
+COPY harness-authorized-keys /usr/local/bin/harness-authorized-keys
+RUN chown root:root /usr/local/bin/harness-authorized-keys \
+ && chmod 755 /usr/local/bin/harness-authorized-keys
+
+# The host key is generated outside and copied in, never generated here.
+# `ssh-keygen -A` only creates keys that do not already exist, so this survives
+# it — and it means ENS can publish the key before the Runner is ever
+# reachable, leaving no window in which a client has to trust on first use.
+COPY ssh_host_ed25519_key /etc/ssh/ssh_host_ed25519_key
+COPY ssh_host_ed25519_key.pub /etc/ssh/ssh_host_ed25519_key.pub
+RUN chmod 600 /etc/ssh/ssh_host_ed25519_key && chmod 644 /etc/ssh/ssh_host_ed25519_key.pub
+
+# Which Agent this Runner is. sshd gives AuthorizedKeysCommand almost no
+# environment, so the name is a file rather than a variable.
+COPY name /etc/harness/name
+
+COPY sshd_config /etc/ssh/sshd_config
+
+EXPOSE 22
+CMD ["/usr/sbin/sshd", "-D", "-e"]

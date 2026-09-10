@@ -16,12 +16,20 @@
 # ~/.ssh/known_hosts and quietly restore the trust we are replacing.
 set -euo pipefail
 
-host="${1:?usage: harness-known-hosts <hostname>}"
+# %H is what ssh will match the line against — the host as it dialled it,
+# which may be an address and port. The ENS name is what we look up. They are
+# usually the same and need not be: an Agent reached through a tunnel or a
+# forwarded port is still that Agent.
+host="${1:?usage: harness-known-hosts <host-as-dialled> [ens-name]}"
+lookup="${2:-}"
 rpc="${HARNESS_RPC:-https://ethereum-sepolia-rpc.publicnode.com}"
 universal="${HARNESS_UNIVERSAL_RESOLVER:-0xd26f2040d083af1cd2962ba303f4bea0c4faf142}"
 
 # ssh passes %H as [host]:port whenever the port is not 22.
-host="${host#[}"; host="${host%%]*}"; host="${host%%:*}"; host="${host%.}"
+if [ -z "$lookup" ]; then
+    # ssh passes %H as [host]:port whenever the port is not 22.
+    lookup="${host#[}"; lookup="${lookup%%]*}"; lookup="${lookup%%:*}"; lookup="${lookup%.}"
+fi
 
 # DNS wire format: each label prefixed by its length, then a zero byte. This is
 # how ENSIP-10 passes a name to a wildcard resolver.
@@ -29,21 +37,22 @@ wire=$(python3 -c '
 import sys
 name = sys.argv[1]
 print("0x" + "".join("%02x" % len(l) + l.encode().hex() for l in name.split(".")) + "00")
-' "$host")
+' "$lookup")
 
 answer=$(cast call "$universal" 'resolve(bytes,bytes)(bytes,address)' \
     "$wire" \
-    "$(cast calldata 'text(bytes32,string)' "$(cast namehash "$host")" 'ssh-hostkey')" \
+    "$(cast calldata 'text(bytes32,string)' "$(cast namehash "$lookup")" 'ssh-hostkey')" \
     --rpc-url "$rpc" 2>/dev/null | head -1) || {
-    echo "harness: could not reach ENS for $host" >&2
+    echo "harness: could not reach ENS for $lookup" >&2
     exit 1
 }
 
 line=$(cast --abi-decode 'f()(string)' "$answer" 2>/dev/null | tr -d '"' || true)
 
 if [ -z "${line// }" ]; then
-    echo "harness: $host publishes no host key — revoked, expired, or no runner" >&2
+    echo "harness: $lookup publishes no host key — revoked, expired, or no runner" >&2
     exit 1
 fi
 
+# Keyed by the host as ssh dialled it, so ssh can match the line.
 echo "$host $line"

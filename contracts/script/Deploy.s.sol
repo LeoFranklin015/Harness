@@ -34,6 +34,9 @@ contract Deploy is Script {
     /// The ed25519 host key of the box serving the demo Agent.
     bytes32 constant HOST_KEY =
         0x4d86674e02de300f905ceb0b712f3323a14447fa7516dbad2094dca747e1cb74;
+    /// SHA-256 fingerprint of the key allowed to log in. The fingerprint, not
+    /// the key: this is an access roster, and a roster on chain is permanent.
+    bytes32 constant OPERATOR = 0xcd44cf1d7609fb909293929ccafa0b477b2eb86dfd3691eb12770d5881865b2f;
 
     address constant USDC = 0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238;
     /// The shared label database every ENSv2 registry writes labels into.
@@ -76,7 +79,7 @@ contract Deploy is Script {
         AgentRegistry demoReg = root.attachChildRegistry(demoId, "demo");
         bytes32 researchId =
             demoReg.grant(_grant(demoId, "research", agentKey, 10e6), _grant(bytes32(0), "demo", owner, 100e6));
-        demoReg.setHost(bytes4(hex"8d94d14d"), HOST_KEY); // 141.148.209.77
+        demoReg.setHost(bytes4(hex"8d94d14d"), HOST_KEY, OPERATOR); // 141.148.209.77
 
         vm.stopBroadcast();
 

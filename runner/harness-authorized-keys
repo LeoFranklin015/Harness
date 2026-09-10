@@ -1,0 +1,235 @@
+#!/usr/bin/env python3
+"""Decide whether an SSH key may log in, by asking ENS.
+
+The mirror of harness-known-hosts: there the client checks the host against the
+chain, here the host checks the client. Together a connection is only possible
+while both ends still hold authority, so revoking an Agent ends spending, name
+resolution and shell access from one transaction.
+
+In sshd_config:
+
+    Match User agent
+        AuthorizedKeysCommand /usr/local/bin/harness-authorized-keys %u %f %k %t
+        AuthorizedKeysCommandUser nobody
+        AuthorizedKeysFile none
+        PasswordAuthentication no
+
+sshd hands over the key being offered, so nothing here enumerates who may log
+in: ENS holds a fingerprint and this compares against it. Publishing the key
+itself would publish an access roster — who may log in, and precisely which
+private key is worth stealing — permanently and globally indexed.
+
+Standard library only. This runs inside the login path on every connection, so
+it depends on nothing that has to be installed, and nothing that could fail to
+be there when someone needs to get in.
+
+sshd ignores the script unless it is owned by root and not group- or
+world-writable.
+"""
+
+import json
+import os
+import sys
+import urllib.error
+import urllib.request
+
+RPC = os.environ.get("HARNESS_RPC", "https://ethereum-sepolia-rpc.publicnode.com")
+UNIVERSAL = os.environ.get(
+    "HARNESS_UNIVERSAL_RESOLVER", "0xd26f2040d083af1cd2962ba303f4bea0c4faf142"
+)
+TIMEOUT = float(os.environ.get("HARNESS_TIMEOUT", "5"))
+
+# resolve(bytes,bytes) — ENSIP-10, and text(bytes32,string) — ENSIP-5.
+RESOLVE = "9061b923"
+TEXT = "59d1d43c"
+RECORD = "ssh-operator"
+
+
+def keccak(data: bytes) -> bytes:
+    """Keccak-256. Not SHA3-256: the padding byte differs, and hashlib has only
+    the latter, so the permutation is spelled out here rather than pulling in a
+    dependency for one hash inside sshd's login path."""
+    rate, out, state = 136, 32, [0] * 25
+    rc = [
+        0x0000000000000001, 0x0000000000008082, 0x800000000000808A,
+        0x8000000080008000, 0x000000000000808B, 0x0000000080000001,
+        0x8000000080008081, 0x8000000000008009, 0x000000000000008A,
+        0x0000000000000088, 0x0000000080008009, 0x000000008000000A,
+        0x000000008000808B, 0x800000000000008B, 0x8000000000008089,
+        0x8000000000008003, 0x8000000000008002, 0x8000000000000080,
+        0x000000000000800A, 0x800000008000000A, 0x8000000080008081,
+        0x8000000000008080, 0x0000000080000001, 0x8000000080008008,
+    ]
+    rot = [
+        [0, 36, 3, 41, 18], [1, 44, 10, 45, 2], [62, 6, 43, 15, 61],
+        [28, 55, 25, 21, 56], [27, 20, 39, 8, 14],
+    ]
+    mask = (1 << 64) - 1
+
+    def rol(x, n):
+        return ((x << n) | (x >> (64 - n))) & mask
+
+    def keccak_f(a):
+        for r in range(24):
+            c = [a[x] ^ a[x + 5] ^ a[x + 10] ^ a[x + 15] ^ a[x + 20] for x in range(5)]
+            d = [c[(x - 1) % 5] ^ rol(c[(x + 1) % 5], 1) for x in range(5)]
+            for x in range(5):
+                for y in range(5):
+                    a[x + 5 * y] ^= d[x]
+            b = [0] * 25
+            for x in range(5):
+                for y in range(5):
+                    b[y + 5 * ((2 * x + 3 * y) % 5)] = rol(a[x + 5 * y], rot[x][y])
+            for x in range(5):
+                for y in range(5):
+                    a[x + 5 * y] = b[x + 5 * y] ^ (
+                        (~b[(x + 1) % 5 + 5 * y] & mask) & b[(x + 2) % 5 + 5 * y]
+                    )
+            a[0] ^= rc[r]
+        return a
+
+    padded = bytearray(data)
+    padded.append(0x01)
+    while len(padded) % rate != 0:
+        padded.append(0x00)
+    padded[-1] |= 0x80
+
+    for off in range(0, len(padded), rate):
+        block = padded[off : off + rate]
+        for i in range(rate // 8):
+            state[i] ^= int.from_bytes(block[i * 8 : i * 8 + 8], "little")
+        state = keccak_f(state)
+
+    return b"".join(x.to_bytes(8, "little") for x in state)[:out]
+
+
+def namehash(name: str) -> bytes:
+    node = b"\x00" * 32
+    for label in reversed(name.rstrip(".").split(".")):
+        if label:
+            node = keccak(node + keccak(label.encode()))
+    return node
+
+
+def wire(name: str) -> bytes:
+    out = b""
+    for label in name.rstrip(".").split("."):
+        if label:
+            out += bytes([len(label)]) + label.encode()
+    return out + b"\x00"
+
+
+def word(n: int) -> str:
+    return f"{n:064x}"
+
+
+def pad(b: bytes) -> str:
+    return b.hex() + "00" * ((32 - len(b) % 32) % 32)
+
+
+def dyn(b: bytes) -> str:
+    return word(len(b)) + pad(b)
+
+
+def call_data(name: str) -> str:
+    inner = bytes.fromhex(
+        TEXT + namehash(name).hex() + word(0x40) + word(len(RECORD)) + pad(RECORD.encode())
+    )
+    n = wire(name)
+    return (
+        "0x" + RESOLVE + word(0x40) + word(0x40 + 32 + len(pad(n)) // 2) + dyn(n) + dyn(inner)
+    )
+
+
+def read_string(out: bytes, slot: int = 0) -> str:
+    """Unwrap `resolve`'s (bytes,address), then the inner `text` return."""
+    def at(b, s):
+        off = int.from_bytes(b[s * 32 : s * 32 + 32], "big")
+        if off + 32 > len(b):
+            return b""
+        n = int.from_bytes(b[off : off + 32], "big")
+        return b[off + 32 : off + 32 + n] if off + 32 + n <= len(b) else b""
+
+    return at(at(out, slot), 0).decode("utf-8", "replace")
+
+
+def authorised_fingerprint(name: str) -> str:
+    body = json.dumps(
+        {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "eth_call",
+            "params": [{"to": UNIVERSAL, "data": call_data(name)}, "latest"],
+        }
+    ).encode()
+    req = urllib.request.Request(
+        RPC,
+        data=body,
+        headers={
+            "content-type": "application/json",
+            # Public RPCs reject urllib's default agent with a 403, which would
+            # otherwise look exactly like an unreachable chain.
+            "user-agent": "harness-authorized-keys",
+        },
+    )
+    with urllib.request.urlopen(req, timeout=TIMEOUT) as resp:
+        answer = json.load(resp)
+    if "error" in answer:
+        # A revert is a definite no: ENS found no resolver, or ours refused the
+        # name. Told apart from an unreachable chain, which is not.
+        if "revert" in str(answer["error"].get("message", "")):
+            return ""
+        raise RuntimeError(answer["error"].get("message", "eth_call failed"))
+    return read_string(bytes.fromhex(answer["result"][2:])).strip()
+
+
+NAME_FILE = "/etc/harness/name"
+
+
+def read_name(user: str) -> str:
+    try:
+        with open(NAME_FILE) as f:
+            configured = f.read().strip()
+        if configured:
+            return configured
+    except OSError:
+        pass
+    return f"{user}.demo.harness.eth"
+
+
+def main() -> int:
+    if len(sys.argv) < 5:
+        print("usage: harness-authorized-keys <user> <fingerprint> <key> <type>", file=sys.stderr)
+        return 1
+    user, offered_fp, offered_key, key_type = sys.argv[1:5]
+
+    # Which Agent this host is. sshd gives AuthorizedKeysCommand almost no
+    # environment, so the name is read from a file the Runner is built with —
+    # guessing it from the username would silently authorise against the wrong
+    # Agent if the two ever diverged.
+    name = os.environ.get("HARNESS_NAME") or read_name(user)
+
+    try:
+        authorised = authorised_fingerprint(name)
+    except (urllib.error.URLError, OSError, RuntimeError, ValueError) as err:
+        # Fail closed. An unreachable chain must not become an open door — and
+        # printing nothing is what closes it, since sshd accepts only keys this
+        # prints.
+        print(f"harness: could not reach ENS for {name}: {err}", file=sys.stderr)
+        return 1
+
+    if not authorised:
+        print(
+            f"harness: {name} authorises nobody — revoked, expired, or no runner",
+            file=sys.stderr,
+        )
+        return 0
+
+    if offered_fp == authorised:
+        # Hand the key back: sshd accepts a key it printed itself.
+        print(f"{key_type} {offered_key}")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

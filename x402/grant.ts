@@ -8,6 +8,7 @@
 import { readFileSync } from "node:fs";
 import { keccak256, toHex, type Address, type Hex } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
+import { agentKey } from "./keys.ts";
 import { USDC, type Grant } from "./harness.ts";
 
 export type Issued = {
@@ -24,15 +25,25 @@ export function load(label: string, tenant = "demo"): Issued {
     readFileSync(new URL(`./grants/${label}.json`, import.meta.url), "utf8"),
   );
 
-  // Demo keys are derived from a public string, so they are reproducible and
-  // deliberately worth nothing. A real Agent Key is generated on the host that
-  // runs the Agent and never leaves it.
-  const agentPk = keccak256(toHex(`${label}-agent-key`));
-  const derived = privateKeyToAccount(agentPk).address;
-  if (derived.toLowerCase() !== raw.agentKey.toLowerCase()) {
-    throw new Error(
-      `grants/${label}.json names ${raw.agentKey}, but the seed derives ${derived}`,
-    );
+  // The Agent's key, derived from the VPS's sealed root. See `keys.ts` for why
+  // it is not derived from the ring itself.
+  let agentPk = agentKey(tenant, label);
+
+  if (privateKeyToAccount(agentPk).address.toLowerCase() !== raw.agentKey.toLowerCase()) {
+    // Agents granted before `keys.ts` existed carry a key derived from a public
+    // string. Those are worth nothing by construction, and saying so out loud
+    // is better than silently treating them as real.
+    const legacy = keccak256(toHex(`${label}-agent-key`));
+    if (privateKeyToAccount(legacy).address.toLowerCase() === raw.agentKey.toLowerCase()) {
+      console.warn(
+        `  ! ${label} uses a publicly derivable demo key — anyone can compute it`,
+      );
+      agentPk = legacy;
+    } else {
+      throw new Error(
+        `grants/${label}.json names ${raw.agentKey}, which this host cannot derive`,
+      );
+    }
   }
 
   return {

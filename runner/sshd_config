@@ -1,0 +1,17 @@
+# Logins are decided by the chain, not by a file on this host.
+Port 22
+HostKey /etc/ssh/ssh_host_ed25519_key
+
+# No stored list of authorized keys anywhere. `none` is load-bearing: without
+# it sshd would consult ~/.ssh/authorized_keys first and a key left there would
+# survive revocation.
+AuthorizedKeysFile none
+AuthorizedKeysCommand /usr/local/bin/harness-authorized-keys %u %f %k %t
+AuthorizedKeysCommandUser nobody
+
+PasswordAuthentication no
+KbdInteractiveAuthentication no
+PermitRootLogin no
+
+LogLevel VERBOSE
+Subsystem sftp /usr/lib/ssh/sftp-server

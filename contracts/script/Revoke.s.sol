@@ -33,7 +33,7 @@ contract Revoke is Script {
         } else {
             vm.startBroadcast(pk);
             bytes32 id = DEMO.grant(g, parent);
-            DEMO.setHost(bytes4(hex"0a0a0a0a"), bytes32(uint256(1)));
+            DEMO.setHost(bytes4(hex"0a0a0a0a"), bytes32(uint256(1)), bytes32(0));
             vm.stopBroadcast();
             console.log("granted throwaway.demo.harness.eth -> 10.10.10.10");
             console.logBytes32(id);

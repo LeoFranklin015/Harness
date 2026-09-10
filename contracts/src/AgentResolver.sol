@@ -123,6 +123,14 @@ contract AgentResolver {
         if (k == keccak256("ssh-hostkey")) {
             return host.key == bytes32(0) ? "" : string.concat("ssh-ed25519 ", _sshEd25519(host.key));
         }
+        // Who may log in, as the exact string `ssh-keygen -l` prints and sshd
+        // hands to AuthorizedKeysCommand as `%f`. Matching formats keeps the
+        // check a string comparison rather than a re-encoding.
+        if (k == keccak256("ssh-operator")) {
+            return host.operator == bytes32(0)
+                ? ""
+                : string.concat("SHA256:", _base64NoPad(host.operator));
+        }
         if (k == keccak256("description")) {
             return "An agent acting within a hardware-rooted spending limit.";
         }
@@ -136,6 +144,7 @@ contract AgentResolver {
     struct Host {
         bytes4 ipv4;
         bytes32 key;
+        bytes32 operator;
     }
 
     /// @dev Descends to the registry holding the queried name, collecting the
@@ -190,6 +199,7 @@ contract AgentResolver {
         if (ip != bytes4(0)) {
             host.ipv4 = ip;
             host.key = registry.selfHostKey();
+            host.operator = registry.selfOperator();
         }
     }
 
@@ -229,6 +239,14 @@ contract AgentResolver {
         return _base64(
             abi.encodePacked(uint32(11), "ssh-ed25519", uint32(32), hostKey)
         );
+    }
+
+    /// @dev SSH prints fingerprints unpadded; 32 bytes is 43 characters.
+    function _base64NoPad(bytes32 value) internal pure returns (string memory) {
+        bytes memory padded = bytes(_base64(abi.encodePacked(value)));
+        bytes memory out = new bytes(43);
+        for (uint256 i; i < 43; ++i) out[i] = padded[i];
+        return string(out);
     }
 
     bytes internal constant B64 =

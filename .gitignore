@@ -70,3 +70,9 @@ skills-lock.json
 tmp/
 scratch/
 *.local
+x402/.relayer
+x402/.agent-root
+
+# Runner host keys: generated per container, never committed.
+runner/ssh_host_ed25519_key
+runner/ssh_host_ed25519_key.pub
