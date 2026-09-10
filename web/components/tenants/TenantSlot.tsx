@@ -114,7 +114,7 @@ function AgentCard({ tenant, onOpen }: { tenant: Tenant; onOpen: () => void }) {
       <Agent
         state={tenant.status}
         awaiting={tenant.awaiting}
-        className="h-[74%] transition-transform duration-500 group-hover:scale-[1.03]"
+        className="h-[88%] transition-transform duration-500 group-hover:scale-[1.03]"
       />
     </button>
   );

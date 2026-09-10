@@ -44,10 +44,14 @@ const RUNG = 9;
  * Only things this product actually does — an agent here buys resources over
  * x402, pays out USDC, escalates past its ceiling and gets a signature back.
  * "swapped" and "sold" would be nice words and neither is true yet.
+ *
+ * Six characters is the ceiling. The bubble is small and a real card renders
+ * this drawing about 290px wide, so a longer word forces a font size that
+ * cannot be read at all where it actually lives.
  */
-const DOING = ["purchased", "paid", "asked", "signed"];
+const DOING = ["paid", "bought", "asked", "signed"];
 /** Seconds each word holds. The cycle is this times the number of words. */
-const WORD = 2;
+const WORD = 3.6;
 
 export function Agent({
   state,
@@ -69,7 +73,7 @@ export function Agent({
       : { animation: `${name} ${(secs * hurry).toFixed(2)}s ${ease} ${delay}s infinite` };
 
   return (
-    <svg className={className} viewBox="8 12 284 236" aria-hidden style={{ opacity: stopped ? 0.3 : 1 }}>
+    <svg className={className} viewBox="8 4 284 244" aria-hidden style={{ opacity: stopped ? 0.3 : 1 }}>
       <defs>
         {/* One clip per eye, so the lid drops inside the shell rather than
             across the top of it. */}
@@ -157,28 +161,28 @@ export function Agent({
               only thing on the card that says what the machine is doing
               rather than that it is doing something. */}
           {state === "live" && (
-            <g style={{ animation: "walle-bubble 3.5s ease-in-out infinite" }}>
+            <g style={{ animation: "walle-bubble 5.2s ease-in-out infinite" }}>
               {/* A visible outline: the fill is nearly the card's own colour,
                   so without one the bubble is a floating word. Pulled left and
                   down until the tail actually lands on the pod it comes
                   from. */}
               <path
-                d="M 200 12 H 268 A 7 7 0 0 1 275 19 V 37 A 7 7 0 0 1 268 44 H 218 L 205 56 L 208 44 H 200 A 7 7 0 0 1 193 37 V 19 A 7 7 0 0 1 200 12 Z"
+                d="M 208 10 H 260 A 5 5 0 0 1 265 15 V 31 A 5 5 0 0 1 260 36 H 222 L 212 46 L 214 36 H 208 A 5 5 0 0 1 203 31 V 15 A 5 5 0 0 1 208 10 Z"
                 fill="#171B21"
                 stroke="#5A626C"
-                strokeWidth={2.5}
+                strokeWidth={1.8}
                 strokeLinejoin="round"
               />
               {DOING.map((word, i) => (
                 <text
                   key={word}
                   x={234}
-                  y={28}
+                  y={23}
                   textAnchor="middle"
                   dominantBaseline="central"
-                  fontSize={11}
+                  fontSize={9}
                   fontFamily="var(--font-mono), monospace"
-                  letterSpacing={0.6}
+                  letterSpacing={0.3}
                   fill={YELLOW_LIT}
                   // Negative delays put each word in its own slice of one
                   // shared cycle, so they can never overlap or drift apart.
