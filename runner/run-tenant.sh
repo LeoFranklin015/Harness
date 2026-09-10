@@ -13,10 +13,15 @@
 # not a substitute for the hardware boundary a real deployment wants — a shared
 # kernel is still a shared kernel — but it removes the failure that costs
 # nothing to prevent.
+#
+# The same argument applies to the network. On one shared bridge every Runner
+# can reach every other Runner, which is a neighbour you did not agree to. So
+# each Tenant gets a network of its own with `isolate=strict`, and the only
+# address in it that answers is the gateway — the host, where the broker is.
 set -euo pipefail
 
-tenant="${1:?usage: run-tenant.sh <tenant> <ip>}"
-ip="${2:?}"
+tenant="${1:?usage: run-tenant.sh <tenant> [agent]}"
+agent="${2:-runner}"
 
 # The mesh key is read from the secrets file rather than passed in. This script
 # is run through sudo by the web server, and an environment handed across sudo
@@ -30,6 +35,16 @@ cpus="${CPUS:-0.5}"
 # sshd needs exactly four capabilities: bind port 22, chroot for privilege
 # separation, and change uid/gid to drop to the Agent. Everything else goes.
 sudo podman rm -f "harness-${tenant}" >/dev/null 2>&1 || true
+
+# One network per Tenant. `isolate=strict` is what makes it a boundary rather
+# than a label: netavark drops traffic from this bridge to any other, so a
+# Runner cannot reach another Tenant's Runner at all. Its own gateway still
+# answers, which is the host, which is where the broker listens — the one thing
+# it is meant to be able to reach.
+net="harness-${tenant}"
+sudo podman network exists "$net" \
+    || sudo podman network create --opt isolate=strict "$net" >/dev/null
+gateway=$(sudo podman network inspect "$net" --format '{{range .Subnets}}{{.Gateway}}{{end}}')
 # Tailscale needs somewhere to keep its node key across restarts, and the root
 # filesystem is read-only on purpose.
 sudo podman volume create "harness-${tenant}-ts" >/dev/null 2>&1 || true
@@ -39,9 +54,13 @@ sudo podman volume create "harness-${tenant}-ts" >/dev/null 2>&1 || true
 
 sudo podman run -d \
     --name "harness-${tenant}" \
-    --ip "$ip" \
+    --network "$net" \
     -e TS_AUTHKEY="${TS_AUTHKEY:?set TS_AUTHKEY}" \
     -e TS_HOSTNAME="${tenant}-runner" \
+    -e HARNESS_BROKER="http://${gateway}:8402" \
+    -e HARNESS_SELLER="${HARNESS_SELLER:-http://${gateway}:4022}" \
+    --label "harness.tenant=${tenant}" \
+    --label "harness.agent=${agent}" \
     -v "harness-${tenant}-ts:/var/lib/tailscale" \
     --memory "$mem" \
     --memory-swap "$mem" \
@@ -56,4 +75,6 @@ sudo podman run -d \
     --cap-add NET_BIND_SERVICE --cap-add SYS_CHROOT \
     "harness-${tenant}" >/dev/null
 
-echo "  harness-${tenant}  ${ip}  mem=${mem} cpus=${cpus}"
+ip=$(sudo podman inspect "harness-${tenant}" \
+    --format '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}')
+echo "  harness-${tenant}  ${ip}  net=${net} (isolated)  broker=${gateway}:8402  mem=${mem} cpus=${cpus}"

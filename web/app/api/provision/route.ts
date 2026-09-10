@@ -179,10 +179,9 @@ export async function POST(req: Request) {
 
         // 3. Start it on the mesh.
         emit({ step: "Starting the machine on the mesh" });
-        const ip = `10.88.0.${20 + (Math.abs(hashCode(body.label)) % 200)}`;
         // No environment across sudo: the script reads the mesh key from the
         // secrets file itself, so nothing secret sits in a command line.
-        await exec("sudo", ["-n", `${RUNNER_DIR}/run-tenant.sh`, body.label, ip], {
+        await exec("sudo", ["-n", `${RUNNER_DIR}/run-tenant.sh`, body.label, body.agent], {
           cwd: RUNNER_DIR,
         });
 
@@ -231,10 +230,4 @@ export async function POST(req: Request) {
   return new Response(stream, {
     headers: { "content-type": "application/x-ndjson", "cache-control": "no-store" },
   });
-}
-
-function hashCode(s: string): number {
-  let h = 0;
-  for (const c of s) h = (h * 31 + c.charCodeAt(0)) | 0;
-  return h;
 }

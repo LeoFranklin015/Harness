@@ -39,6 +39,11 @@ COPY sshd_config /etc/ssh/sshd_config
 # that ownership up on first start, so it is fixed here rather than after.
 RUN mkdir -p /var/lib/tailscale && chown root:root /var/lib/tailscale && chmod 700 /var/lib/tailscale
 
+# The Agent itself. Stdlib python, because it needs no key and therefore no
+# crypto library — everything it would have signed with lives in the broker.
+COPY agent.py /usr/local/bin/agent
+RUN chmod 755 /usr/local/bin/agent
+
 COPY entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod 755 /usr/local/bin/entrypoint.sh
 

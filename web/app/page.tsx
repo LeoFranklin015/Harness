@@ -207,6 +207,23 @@ function Machines({ session, onForget }: { session: Session; onForget: () => voi
       const agentId = agentIdFrom(receipt.logs);
       if (!agentId) throw new Error("granted, but the receipt named no agent");
 
+      // The chain keeps only the hash, so the terms are filed here too —
+      // otherwise nothing could ever act under this Grant again.
+      await fetch("/api/grants", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          tenant: req.label,
+          label: req.agent,
+          agentKey: ready.agentKey,
+          start: grant.start,
+          end: grant.end,
+          cap: grant.spends[0]!.allowance.toString(),
+          registry: ready.registry,
+          agentId,
+        }),
+      });
+
       setSlot(slot, {
         label: req.label,
         registry: ready.registry,

@@ -175,6 +175,13 @@ export const REGISTRY_ABI = [
   },
   {
     type: "function",
+    name: "agentKeyOf",
+    stateMutability: "view",
+    inputs: [{ name: "label", type: "string" }],
+    outputs: [{ type: "address" }],
+  },
+  {
+    type: "function",
     name: "spentOf",
     stateMutability: "view",
     inputs: [

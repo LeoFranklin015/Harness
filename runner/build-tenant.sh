@@ -12,7 +12,7 @@ agent="${2:?}"
 dir="build/${tenant}"
 
 mkdir -p "$dir"
-cp Containerfile sshd_config entrypoint.sh ../tools/harness-authorized-keys "$dir/"
+cp Containerfile sshd_config entrypoint.sh agent.py ../tools/harness-authorized-keys "$dir/"
 echo "${agent}.${tenant}.harness.eth" > "$dir/name"
 
 if [ ! -f "$dir/ssh_host_ed25519_key" ]; then

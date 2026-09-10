@@ -5,7 +5,7 @@
 // makes issuing cheap, and it is why the issuer writes every Grant it signs
 // into `grants/`: the chain will not hand it back.
 
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { keccak256, toHex, type Address, type Hex } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { agentKey } from "./keys.ts";
@@ -21,9 +21,13 @@ export type Issued = {
 };
 
 export function load(label: string, tenant = "demo"): Issued {
-  const raw = JSON.parse(
-    readFileSync(new URL(`./grants/${label}.json`, import.meta.url), "utf8"),
-  );
+  // Two Tenants may both call an Agent `runner`, so a Grant is filed under
+  // both names. The bare name is what the scripted demo Tenants wrote before
+  // Tenants were a thing.
+  const scoped = new URL(`./grants/${tenant}.${label}.json`, import.meta.url);
+  const bare = new URL(`./grants/${label}.json`, import.meta.url);
+  const file = existsSync(scoped) ? scoped : bare;
+  const raw = JSON.parse(readFileSync(file, "utf8"));
 
   // The Agent's key, derived from the VPS's sealed root. See `keys.ts` for why
   // it is not derived from the ring itself.
