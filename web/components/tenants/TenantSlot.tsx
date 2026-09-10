@@ -1,12 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 
 import { BorderBeam } from "@/components/ui/border-beam";
 import { MeshInvite } from "@/components/tenants/MeshInvite";
 import { Terminal } from "@/components/tenants/Terminal";
 import { Asks, type Ask } from "@/components/tenants/Asks";
+import { Agent } from "@/components/tenants/Agent";
 import { Ceiling } from "@/components/tenants/Ceiling";
 import { Machine } from "@/components/tenants/Machine";
 import { RevokeCascade } from "@/components/tenants/RevokeCascade";
@@ -31,9 +31,14 @@ export type Tenant = {
 /**
  * One machine's place on the page.
  *
- * Empty and filled are the same slot rather than two components, because the
- * thing that changes is what a Tenant *is* — a space you could put a machine
- * in, or the machine.
+ * The card carries no text at all — it is the agent, drawn, and the state it
+ * is in. Everything a person might read is a click away, which is the right
+ * trade for a page whose whole claim is that these things run unattended:
+ * the resting state should look like a machine working, not like a form.
+ *
+ * The cost is that "waiting for you to press a button on your Ledger" has no
+ * words on the card either, so it is carried by the drawing instead — the
+ * accent pulses rather than breathes. See `Agent`.
  */
 export function TenantSlot({
   tenant,
@@ -52,33 +57,24 @@ export function TenantSlot({
   /** Signs a new Grant at a higher ceiling, after an agent asked for one. */
   onRaise: (t: Tenant, ask: Ask, newCapUsd: number) => Promise<void>;
 }) {
-  const still = useReducedMotion();
+  const [open, setOpen] = useState(false);
 
-  // Keyed by which machine is here, so replacing one animates rather than
-  // mutating in place. `wait` because both states occupy the same cell and
-  // crossfading two cards on top of each other reads as a glitch.
+  if (!tenant) return <EmptySlot onAdd={onAdd} />;
+
   return (
-    <AnimatePresence mode="wait" initial={false}>
-      <motion.div
-        key={tenant?.label ?? "empty"}
-        initial={still ? false : { opacity: 0, y: 8, scale: 0.985 }}
-        animate={{ opacity: 1, y: 0, scale: 1 }}
-        exit={still ? undefined : { opacity: 0, y: -8, scale: 0.985 }}
-        transition={{ duration: still ? 0 : 0.32, ease: [0.22, 1, 0.36, 1] }}
-      >
-        {tenant ? (
-          <FilledSlot
-            tenant={tenant}
-            onContinue={onContinue}
-            onRevoke={onRevoke}
-            onAuthorise={onAuthorise}
-            onRaise={onRaise}
-          />
-        ) : (
-          <EmptySlot onAdd={onAdd} />
-        )}
-      </motion.div>
-    </AnimatePresence>
+    <>
+      <AgentCard tenant={tenant} onOpen={() => setOpen(true)} />
+      {open && (
+        <Details
+          tenant={tenant}
+          onClose={() => setOpen(false)}
+          onContinue={onContinue}
+          onRevoke={onRevoke}
+          onAuthorise={onAuthorise}
+          onRaise={onRaise}
+        />
+      )}
+    </>
   );
 }
 
@@ -98,14 +94,43 @@ function EmptySlot({ onAdd }: { onAdd: () => void }) {
   );
 }
 
-function FilledSlot({
+/** The whole card is the button, because the whole card is the machine. */
+function AgentCard({ tenant, onOpen }: { tenant: Tenant; onOpen: () => void }) {
+  return (
+    <button
+      onClick={onOpen}
+      aria-label={`${tenant.label}.harness.eth — ${tenant.status}`}
+      className="group relative flex min-h-[280px] w-full items-center justify-center overflow-hidden rounded-2xl border border-neutral-800 bg-neutral-950/60 transition hover:border-neutral-700"
+    >
+      {tenant.status === "provisioning" && <BorderBeam size={220} duration={7} />}
+
+      <Agent
+        state={tenant.status}
+        awaiting={tenant.awaiting}
+        className="h-[74%] transition-transform duration-500 group-hover:scale-[1.03]"
+      />
+
+      {/* The gear train, small, in the corner. Two registers of the same
+          idea: the drawing is what the machine is, this is that it runs. */}
+      <Machine
+        state={tenant.status}
+        className="pointer-events-none absolute bottom-4 right-4 h-16 w-16 opacity-70"
+      />
+    </button>
+  );
+}
+
+/** Everything the card no longer says. */
+function Details({
   tenant,
+  onClose,
   onContinue,
   onRevoke,
   onAuthorise,
   onRaise,
 }: {
   tenant: Tenant;
+  onClose: () => void;
   onContinue: (t: Tenant) => void;
   onRevoke: (t: Tenant) => void;
   onAuthorise: (t: Tenant, operator: `0x${string}`) => Promise<void>;
@@ -116,113 +141,109 @@ function FilledSlot({
   const revoked = tenant.status === "revoked";
 
   return (
-    <div className="relative min-h-[280px] w-full overflow-hidden rounded-2xl border border-neutral-800 bg-neutral-950/60 p-6">
-      {provisioning && <BorderBeam size={220} duration={7} />}
-
-      {/* Sat in the corner rather than bled off it: half a mechanism reads
-          as a smudge, and the whole point is that it is legibly turning.
-          Behind the content, which is what anyone is here to read. */}
-      <Machine
-        state={tenant.status}
-        className="pointer-events-none absolute bottom-3 right-3 h-32 w-32 select-none"
-      />
-
-      <div className="relative flex items-start justify-between gap-4">
-        <div className="min-w-0">
-          <p className="truncate font-mono text-sm text-neutral-300">
-            {tenant.label}.harness.eth
-          </p>
-          {/* Truncated, because it is a reference rather than something read:
-              at a narrow width an untruncated address pushes the status pill
-              off the edge of the card. */}
-          <p className="truncate text-xs text-neutral-600">{tenant.registry}</p>
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <div
+        className="max-h-[88vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-neutral-800 bg-neutral-950 p-6 duration-200 animate-in fade-in-0 zoom-in-95"
+        onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+      >
+        <div className="flex items-start justify-between gap-4">
+          <div className="min-w-0">
+            <p className="truncate font-mono text-sm text-neutral-300">
+              {tenant.label}.harness.eth
+            </p>
+            <p className="truncate text-xs text-neutral-600">{tenant.registry}</p>
+          </div>
+          <StatusPill status={tenant.status} />
         </div>
-        <StatusPill status={tenant.status} />
-      </div>
 
-      {provisioning ? (
-        <>
-          <p
-            className="mt-8 flex items-center gap-2 text-sm text-neutral-400"
-            role="status"
-            aria-live="polite"
-          >
-            <span
-              className={`h-1.5 w-1.5 rounded-full ${tenant.awaiting ? "bg-emerald-400" : "animate-pulse bg-sky-400"}`}
-            />
-            {tenant.step ?? "Starting"}
-          </p>
-
-          {/* The ring is done; reaching the device again needs a click, and
-              this is it. Not a spinner that will resolve on its own. */}
-          {tenant.awaiting && (
-            <button
-              onClick={() => onContinue(tenant)}
-              className="relative mt-4 rounded-full bg-neutral-50 px-4 py-1.5 text-xs font-medium text-neutral-950 transition hover:bg-white"
+        {provisioning ? (
+          <>
+            <p
+              className="mt-8 flex items-center gap-2 text-sm text-neutral-400"
+              role="status"
+              aria-live="polite"
             >
-              Continue in Ethereum →
-            </button>
-          )}
-        </>
-      ) : (
-        // Above the machine turning behind it.
-        <div className="relative">
-          <dl className="mt-6 space-y-2.5 text-sm">
-            <Row label="Agent" value={tenant.agent ? `${tenant.agent}.${tenant.label}.harness.eth` : "—"} mono />
-            <Row label="Mesh" value={tenant.meshAddress ?? "—"} mono />
-          </dl>
-          {/* Not on a revoked machine: a full green bar beside "spending
-              stopped" reads as a contradiction, and the cascade is already
-              saying what the ceiling is now worth. */}
-          {!revoked && (
-            <Ceiling capUsd={capUsd(tenant)} tenant={tenant.label} agent={tenant.agent} />
-          )}
-        </div>
-      )}
+              <span
+                className={`h-1.5 w-1.5 rounded-full ${tenant.awaiting ? "bg-emerald-400" : "animate-pulse bg-sky-400"}`}
+              />
+              {tenant.step ?? "Starting"}
+            </p>
 
-      {tenant.status === "live" && (
-        <>
-          {shell && tenant.agent && (
-            <Terminal tenant={tenant.label} agent={tenant.agent} onClose={() => setShell(false)} />
-          )}
-          <div className="relative mt-6 flex flex-wrap gap-2">
-            {tenant.agent && (
+            {/* The ring is done; reaching the device again needs a click, and
+                this is it. Not a spinner that will resolve on its own. */}
+            {tenant.awaiting && (
               <button
-                onClick={() => setShell(true)}
-                className="rounded-full border border-neutral-700 px-4 py-1.5 text-xs text-neutral-200 transition hover:border-neutral-600 hover:bg-neutral-900/60"
+                onClick={() => onContinue(tenant)}
+                className="relative mt-4 rounded-full bg-neutral-50 px-4 py-1.5 text-xs font-medium text-neutral-950 transition hover:bg-white"
               >
-                Open a terminal
+                Continue in Ethereum →
               </button>
             )}
-          <button
-            onClick={() => onRevoke(tenant)}
-            className="rounded-full border border-red-900/60 px-4 py-1.5 text-xs text-red-400/90 transition hover:border-red-800 hover:bg-red-950/40"
-          >
-            Revoke
-          </button>
-          </div>
-          {/* The machine has no public address, so reaching it is a separate,
-              deliberate act — and one that expires on its own. */}
-          <Asks
-            tenant={tenant.label}
-            currentCapUsd={capUsd(tenant)}
-            onApprove={(ask, newCap) => onRaise(tenant, ask, newCap)}
-          />
-          <MeshInvite
-            machine={tenant.label}
-            agent={tenant.agent}
-            meshAddress={tenant.meshAddress}
-            ensName={tenant.agent ? `${tenant.agent}.${tenant.label}.harness.eth` : null}
-            onAuthorise={(operator) => onAuthorise(tenant, operator)}
-          />
-        </>
-      )}
+          </>
+        ) : (
+          <>
+            <dl className="mt-6 space-y-2.5 text-sm">
+              <Row label="Agent" value={tenant.agent ? `${tenant.agent}.${tenant.label}.harness.eth` : "—"} mono />
+              <Row label="Mesh" value={tenant.meshAddress ?? "—"} mono />
+            </dl>
+            {/* Not on a revoked machine: a full bar beside "spending stopped"
+                reads as a contradiction, and the cascade already says what
+                the ceiling is now worth. */}
+            {!revoked && (
+              <Ceiling capUsd={capUsd(tenant)} tenant={tenant.label} agent={tenant.agent} />
+            )}
+          </>
+        )}
 
-      {revoked && (
-        <RevokeCascade
-          name={tenant.agent ? `${tenant.agent}.${tenant.label}.harness.eth` : `${tenant.label}.harness.eth`}
-        />
-      )}
+        {tenant.status === "live" && (
+          <>
+            {shell && tenant.agent && (
+              <Terminal tenant={tenant.label} agent={tenant.agent} onClose={() => setShell(false)} />
+            )}
+            <div className="mt-6 flex flex-wrap gap-2">
+              {tenant.agent && (
+                <button
+                  onClick={() => setShell(true)}
+                  className="rounded-full border border-neutral-700 px-4 py-1.5 text-xs text-neutral-200 transition hover:border-neutral-600 hover:bg-neutral-900/60"
+                >
+                  Open a terminal
+                </button>
+              )}
+              <button
+                onClick={() => onRevoke(tenant)}
+                className="rounded-full border border-red-900/60 px-4 py-1.5 text-xs text-red-400/90 transition hover:border-red-800 hover:bg-red-950/40"
+              >
+                Revoke
+              </button>
+            </div>
+            {/* The machine has no public address, so reaching it is a separate,
+                deliberate act — and one that expires on its own. */}
+            <Asks
+              tenant={tenant.label}
+              currentCapUsd={capUsd(tenant)}
+              onApprove={(ask, newCap) => onRaise(tenant, ask, newCap)}
+            />
+            <MeshInvite
+              machine={tenant.label}
+              agent={tenant.agent}
+              meshAddress={tenant.meshAddress}
+              ensName={tenant.agent ? `${tenant.agent}.${tenant.label}.harness.eth` : null}
+              onAuthorise={(operator) => onAuthorise(tenant, operator)}
+            />
+          </>
+        )}
+
+        {revoked && (
+          <RevokeCascade
+            name={tenant.agent ? `${tenant.agent}.${tenant.label}.harness.eth` : `${tenant.label}.harness.eth`}
+          />
+        )}
+      </div>
     </div>
   );
 }

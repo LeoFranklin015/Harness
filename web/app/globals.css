@@ -116,3 +116,50 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .gear-turn { animation: none; }
 }
+
+/* --- the agent ---------------------------------------------------------- */
+
+/* Signal leaving the antenna: brightens and grows a little, then gone. */
+@keyframes agent-wave {
+  0%, 100% { opacity: 0.15; }
+  45%      { opacity: 1; }
+}
+
+/* Barely there. Enough that the drawing is not furniture. */
+@keyframes agent-bob {
+  0%, 100% { translate: 0 0; }
+  50%      { translate: 0 -3px; }
+}
+
+/* A blink is one frame long and mostly absent, so the eyes are open almost
+   all the time and the shut moment is a surprise rather than a rhythm. */
+@keyframes agent-blink {
+  0%, 92%, 100% { scale: 1 1; }
+  95%           { scale: 1 0.1; }
+}
+
+@keyframes agent-think {
+  0%, 100% { opacity: 0.45; }
+  50%      { opacity: 1; }
+}
+
+/* Out and away. Linear, because a payment does not ease. */
+/* Held invisible until it is clear of the arm, so a coin never draws on top
+   of the hand it came from. */
+@keyframes agent-spend {
+  0%, 14%  { translate: 0 0; opacity: 0; }
+  30%      { opacity: 1; }
+  76%      { opacity: 1; }
+  100%     { translate: 74px -40px; opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .agent-still *, [style*="agent-"] { animation: none !important; }
+}
+
+/* Stalled on a person. Faster and wider than anything else the agent does,
+   so it reads as being asked for something rather than as working. */
+@keyframes agent-waiting {
+  0%, 100% { opacity: 1;   scale: 1; }
+  50%      { opacity: 0.3; scale: 1.35; }
+}

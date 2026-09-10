@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Agent } from "@/components/tenants/Agent";
 import { Machine } from "@/components/tenants/Machine";
 
 /** The gear train on its own, large, with nothing to compete with it. */
@@ -25,8 +26,10 @@ export default function MachinePreview() {
         ))}
       </div>
 
-      <div className="flex aspect-[16/10] w-full max-w-3xl items-center justify-center overflow-hidden rounded-2xl border border-neutral-800 bg-neutral-950/60">
-        <Machine state={state} className="h-[86%] w-[86%]" />
+      {/* The card as it will be: the agent, and the train in the corner. */}
+      <div className="relative flex aspect-[16/10] w-full max-w-3xl items-center justify-center overflow-hidden rounded-2xl border border-neutral-800 bg-neutral-950/60">
+        <Agent state={state} className="h-[78%]" />
+        <Machine state={state} className="pointer-events-none absolute bottom-4 right-4 h-24 w-24" />
       </div>
     </div>
   );
