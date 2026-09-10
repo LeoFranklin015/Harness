@@ -1,10 +1,19 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.30;
 
+import {PermissionedRegistry} from "@ensdomains/contracts-v2/registry/PermissionedRegistry.sol";
+import {IPermissionedRegistry} from
+    "@ensdomains/contracts-v2/registry/interfaces/IPermissionedRegistry.sol";
+import {IRegistry} from "@ensdomains/contracts-v2/registry/interfaces/IRegistry.sol";
+import {RegistryRolesLib} from "@ensdomains/contracts-v2/registry/libraries/RegistryRolesLib.sol";
+import {ILabelStore} from "@ensdomains/contracts-v2/utils/interfaces/ILabelStore.sol";
+import {LibLabel} from "@ensdomains/contracts-v2/utils/LibLabel.sol";
+
 import {Call, CallRule, Constants, Grant, Period, PeriodSpend, Reason, SpendLimit} from "./Types.sol";
+import {Clone} from "./Clone.sol";
+import {GrantLib} from "./GrantLib.sol";
 import {ICallChecker} from "./interfaces/ICallChecker.sol";
 import {IExecutor} from "./interfaces/IExecutor.sol";
-import {IRegistry} from "./interfaces/IRegistry.sol";
 
 /// @title AgentRegistry
 /// @notice The tree and the permissions in one contract: an Agent's name, the
@@ -24,7 +33,37 @@ import {IRegistry} from "./interfaces/IRegistry.sol";
 /// Grants are never stored decomposed. Only a status word is kept and the
 /// caller resupplies the struct, so issuing is cheap and revocation is a single
 /// storage write.
-contract AgentRegistry is IRegistry {
+///
+/// It extends `PermissionedRegistry`, so every Agent is a real ENSv2 name: a
+/// token, with an expiry and roles, registered in the same registry type the
+/// rest of the namespace uses. Granting authority mints the name and revoking
+/// burns it. Two properties fall out of that rather than being invented here:
+///
+///   - The name expires exactly when the Grant does, because the Grant's end is
+///     the registration's expiry. There is no second clock to keep in step.
+///   - An Agent's name cannot be transferred away from the authority that
+///     issued it, because the registration withholds `ROLE_CAN_TRANSFER_ADMIN`.
+///     A name that could be sold would outlive the Grant it stands for.
+///
+/// The authority layer sits on top: narrowing, spend limits, and the walk up to
+/// ancestors, none of which ENSv2 can express.
+contract AgentRegistry is PermissionedRegistry {
+    /// What this registry may do to itself: register Agents, unregister them,
+    /// and point names at subregistries and resolvers.
+    uint256 internal constant ROOT_ROLES = RegistryRolesLib.ROLE_REGISTRAR
+        | RegistryRolesLib.ROLE_UNREGISTER | RegistryRolesLib.ROLE_SET_SUBREGISTRY
+        | RegistryRolesLib.ROLE_SET_RESOLVER | RegistryRolesLib.ROLE_SET_PARENT
+        | RegistryRolesLib.ROLE_RENEW;
+
+    /// What an Agent's owner gets over its own name.
+    ///
+    /// Deliberately not `ROLE_CAN_TRANSFER_ADMIN`: an Agent's name is a
+    /// statement about delegated authority, and a transferable one could be
+    /// sold to someone the Grant never mentioned. `_update` refuses a transfer
+    /// without that role, so withholding it is the whole enforcement.
+    uint256 internal constant AGENT_ROLES =
+        RegistryRolesLib.ROLE_SET_RESOLVER | RegistryRolesLib.ROLE_SET_SUBREGISTRY;
+
     // --- identity of this instance -----------------------------------------
 
     /// Storage rather than immutable: instances are deployed as minimal-proxy
@@ -50,13 +89,8 @@ contract AgentRegistry is IRegistry {
     /// the tree is one trust domain, and `Grant.parent` already pins where a
     /// Grant sits inside it.
     address public rootOfTree;
-    /// This registry's own label under its parent, for `getParent`.
-    string public selfLabel;
     /// Answers lookups for the Agents beneath this registry.
     address public childResolver;
-    /// Where a child's own children live, once it has any.
-    mapping(bytes32 labelHash => AgentRegistry) public childRegistry;
-
     bool private _initialised;
 
     // --- per-Agent state ----------------------------------------------------
@@ -68,6 +102,8 @@ contract AgentRegistry is IRegistry {
         uint48 end;
         bool exists;
         bool revoked;
+        /// Which name this Agent holds, so revoking can burn it.
+        bytes32 labelHash;
     }
 
     /// Everything needed to walk and to authorise. The Grant's rules and limits
@@ -76,6 +112,16 @@ contract AgentRegistry is IRegistry {
 
     /// The live Agent for a label, so a name resolves to current authority.
     mapping(bytes32 labelHash => bytes32 agentId) public current;
+
+    /// Where the host behind *this* registry can be reached, as raw IPv4
+    /// bytes, and the ed25519 SSH host key it answers with.
+    ///
+    /// One record, about this registry's own name, not one per Agent. An
+    /// address and a host key are properties of a machine: every Agent running
+    /// on it shares them, and storing them per Agent would be the same two
+    /// facts written N times with nothing keeping them equal.
+    bytes4 public selfEndpoint;
+    bytes32 public selfHostKey;
 
     /// Consumption per Agent, per SpendLimit, within the current window.
     mapping(bytes32 agentId => mapping(bytes32 limitId => PeriodSpend)) internal _spent;
@@ -86,14 +132,6 @@ contract AgentRegistry is IRegistry {
 
     // --- EIP-712 ------------------------------------------------------------
 
-    bytes32 private constant CALL_RULE_TYPEHASH = keccak256(
-        "CallRule(address target,bytes4 selector,uint128 maxValue,address checker,bytes32 checkerCodeHash)"
-    );
-    bytes32 private constant SPEND_LIMIT_TYPEHASH =
-        keccak256("SpendLimit(address token,uint160 allowance,uint8 unit,uint16 multiplier)");
-    bytes32 private constant GRANT_TYPEHASH = keccak256(
-        "Grant(bytes32 parent,string label,address agentKey,uint48 start,uint48 end,uint256 salt,CallRule[] calls,SpendLimit[] spends)CallRule(address target,bytes4 selector,uint128 maxValue,address checker,bytes32 checkerCodeHash)SpendLimit(address token,uint160 allowance,uint8 unit,uint16 multiplier)"
-    );
 
     // --- events -------------------------------------------------------------
 
@@ -107,10 +145,8 @@ contract AgentRegistry is IRegistry {
     error NotAgentKey();
     error NotAuthorised(Reason reason);
     error GrantMismatch();
-    error NotNarrower();
     error AlreadyGranted();
     error BadWindow();
-    error DuplicateLimit();
     /// Only the Tenant's device may issue or revoke a Grant.
     error NotRootDevice();
     /// The batch was not signed by the Agent's key.
@@ -118,19 +154,19 @@ contract AgentRegistry is IRegistry {
     error BadNonce();
 
     constructor(
+        ILabelStore labelStore_,
         bytes32 self_,
         address tenant_,
         address rootDevice_,
         IExecutor executor_,
         AgentRegistry parentRegistry_
-    ) {
-        initialize(self_, "", tenant_, rootDevice_, executor_, parentRegistry_, address(0));
+    ) PermissionedRegistry(labelStore_, rootDevice_, ROOT_ROLES) {
+        initialize(self_, tenant_, rootDevice_, executor_, parentRegistry_, address(0));
     }
 
     /// @notice Configures a clone. Callable once.
     function initialize(
         bytes32 self_,
-        string memory selfLabel_,
         address tenant_,
         address rootDevice_,
         IExecutor executor_,
@@ -139,8 +175,16 @@ contract AgentRegistry is IRegistry {
     ) public {
         if (_initialised) revert AlreadyGranted();
         _initialised = true;
+
+        // Clones run no constructor, so the root roles it would have granted
+        // are granted here instead — to the device, which is already the only
+        // account allowed to issue or revoke anywhere in this tree. Giving them
+        // to the contract itself would not work: `grant` and
+        // `attachChildRegistry` reach the inherited registry functions by
+        // internal call, which leaves `msg.sender` as the device.
+        _grantRoles(ROOT_RESOURCE, ROOT_ROLES, rootDevice_, false);
+
         self = self_;
-        selfLabel = selfLabel_;
         tenant = tenant_;
         rootDevice = rootDevice_;
         executor = executor_;
@@ -159,22 +203,73 @@ contract AgentRegistry is IRegistry {
     // rather than because a record was deleted.
 
     /// @inheritdoc IRegistry
-    function getSubregistry(string calldata label) external view returns (IRegistry) {
-        bytes32 id = current[keccak256(bytes(label))];
-        if (id == bytes32(0) || _checkAuthority(id) != Reason.Ok) return IRegistry(address(0));
-        return IRegistry(address(childRegistry[keccak256(bytes(label))]));
+    /// @dev Registration expiry already stops an expired name here. This adds
+    ///      what ENSv2 cannot see: revocation, and the death of an ancestor in
+    ///      a registry above this one.
+    function getSubregistry(string calldata label)
+        public
+        view
+        override
+        returns (IRegistry)
+    {
+        if (!_live(label)) return IRegistry(address(0));
+        return super.getSubregistry(label);
     }
 
     /// @inheritdoc IRegistry
-    function getResolver(string calldata label) external view returns (address) {
+    function getResolver(string calldata label) public view override returns (address) {
+        if (!_live(label)) return address(0);
+        return super.getResolver(label);
+    }
+
+    /// @dev Whether the Agent behind a label still holds authority.
+    function _live(string calldata label) internal view returns (bool) {
+        bytes32 id = current[keccak256(bytes(label))];
+        return id != bytes32(0) && _checkAuthority(id) == Reason.Ok;
+    }
+
+    /// @notice Records where this host is and how to recognise it.
+    /// @param ipv4 the host's address on the mesh
+    /// @param sshHostKey its raw ed25519 SSH host key — exactly 32 bytes, which
+    ///        is the whole key
+    ///
+    /// @dev Set by the Tenant's own device. A host may move, and moving is not a
+    ///      change of authority, so this needs no Grant.
+    ///
+    ///      Both together, never separately. They are one fact: a host that
+    ///      moves gets a new address *and* a new key, and publishing the address
+    ///      first leaves the name pointing at the new machine while the key
+    ///      still names the old one — which is indistinguishable, to whoever
+    ///      connects, from being handed the wrong host.
+    function setHost(bytes4 ipv4, bytes32 sshHostKey) external {
+        if (msg.sender != rootDevice) revert NotRootDevice();
+        selfEndpoint = ipv4;
+        selfHostKey = sshHostKey;
+    }
+
+    /// @notice An Agent's key, or zero if it may not act.
+    /// @dev What `addr()` answers with. Same computation as `endpointOf`: an
+    ///      Agent that cannot act has no address to publish.
+    function agentKeyOf(string calldata label) external view returns (address) {
         bytes32 id = current[keccak256(bytes(label))];
         if (id == bytes32(0) || _checkAuthority(id) != Reason.Ok) return address(0);
-        return childResolver;
+        return agents[id].agentKey;
     }
 
-    /// @inheritdoc IRegistry
-    function getParent() external view returns (IRegistry parent, string memory label) {
-        return (IRegistry(address(parentRegistry)), selfLabel);
+    /// @notice Names the funding backend, once.
+    /// @dev The executor must know the registry and the registry the executor,
+    ///      so one of them is set after deployment rather than predicting an
+    ///      address. Set-once, device-only.
+    function setExecutor(IExecutor executor_) external {
+        if (msg.sender != rootDevice) revert NotRootDevice();
+        if (address(executor) != address(0)) revert AlreadyGranted();
+        executor = executor_;
+    }
+
+    /// @notice Names the resolver that answers for Agents beneath this registry.
+    function setChildResolver(address resolver_) external {
+        if (msg.sender != rootDevice) revert NotRootDevice();
+        childResolver = resolver_;
     }
 
     /// @notice Gives an Agent a registry of its own, so it can hold children.
@@ -188,24 +283,31 @@ contract AgentRegistry is IRegistry {
         if (!a.exists) revert NotAuthorised(Reason.AncestorGone);
         if (current[keccak256(bytes(label))] != agentId) revert GrantMismatch();
 
-        child = AgentRegistry(_clone(address(this)));
-        child.initialize(agentId, label, tenant, rootDevice, executor, this, childResolver);
-        childRegistry[keccak256(bytes(label))] = child;
+        child = AgentRegistry(Clone.make(address(this)));
+        child.initialize(agentId, tenant, rootDevice, executor, this, childResolver);
+        // The real ENSv2 pointer, so a standard client descends into the child.
+        setSubregistry(LibLabel.id(label), IRegistry(address(child)));
+        child.adoptParent(label);
     }
 
-    /// @dev EIP-1167 minimal proxy, written out rather than pulling a library
-    ///      in for twenty bytes of initcode.
-    function _clone(address impl) internal returns (address addr) {
-        bytes20 target = bytes20(impl);
-        assembly {
-            let p := mload(0x40)
-            mstore(p, 0x3d602d80600a3d3981f3363d3d373d3d3d363d73000000000000000000000000)
-            mstore(add(p, 0x14), target)
-            mstore(add(p, 0x28), 0x5af43d82803e903d91602b57fd5bf30000000000000000000000000000000000)
-            addr := create(0, p, 0x37)
+    /// @notice Records this registry's place under its parent, for `getParent`.
+    /// @dev Callable once, by whichever registry created this one: an
+    ///      `AgentRegistry` above it, or the `PlatformRegistry` if this is a
+    ///      Tenant's root. It writes the inherited parent edge directly, because
+    ///      `setParent` is gated on a root role the creator does not hold.
+    ///
+    ///      A Tenant root has no `parentRegistry` to check against, so the first
+    ///      caller wins. There is no race to lose: creation, initialisation and
+    ///      this call happen in one transaction.
+    function adoptParent(string calldata label) external {
+        if (address(_parentRegistry) != address(0)) revert AlreadyGranted();
+        if (address(parentRegistry) != address(0) && msg.sender != address(parentRegistry)) {
+            revert NotRootDevice();
         }
-        require(addr != address(0), "clone failed");
+        _parentRegistry = IRegistry(msg.sender);
+        _childLabel = label;
     }
+
 
     // --- issuing ------------------------------------------------------------
 
@@ -241,13 +343,13 @@ contract AgentRegistry is IRegistry {
             if (parentRegistry.checkReason(self) != Reason.Ok) {
                 revert NotAuthorised(Reason.AncestorGone);
             }
-            if (g.start < parentGrant.start || g.end > parentGrant.end) revert NotNarrower();
-            _requireNarrower(g, parentGrant);
+            if (g.start < parentGrant.start || g.end > parentGrant.end) revert GrantLib.NotNarrower();
+            GrantLib.requireNarrower(g, parentGrant);
         }
 
         agentId = hashGrant(g);
         if (agents[agentId].exists) revert AlreadyGranted();
-        _requireNoDuplicateLimits(g);
+        GrantLib.requireNoDuplicateLimits(g);
 
         agents[agentId] = Agent({
             parent: g.parent,
@@ -255,9 +357,25 @@ contract AgentRegistry is IRegistry {
             start: g.start,
             end: g.end,
             exists: true,
-            revoked: false
+            revoked: false,
+            labelHash: keccak256(bytes(g.label))
         });
         current[keccak256(bytes(g.label))] = agentId;
+
+        // The Agent becomes a real ENSv2 name, owned by the Tenant, expiring
+        // exactly when its authority does. `checkRoles` is false because the
+        // caller was already checked against `rootDevice` above; the roles this
+        // contract holds over itself are what let it register at all.
+        _register(g.label, tenant, IRegistry(address(0)), childResolver, AGENT_ROLES, g.end, false);
+
+        // An Agent may stand itself down, so it needs the role that burns its
+        // own name. Granted on that name only — never at the root.
+        _grantRoles(
+            getResource(LibLabel.id(g.label)),
+            RegistryRolesLib.ROLE_UNREGISTER,
+            g.agentKey,
+            false
+        );
 
         emit Granted(agentId, g.parent, g.label, g.agentKey);
     }
@@ -270,6 +388,19 @@ contract AgentRegistry is IRegistry {
         // The device, or the Agent standing itself down.
         if (msg.sender != rootDevice && msg.sender != a.agentKey) revert NotRootDevice();
         a.revoked = true;
+
+        // Burn the name with the authority. The token goes, the roles attached
+        // to it are invalidated by the version bump, and the entry expires — so
+        // an ENS client sees the name end for the same reason the spend path
+        // does, without being told about revocation as a separate idea.
+        //
+        // Only if this Agent still holds the label: a later Grant for the same
+        // name supersedes this one, and revoking the superseded Agent must not
+        // take the live one's name with it.
+        if (current[a.labelHash] == agentId) {
+            unregister(uint256(a.labelHash));
+        }
+
         emit Revoked(agentId);
     }
 
@@ -292,7 +423,7 @@ contract AgentRegistry is IRegistry {
     {
         bytes32 agentId = hashGrant(g);
         if (nonce != nonces[agentId]) revert BadNonce();
-        if (_recover(_batchDigest(agentId, calls, nonce), agentSig) != g.agentKey) revert BadSignature();
+        if (GrantLib.recover(GrantLib.batchDigest(agentId, calls, nonce, _domainSeparator()), agentSig) != g.agentKey) revert BadSignature();
         nonces[agentId] = nonce + 1;
 
         Reason r = _checkAuthority(agentId);
@@ -337,38 +468,12 @@ contract AgentRegistry is IRegistry {
         view
         returns (PeriodSpend memory)
     {
-        return _spent[agentId][_limitId(limit)];
+        return _spent[agentId][GrantLib.limitId(limit)];
     }
 
+    /// @notice The EIP-712 digest that identifies a Grant.
     function hashGrant(Grant calldata g) public view returns (bytes32) {
-        bytes32[] memory ruleHashes = new bytes32[](g.calls.length);
-        for (uint256 i; i < g.calls.length; ++i) {
-            CallRule calldata c = g.calls[i];
-            ruleHashes[i] = keccak256(
-                abi.encode(CALL_RULE_TYPEHASH, c.target, c.selector, c.maxValue, c.checker, c.checkerCodeHash)
-            );
-        }
-        bytes32[] memory limitHashes = new bytes32[](g.spends.length);
-        for (uint256 i; i < g.spends.length; ++i) {
-            SpendLimit calldata s = g.spends[i];
-            limitHashes[i] = keccak256(
-                abi.encode(SPEND_LIMIT_TYPEHASH, s.token, s.allowance, uint8(s.unit), s.multiplier)
-            );
-        }
-        bytes32 structHash = keccak256(
-            abi.encode(
-                GRANT_TYPEHASH,
-                g.parent,
-                keccak256(bytes(g.label)),
-                g.agentKey,
-                g.start,
-                g.end,
-                g.salt,
-                keccak256(abi.encodePacked(ruleHashes)),
-                keccak256(abi.encodePacked(limitHashes))
-            )
-        );
-        return keccak256(abi.encodePacked("\x19\x01", _domainSeparator(), structHash));
+        return GrantLib.hash(g, _domainSeparator());
     }
 
     // --- internals ----------------------------------------------------------
@@ -424,10 +529,10 @@ contract AgentRegistry is IRegistry {
     function _account(bytes32 agentId, Grant calldata g, SpendLimit calldata limit, uint160 amount)
         internal
     {
-        bytes32 lid = _limitId(limit);
+        bytes32 lid = GrantLib.limitId(limit);
         PeriodSpend memory p = _spent[agentId][lid];
 
-        (uint48 wStart, uint48 wEnd) = _window(limit, g.start, g.end);
+        (uint48 wStart, uint48 wEnd) = GrantLib.window(limit, g.start, g.end);
         if (p.start != wStart) p = PeriodSpend({start: wStart, end: wEnd, spend: 0});
 
         uint256 total = uint256(p.spend) + amount;
@@ -439,105 +544,10 @@ contract AgentRegistry is IRegistry {
     }
 
     /// @dev Windows are aligned to the Grant's own start, never to the epoch.
-    function _window(SpendLimit calldata limit, uint48 gStart, uint48 gEnd)
-        internal
-        view
-        returns (uint48 start, uint48 end)
-    {
-        if (limit.unit == Period.Forever) return (gStart, gEnd);
-        uint256 len = _periodSeconds(limit.unit) * (limit.multiplier == 0 ? 1 : limit.multiplier);
-        uint256 elapsed = block.timestamp - gStart;
-        start = uint48(gStart + (elapsed / len) * len);
-        end = uint48(uint256(start) + len);
-    }
 
-    function _periodSeconds(Period unit) internal pure returns (uint256) {
-        if (unit == Period.Minute) return 60;
-        if (unit == Period.Hour) return 3600;
-        if (unit == Period.Day) return 86400;
-        if (unit == Period.Week) return 604800;
-        return 2629746; // average Gregorian month
-    }
-
-    function _limitId(SpendLimit calldata l) internal pure returns (bytes32) {
-        return keccak256(abi.encode(l.token, l.unit, l.multiplier));
-    }
 
     /// @dev Every rule and limit in `g` must already be permitted by `parent`.
-    function _requireNarrower(Grant calldata g, Grant calldata parent) internal pure {
-        for (uint256 i; i < g.calls.length; ++i) {
-            bool covered;
-            for (uint256 j; j < parent.calls.length; ++j) {
-                if (_covers(parent.calls[j], g.calls[i])) {
-                    covered = true;
-                    break;
-                }
-            }
-            if (!covered) revert NotNarrower();
-        }
-        for (uint256 i; i < g.spends.length; ++i) {
-            bool covered;
-            for (uint256 j; j < parent.spends.length; ++j) {
-                SpendLimit calldata ps = parent.spends[j];
-                SpendLimit calldata cs = g.spends[i];
-                if (ps.token == cs.token && ps.unit == cs.unit && ps.multiplier == cs.multiplier) {
-                    if (cs.allowance > ps.allowance) revert NotNarrower();
-                    covered = true;
-                    break;
-                }
-            }
-            if (!covered) revert NotNarrower();
-        }
-    }
 
-    function _covers(CallRule calldata wide, CallRule calldata narrow) internal pure returns (bool) {
-        if (wide.target != Constants.ANY_TARGET && wide.target != narrow.target) return false;
-        if (wide.selector != Constants.ANY_SELECTOR && wide.selector != narrow.selector) return false;
-        if (narrow.maxValue > wide.maxValue) return false;
-        // A child may add a checker, never drop the parent's.
-        if (wide.checker != address(0) && wide.checker != narrow.checker) return false;
-        return true;
-    }
-
-    function _requireNoDuplicateLimits(Grant calldata g) internal pure {
-        for (uint256 i; i < g.spends.length; ++i) {
-            for (uint256 j = i + 1; j < g.spends.length; ++j) {
-                if (_limitId(g.spends[i]) == _limitId(g.spends[j])) revert DuplicateLimit();
-            }
-        }
-    }
-
-    /// @dev What an Agent signs to authorise one batch. Bound to the Agent, the
-    ///      calls, the nonce, this contract and this chain, so a relayer can
-    ///      carry it but not reuse or redirect it.
-    function _batchDigest(bytes32 agentId, Call[] calldata calls, uint256 nonce)
-        internal
-        view
-        returns (bytes32)
-    {
-        bytes32[] memory callHashes = new bytes32[](calls.length);
-        for (uint256 i; i < calls.length; ++i) {
-            callHashes[i] = keccak256(abi.encode(calls[i].to, calls[i].value, keccak256(calls[i].data)));
-        }
-        bytes32 structHash = keccak256(
-            abi.encode(
-                keccak256("Batch(bytes32 agentId,uint256 nonce,bytes32 calls)"),
-                agentId,
-                nonce,
-                keccak256(abi.encodePacked(callHashes))
-            )
-        );
-        return keccak256(abi.encodePacked("\x19\x01", _domainSeparator(), structHash));
-    }
-
-    function _recover(bytes32 digest, bytes calldata sig) internal pure returns (address) {
-        if (sig.length != 65) return address(0);
-        bytes32 r = bytes32(sig[0:32]);
-        bytes32 s = bytes32(sig[32:64]);
-        uint8 v = uint8(sig[64]);
-        if (v < 27) v += 27;
-        return ecrecover(digest, v, r, s);
-    }
 
     /// @notice EIP-712 domain separator, so an Agent can build a batch digest.
     function domainSeparator() external view returns (bytes32) {

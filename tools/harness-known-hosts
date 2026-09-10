@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+# Prints the known_hosts line for an Agent, read from ENS.
+#
+# Wired into ssh as KnownHostsCommand, this replaces trust-on-first-use with
+# trust-on-authority: the key ssh checks against is the one the Agent's Grant
+# says it should have, fetched fresh on every connection rather than remembered
+# from the first. Revoke the Agent and the record goes with it, so the next
+# connection fails instead of succeeding against a key someone once accepted.
+#
+#   Host *.harness.eth
+#       KnownHostsCommand /path/to/harness-known-hosts %H
+#       StrictHostKeyChecking yes
+#
+# ssh terminates the connection when this exits non-zero, which is what we
+# want: no record, no connection. Exiting 0 in silence would fall through to
+# ~/.ssh/known_hosts and quietly restore the trust we are replacing.
+set -euo pipefail
+
+host="${1:?usage: harness-known-hosts <hostname>}"
+rpc="${HARNESS_RPC:-https://ethereum-sepolia-rpc.publicnode.com}"
+universal="${HARNESS_UNIVERSAL_RESOLVER:-0xd26f2040d083af1cd2962ba303f4bea0c4faf142}"
+
+# ssh passes %H as [host]:port whenever the port is not 22.
+host="${host#[}"; host="${host%%]*}"; host="${host%%:*}"; host="${host%.}"
+
+# DNS wire format: each label prefixed by its length, then a zero byte. This is
+# how ENSIP-10 passes a name to a wildcard resolver.
+wire=$(python3 -c '
+import sys
+name = sys.argv[1]
+print("0x" + "".join("%02x" % len(l) + l.encode().hex() for l in name.split(".")) + "00")
+' "$host")
+
+answer=$(cast call "$universal" 'resolve(bytes,bytes)(bytes,address)' \
+    "$wire" \
+    "$(cast calldata 'text(bytes32,string)' "$(cast namehash "$host")" 'ssh-hostkey')" \
+    --rpc-url "$rpc" 2>/dev/null | head -1) || {
+    echo "harness: could not reach ENS for $host" >&2
+    exit 1
+}
+
+line=$(cast --abi-decode 'f()(string)' "$answer" 2>/dev/null | tr -d '"' || true)
+
+if [ -z "${line// }" ]; then
+    echo "harness: $host publishes no host key — revoked, expired, or no runner" >&2
+    exit 1
+fi
+
+echo "$host $line"

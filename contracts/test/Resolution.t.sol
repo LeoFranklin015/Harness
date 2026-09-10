@@ -4,7 +4,8 @@ pragma solidity ^0.8.30;
 import {Test} from "forge-std/Test.sol";
 import {AgentRegistry} from "../src/AgentRegistry.sol";
 import {CallRule, Constants, Grant, Period, SpendLimit} from "../src/Types.sol";
-import {IRegistry} from "../src/interfaces/IRegistry.sol";
+import {IRegistry} from "@ensdomains/contracts-v2/registry/interfaces/IRegistry.sol";
+import {MockLabelStore} from "./mocks/MockLabelStore.sol";
 import {MockExecutor} from "./mocks/MockExecutor.sol";
 
 /// Resolution answers to the same state as authority. These check that a name
@@ -27,7 +28,14 @@ contract ResolutionTest is Test {
     function setUp() public {
         device = vm.addr(DEVICE_PK);
         executor = new MockExecutor();
-        registry = new AgentRegistry(bytes32(0), tenant, device, executor, AgentRegistry(address(0)));
+        registry = new AgentRegistry(
+            new MockLabelStore(),
+            bytes32(0),
+            tenant,
+            device,
+            executor,
+            AgentRegistry(address(0))
+        );
         vm.warp(1_000_000);
     }
 

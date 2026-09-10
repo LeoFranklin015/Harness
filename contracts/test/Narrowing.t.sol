@@ -3,7 +3,9 @@ pragma solidity ^0.8.30;
 
 import {Test} from "forge-std/Test.sol";
 import {AgentRegistry} from "../src/AgentRegistry.sol";
+import {GrantLib} from "../src/GrantLib.sol";
 import {Call, CallRule, Constants, Grant, Period, Reason, SpendLimit} from "../src/Types.sol";
+import {MockLabelStore} from "./mocks/MockLabelStore.sol";
 import {MockExecutor} from "./mocks/MockExecutor.sol";
 
 /// Tests written to break the design, not to confirm it. Each targets a
@@ -31,7 +33,14 @@ contract NarrowingTest is Test {
         childKey = vm.addr(CHILD_KEY_PK);
 
         executor = new MockExecutor();
-        registry = new AgentRegistry(bytes32(0), tenant, device, executor, AgentRegistry(address(0)));
+        registry = new AgentRegistry(
+            new MockLabelStore(),
+            bytes32(0),
+            tenant,
+            device,
+            executor,
+            AgentRegistry(address(0))
+        );
         executor.fund(tenant, USDC, 1_000e6);
         vm.warp(1_000_000);
     }
@@ -149,7 +158,7 @@ contract NarrowingTest is Test {
         Grant memory child = _grant(rootId, "greedy", childKey, TOOL, 500e6);
 
         vm.prank(device);
-        vm.expectRevert(AgentRegistry.NotNarrower.selector);
+        vm.expectRevert(GrantLib.NotNarrower.selector);
         sub.grant(child, root);
     }
 
@@ -159,7 +168,7 @@ contract NarrowingTest is Test {
         Grant memory child = _grant(rootId, "sneaky", childKey, OTHER_TOOL, 10e6);
 
         vm.prank(device);
-        vm.expectRevert(AgentRegistry.NotNarrower.selector);
+        vm.expectRevert(GrantLib.NotNarrower.selector);
         sub.grant(child, root);
     }
 
@@ -170,7 +179,7 @@ contract NarrowingTest is Test {
         child.end = root.end + 1 days;
 
         vm.prank(device);
-        vm.expectRevert(AgentRegistry.NotNarrower.selector);
+        vm.expectRevert(GrantLib.NotNarrower.selector);
         sub.grant(child, root);
     }
 
