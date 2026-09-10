@@ -1,8 +1,6 @@
-import { createPublicClient } from "viem";
-import { sepolia } from "viem/chains";
 import { NextResponse } from "next/server";
 import { findGrant } from "@/lib/store";
-import { sepoliaTransport } from "@/lib/rpc";
+import { publicClient as client } from "@/lib/rpc";
 import { dailyLimit, REGISTRY_ABI } from "@/lib/tenant";
 
 export const runtime = "nodejs";
@@ -35,7 +33,6 @@ export async function GET(request: Request) {
     if (!g) return NextResponse.json({ error: "no such agent" }, { status: 404 });
 
     const allowance = BigInt(g.cap);
-    const client = createPublicClient({ chain: sepolia, transport: sepoliaTransport() });
     const period = (await client.readContract({
       address: g.registry,
       abi: REGISTRY_ABI,

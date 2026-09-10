@@ -33,19 +33,17 @@ const PART_AT = { tracks: 1, body: 2, shoulders: 3, arms: 4, neck: 5, eyes: 6 } 
 export const STAGES = 6;
 
 /**
- * Where the bolts are. Five, at the joints that actually take a fastener —
- * a track to the hull, the two arm pivots, the collar. Twelve scattered
- * across the panels read as texture; five on the seams read as assembly.
+ * Where the bolts are. Three, and every one of them somewhere a bolt would
+ * be and can be seen. The arm pivots were in the list and sat behind the
+ * body, so they read as fasteners floating in the middle of a panel.
  */
 const SCREWS: { x: number; y: number; on: keyof typeof PART_AT }[] = [
-  // Where a track is bolted to the hull.
-  { x: 74, y: 170, on: "body" },
-  { x: 226, y: 170, on: "body" },
-  // The arm pivots.
-  { x: 62, y: 150, on: "arms" },
-  { x: 238, y: 150, on: "arms" },
+  // The hull's own two access ports, which is where a bolt belongs and
+  // where one can actually be seen — the arm pivots sit behind the body.
+  { x: 80, y: 150, on: "body" },
+  { x: 220, y: 150, on: "body" },
   // The collar, holding the neck to the shoulder block.
-  { x: 150, y: 106, on: "neck" },
+  { x: 150, y: 95, on: "neck" },
 ];
 
 export type AssemblyStage = 0 | 1 | 2 | 3 | 4 | 5 | 6;
@@ -72,20 +70,34 @@ export function Assembly({
     <svg className={className} viewBox="8 4 284 250" aria-hidden>
       <defs>
         {(["l", "r"] as const).map((side) => (
+          <clipPath key={`eye-${side}`} id={`asm-eye-${side}`}>
+            <path d={shell(32)} />
+          </clipPath>
+        ))}
+        {(["l", "r"] as const).map((side) => (
           <clipPath key={side} id={`asm-track-${side}`}>
             <rect x={-20} y={-52} width={40} height={104} rx={19} />
           </clipPath>
         ))}
       </defs>
-      {/* A ghost of the whole machine, so the empty space reads as something
-          unfinished rather than as nothing. */}
+      {/* A ghost of what is not there yet. Each outline disappears the
+          moment its part arrives — left up, it draws a full circle around a
+          fitted eye and the pod stops reading as a pod. */}
       <g opacity={0.07} stroke="#E8EDF5" strokeWidth={2} fill="none">
-        <rect x={59} y={132} width={182} height={80} rx={4} />
-        <rect x={68} y={104} width={48} height={30} rx={2} />
-        <rect x={184} y={104} width={48} height={30} rx={2} />
-        <rect x={140} y={48} width={20} height={62} rx={2} />
-        <circle cx={112} cy={54} r={32} />
-        <circle cx={188} cy={54} r={32} />
+        {!has("body") && <rect x={59} y={132} width={182} height={80} rx={4} />}
+        {!has("shoulders") && (
+          <>
+            <rect x={68} y={104} width={48} height={30} rx={2} />
+            <rect x={184} y={104} width={48} height={30} rx={2} />
+          </>
+        )}
+        {!has("neck") && <rect x={140} y={48} width={20} height={62} rx={2} />}
+        {!has("eyes") && (
+          <>
+            <path d={shell(32)} transform="translate(112 54) rotate(-12)" />
+            <path d={shell(32)} transform="translate(188 54) rotate(12)" />
+          </>
+        )}
       </g>
 
       {/* Tracks, and they run. This is what is moving before anything else
@@ -125,8 +137,8 @@ export function Assembly({
         {[112, 146, 180].map((x) => (
           <rect key={x} x={x} y={144} width={4} height={56} rx={2} fill={YELLOW_LIT} opacity={0.6} />
         ))}
-        <circle cx={80} cy={150} r={6} fill="none" stroke={RIM} strokeWidth={2.5} opacity={0.7} />
-        <circle cx={220} cy={150} r={6} fill="none" stroke={RIM} strokeWidth={2.5} opacity={0.7} />
+        <circle cx={80} cy={150} r={7.5} fill="none" stroke={RIM} strokeWidth={2.5} opacity={0.7} />
+        <circle cx={220} cy={150} r={7.5} fill="none" stroke={RIM} strokeWidth={2.5} opacity={0.7} />
       </g>
 
       <g {...part("shoulders")}>
@@ -150,11 +162,18 @@ export function Assembly({
               <g key={side} transform={`translate(${cx} 54)`}>
                 <g style={{ rotate: `${tilt}deg` }} className="walle-origin">
                   <path d={shell(32)} fill={YELLOW} stroke={RIM} strokeWidth={3.5} />
-                  <circle cx={0} cy={5} r={21} fill={RIM} />
-                  <g className={alive("eyes", "rig-look")}>
-                    <circle cx={0} cy={5} r={12.5} fill="#23272C" />
-                    <circle cx={-4.5} cy={0} r={5.5} fill="#F4F7FA" />
+                  {/* Clipped to the shell. Unclipped, the iris bulges past
+                      the flat top and the whole pod reads as a circle —
+                      which is not the shape on the card. */}
+                  <g clipPath={`url(#asm-eye-${side})`}>
+                    <circle cx={0} cy={5} r={21} fill={RIM} />
+                    <g className={alive("eyes", "rig-look")}>
+                      <circle cx={0} cy={5} r={12.5} fill="#23272C" />
+                      <circle cx={-4.5} cy={0} r={5.5} fill="#F4F7FA" />
+                      <circle cx={4.5} cy={9} r={2.4} fill="#F4F7FA" opacity={0.8} />
+                    </g>
                   </g>
+                  <path d={shell(32)} fill="none" stroke={RIM} strokeWidth={3.5} />
                 </g>
               </g>
             ))}

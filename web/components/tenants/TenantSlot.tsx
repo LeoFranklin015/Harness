@@ -1,13 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { BorderBeam } from "@/components/ui/border-beam";
 import { MeshInvite } from "@/components/tenants/MeshInvite";
 import { Terminal } from "@/components/tenants/Terminal";
 import { Asks, type Ask } from "@/components/tenants/Asks";
 import { Agent } from "@/components/tenants/Agent";
-import { Ceiling } from "@/components/tenants/Ceiling";
+import { Activity } from "@/components/tenants/Activity";
+import { Gauge } from "@/components/tenants/Gauge";
+import { InviteMark, RevokeMark, TailscaleMark, TerminalMark } from "@/components/tenants/icons";
 import { RevokeCascade } from "@/components/tenants/RevokeCascade";
 import type { ProvisionRequest } from "@/components/tenants/ProvisionDialog";
 
@@ -152,6 +154,8 @@ function Details({
   onRaise: (t: Tenant, ask: Ask, newCapUsd: number) => Promise<void>;
 }) {
   const [shell, setShell] = useState(false);
+  const [ssh, setSsh] = useState(false);
+  const [invite, setInvite] = useState(false);
   const provisioning = tenant.status === "provisioning";
   const revoked = tenant.status === "revoked";
 
@@ -161,7 +165,7 @@ function Details({
       onClick={onClose}
     >
       <div
-        className="max-h-[88vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-neutral-800 bg-neutral-950 p-6 duration-200 animate-in fade-in-0 zoom-in-95"
+        className="max-h-[88vh] w-full max-w-xl overflow-y-auto rounded-2xl border border-neutral-800 bg-neutral-950 p-6 duration-200 animate-in fade-in-0 zoom-in-95"
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
@@ -206,11 +210,13 @@ function Details({
               <Row label="Agent" value={tenant.agent ? `${tenant.agent}.${tenant.label}.harness.eth` : "—"} mono />
               <Row label="Mesh" value={tenant.meshAddress ?? "—"} mono />
             </dl>
-            {/* Not on a revoked machine: a full bar beside "spending stopped"
-                reads as a contradiction, and the cascade already says what
-                the ceiling is now worth. */}
-            {!revoked && (
-              <Ceiling capUsd={capUsd(tenant)} tenant={tenant.label} agent={tenant.agent} />
+            {/* Not on a revoked machine: a spend gauge beside "spending
+                stopped" reads as a contradiction, and the cascade already
+                says what the ceiling is now worth. */}
+            {!revoked && tenant.agent && (
+              <div className="mt-6 rounded-xl border border-neutral-900 bg-neutral-900/30 p-5">
+                <Spend tenant={tenant.label} agent={tenant.agent} fallbackCap={capUsd(tenant)} />
+              </div>
             )}
           </>
         )}
@@ -220,36 +226,71 @@ function Details({
             {shell && tenant.agent && (
               <Terminal tenant={tenant.label} agent={tenant.agent} onClose={() => setShell(false)} />
             )}
-            <div className="mt-6 flex flex-wrap gap-2">
+            <div className="mt-6 grid grid-cols-3 gap-2">
               {tenant.agent && (
-                <button
-                  onClick={() => setShell(true)}
-                  className="rounded-full border border-neutral-700 px-4 py-1.5 text-xs text-neutral-200 transition hover:border-neutral-600 hover:bg-neutral-900/60"
-                >
-                  Open a terminal
-                </button>
+                <Action icon={<TerminalMark className="h-5 w-5" />} onClick={() => setShell(true)}>
+                  Terminal
+                </Action>
               )}
-              <button
-                onClick={() => onRevoke(tenant)}
-                className="rounded-full border border-red-900/60 px-4 py-1.5 text-xs text-red-400/90 transition hover:border-red-800 hover:bg-red-950/40"
+              <Action
+                icon={<TailscaleMark className="h-5 w-5" />}
+                onClick={() => setSsh((v) => !v)}
+                on={ssh}
               >
-                Revoke
-              </button>
+                Use over SSH
+              </Action>
+              <Action icon={<InviteMark className="h-5 w-5" />} onClick={() => setInvite((v) => !v)} on={invite}>
+                Invite to mesh
+              </Action>
             </div>
+
+            {/* Reaching it from your own shell needs nothing from us but the
+                name — the mesh and the chain do the rest. */}
+            {ssh && tenant.agent && (
+              <pre className="mt-3 overflow-x-auto rounded-lg border border-neutral-900 bg-neutral-950 px-4 py-3 font-mono text-xs text-neutral-300">
+                ssh runner@{tenant.agent}.{tenant.label}.harness.eth
+              </pre>
+            )}
             {/* The machine has no public address, so reaching it is a separate,
                 deliberate act — and one that expires on its own. */}
+            {invite && (
+              <MeshInvite
+                machine={tenant.label}
+                agent={tenant.agent}
+                meshAddress={tenant.meshAddress}
+                ensName={tenant.agent ? `${tenant.agent}.${tenant.label}.harness.eth` : null}
+                onAuthorise={(operator) => onAuthorise(tenant, operator)}
+              />
+            )}
+
             <Asks
               tenant={tenant.label}
               currentCapUsd={capUsd(tenant)}
               onApprove={(ask, newCap) => onRaise(tenant, ask, newCap)}
             />
-            <MeshInvite
-              machine={tenant.label}
-              agent={tenant.agent}
-              meshAddress={tenant.meshAddress}
-              ensName={tenant.agent ? `${tenant.agent}.${tenant.label}.harness.eth` : null}
-              onAuthorise={(operator) => onAuthorise(tenant, operator)}
-            />
+
+            {tenant.agent && (
+              <div className="mt-6 border-t border-neutral-900 pt-5">
+                <Activity tenant={tenant.label} agent={tenant.agent} />
+              </div>
+            )}
+
+            {/* Apart from the rest, and last. It is not one of three things
+                you might do, it is the end of the machine. */}
+            <div className="mt-6 border-t border-neutral-900 pt-5">
+              <button
+                onClick={() => onRevoke(tenant)}
+                className="group flex w-full items-center gap-3 rounded-lg border border-red-950/70 bg-red-950/10 px-4 py-3 text-left transition hover:border-red-900 hover:bg-red-950/25"
+              >
+                <RevokeMark className="h-5 w-5 shrink-0 text-red-400/80" />
+                <span>
+                  <span className="block text-sm text-red-300/90">Revoke</span>
+                  <span className="block text-[11px] text-neutral-600">
+                    Spending, the name, SSH and any open shell, in one transaction.
+                  </span>
+                </span>
+              </button>
+            </div>
           </>
         )}
 
@@ -260,6 +301,71 @@ function Details({
         )}
       </div>
     </div>
+  );
+}
+
+/** The gauge and its numbers, read from the chain and kept fresh. */
+function Spend({
+  tenant,
+  agent,
+  fallbackCap,
+}: {
+  tenant: string;
+  agent: string;
+  fallbackCap: number;
+}) {
+  const [d, setD] = useState<{ capUsd: number; spentUsd: number; windowEnds: number | null } | null>(
+    null,
+  );
+
+  useEffect(() => {
+    let stop = false;
+    const ask = () =>
+      fetch(`/api/spend?tenant=${tenant}&label=${agent}`, { cache: "no-store" })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((v) => !stop && v && setD(v))
+        .catch(() => {});
+    ask();
+    const every = setInterval(ask, 8_000);
+    return () => {
+      stop = true;
+      clearInterval(every);
+    };
+  }, [tenant, agent]);
+
+  return (
+    <Gauge
+      spentUsd={d ? d.spentUsd : null}
+      capUsd={d ? d.capUsd : fallbackCap}
+      windowEnds={d?.windowEnds ?? null}
+    />
+  );
+}
+
+/** One of the things you can do to a live machine. */
+function Action({
+  icon,
+  onClick,
+  children,
+  on,
+}: {
+  icon: React.ReactNode;
+  onClick: () => void;
+  children: React.ReactNode;
+  on?: boolean;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`flex flex-col items-start gap-2 rounded-xl border px-3 py-3 text-left transition ${
+        on
+          ? "border-neutral-600 bg-neutral-900"
+          : "border-neutral-900 bg-neutral-900/30 hover:border-neutral-700 hover:bg-neutral-900/60"
+      }`}
+    >
+      <span className={on ? "text-neutral-100" : "text-neutral-500"}>{icon}</span>
+      <span className={`text-xs ${on ? "text-neutral-100" : "text-neutral-300"}`}>{children}</span>
+    </button>
   );
 }
 

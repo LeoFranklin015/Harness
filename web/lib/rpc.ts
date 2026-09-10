@@ -1,4 +1,5 @@
-import { fallback, http, type Transport } from "viem";
+import { createPublicClient, fallback, http, type PublicClient, type Transport } from "viem";
+import { sepolia } from "viem/chains";
 
 /**
  * One transport, several endpoints, so a bad minute on somebody's free RPC is
@@ -27,8 +28,30 @@ export function sepoliaTransport(): Transport {
   const preferred = process.env.HARNESS_RPC ?? process.env.NEXT_PUBLIC_HARNESS_RPC;
   const urls = preferred ? [preferred, ...ENDPOINTS.filter((u) => u !== preferred)] : ENDPOINTS;
 
+  // Ranking was measured costing more than it saved: it pings every endpoint
+  // on a timer, and a public RPC that takes twenty seconds to answer a probe
+  // holds a connection the whole time. Plain order-of-preference fallback
+  // still moves off a broken endpoint, on the request that finds it broken.
   return fallback(
-    urls.map((url) => http(url, { retryCount: 2, retryDelay: 400, timeout: 20_000 })),
-    { rank: { interval: 30_000, sampleCount: 3 } },
+    urls.map((url) => http(url, { retryCount: 2, retryDelay: 400, timeout: 8_000 })),
   );
 }
+
+
+/**
+ * One read-only client for the whole process.
+ *
+ * `sepoliaTransport` ranks its endpoints, which means a timer that pings all
+ * four every thirty seconds for as long as the client exists. Built inside a
+ * request handler that is polled every eight seconds, each request leaves a
+ * timer behind that nothing ever stops — they accumulate until the event loop
+ * is doing nothing but ranking RPC endpoints and ordinary requests start
+ * taking twenty seconds. Which is exactly what happened.
+ *
+ * A client is stateless as far as callers are concerned, so there was never a
+ * reason to make more than one.
+ */
+export const publicClient: PublicClient = createPublicClient({
+  chain: sepolia,
+  transport: sepoliaTransport(),
+});

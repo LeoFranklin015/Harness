@@ -73,7 +73,13 @@ let opening: Promise<Db> | null = null;
 function db(): Promise<Db> {
   if (!URI) throw new Error("set MONGODB_URI — the metadata store is not optional");
   if (!opening) {
-    opening = new MongoClient(URI, { serverSelectionTimeoutMS: 5_000 })
+    opening = new MongoClient(URI, {
+      serverSelectionTimeoutMS: 5_000,
+      // Hold one connection open. A hosted cluster's first handshake costs
+      // seconds — SRV lookup, TLS, auth — and letting the pool drain to zero
+      // means paying it again the next time somebody opens the dashboard.
+      minPoolSize: 1,
+    })
       .connect()
       .then(async (client) => {
         const d = client.db(DB_NAME);
@@ -92,6 +98,21 @@ function db(): Promise<Db> {
       });
   }
   return opening;
+}
+
+/**
+ * Make the connection before anybody waits on it.
+ *
+ * Called once at server start. Without it the first request of the process
+ * pays the whole handshake — measured at five to twenty seconds against
+ * Atlas — and since every route waits on the same promise, the first person
+ * to open the page waits for all of it.
+ */
+export async function warm(): Promise<void> {
+  await db().then(
+    () => undefined,
+    () => undefined,
+  );
 }
 
 async function grants(): Promise<Collection<GrantRecord>> {
@@ -185,4 +206,48 @@ export async function saveTenant(t: Omit<TenantRecord, "updatedAt">): Promise<vo
 export async function markRevoked(label: string): Promise<void> {
   const c = await tenants();
   await c.updateOne({ _id: label }, { $set: { status: "revoked", updatedAt: new Date() } });
+}
+
+
+// --- what an agent has done ------------------------------------------------
+
+/**
+ * A payment an Agent made, kept so the dashboard can show a history.
+ *
+ * The chain is the record of record and this is not it — every one of these
+ * is a hash you can go and check. It exists because "what has this machine
+ * been doing" is a question about a handful of transfers by one agent, and
+ * answering it from logs means either an indexer or a scan of every block
+ * since the grant was signed. A row per payment is the cheap honest answer,
+ * and if it disagrees with the chain the chain is right.
+ */
+export type Spend = {
+  _id: string;
+  tenant: string;
+  label: string;
+  /** "sent" when the agent paid inside its ceiling, "escalated" when a
+   *  person had to sign for it. Both moved money; only one was autonomous. */
+  kind: "sent" | "escalated";
+  /** Whole USDC, as a number, because it is displayed and never summed for
+   *  accounting — the ceiling is enforced on chain, not here. */
+  usd: number;
+  to: string;
+  hash: string;
+  why?: string;
+  at: Date;
+};
+
+export async function recordSpend(s: Omit<Spend, "_id" | "at">): Promise<void> {
+  const c = (await db()).collection<Spend>("spends");
+  // Keyed by hash: a confirm arriving after a send must not double-count.
+  await c.updateOne(
+    { _id: s.hash.toLowerCase() },
+    { $set: { ...s }, $setOnInsert: { at: new Date() } },
+    { upsert: true },
+  );
+}
+
+export async function recentSpends(tenant: string, label: string, limit = 8): Promise<Spend[]> {
+  const c = (await db()).collection<Spend>("spends");
+  return c.find({ tenant, label }).sort({ at: -1 }).limit(limit).toArray();
 }

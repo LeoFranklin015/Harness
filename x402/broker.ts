@@ -37,6 +37,7 @@ import { REGISTRY_ABI, USDC, publicClient } from "./harness.ts";
 import { USDC_3009_ABI } from "./exact.ts";
 import { load } from "./grant.ts";
 import { headroom } from "./headroom.ts";
+import { recordSpend } from "../web/lib/store.ts";
 import { settle, transferCall } from "./settle.ts";
 import { agentSecrets, sealAsk } from "./keys.ts";
 
@@ -347,6 +348,10 @@ async function sendFor(ip: string, door: string, body: Record<string, unknown>) 
   });
 
   console.log(`  ${name} -> ${usd(amount)} to ${to} (${hash.slice(0, 10)}…)`);
+  // Filed for the dashboard. Never worth failing a settled payment over:
+  // the money has moved and the chain has it either way.
+  await recordSpend({ tenant, label: agent, kind: "sent", usd: Number(amount) / 1e6, to, hash })
+    .catch((e) => console.log(`  (not recorded: ${e.message})`));
   return {
     sent: usd(amount),
     to,

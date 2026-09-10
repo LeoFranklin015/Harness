@@ -4,7 +4,7 @@ import { sepolia } from "viem/chains";
 import { agentKeyFor } from "@/lib/agent-root";
 import { batchCalldata, DELEGATE, delegateFrom } from "@/lib/delegation";
 import { asksFor } from "@/lib/pending";
-import { sepoliaTransport } from "@/lib/rpc";
+import { publicClient as client } from "@/lib/rpc";
 import { allowanceFor, calldata, firstGrant, REGISTRY_ABI, USDC } from "@/lib/tenant";
 
 export const runtime = "nodejs";
@@ -42,7 +42,6 @@ export async function GET(request: Request) {
   if (!ask) return NextResponse.json({ error: "no such ask" }, { status: 404 });
 
   try {
-    const client = createPublicClient({ chain: sepolia, transport: sepoliaTransport() });
 
     const rootDevice = (await client.readContract({
       address: registry,

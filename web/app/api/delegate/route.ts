@@ -5,7 +5,7 @@ import { privateKeyToAccount } from "viem/accounts";
 import { sepolia } from "viem/chains";
 import { DELEGATE, delegateFrom } from "@/lib/delegation";
 import { explain } from "@/lib/explain";
-import { sepoliaTransport } from "@/lib/rpc";
+import { publicClient, sepoliaTransport } from "@/lib/rpc";
 import { secret } from "@/lib/secrets";
 
 export const runtime = "nodejs";
@@ -25,7 +25,9 @@ export const dynamic = "force-dynamic";
  * only power is to publish it or not.
  */
 
-const pub = () => createPublicClient({ chain: sepolia, transport: sepoliaTransport() });
+// Shared, not per call: a ranked transport carries a timer, and one per
+// request never stops. See `publicClient` in lib/rpc.
+const pub = () => publicClient;
 
 /** What the account runs today, and the nonce an authorisation must carry. */
 export async function GET(request: Request) {
