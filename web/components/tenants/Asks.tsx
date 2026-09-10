@@ -30,10 +30,13 @@ export type Ask = {
 
 export function Asks({
   tenant,
+  agent,
   currentCapUsd,
   onApprove,
 }: {
   tenant: string;
+  /** Scope to one agent's asks; a machine can hold several. */
+  agent?: string;
   /** Today's ceiling, so a raise can be expressed as a new total. */
   currentCapUsd: number;
   /** Signs a new Grant at the higher ceiling. Resolves once it has landed. */
@@ -45,14 +48,16 @@ export function Asks({
 
   const load = useCallback(async () => {
     try {
-      const res = await fetch(`/api/asks?tenant=${encodeURIComponent(tenant)}`);
+      const res = await fetch(
+        `/api/asks?tenant=${encodeURIComponent(tenant)}${agent ? `&agent=${encodeURIComponent(agent)}` : ""}`,
+      );
       const body = await res.json();
       setAsks(Array.isArray(body.asks) ? body.asks : []);
     } catch {
       // A machine with no asks and a machine we could not reach look the same
       // from here, and neither is worth a red banner on the page.
     }
-  }, [tenant]);
+  }, [tenant, agent]);
 
   // Polled rather than pushed: an agent asks rarely, a person is not watching
   // closely, and a websocket for this would be machinery without a purpose.

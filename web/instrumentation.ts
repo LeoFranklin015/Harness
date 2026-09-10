@@ -1,14 +1,20 @@
 /**
  * Runs once, before the server takes its first request.
  *
- * Only to open the database connection early. A hosted cluster's first
- * handshake is seconds of SRV lookup, TLS and auth, and every route waits on
- * the same shared promise — so without this the first person to load the
- * dashboard pays for all of it, and the page looks broken rather than slow.
+ * Opens the database connection early, but deliberately does not wait for
+ * it. `register` must finish before the server will answer anything, so
+ * awaiting a hosted cluster's handshake here does not warm the first request
+ * — it delays every request by the length of the handshake, which is worse
+ * than the problem it was added to solve.
+ *
+ * Kicking it off unawaited gets the same benefit: by the time a browser has
+ * loaded the page and mounted a panel, the connection is usually up, and any
+ * request that does arrive first simply waits on the same promise it would
+ * have created itself.
  */
 export async function register() {
   // The same file is evaluated for the edge runtime, which has no driver.
   if (process.env.NEXT_RUNTIME !== "nodejs") return;
   const { warm } = await import("@/lib/store");
-  await warm();
+  void warm();
 }

@@ -8,8 +8,9 @@ import { Terminal } from "@/components/tenants/Terminal";
 import { Asks, type Ask } from "@/components/tenants/Asks";
 import { Agent } from "@/components/tenants/Agent";
 import { Activity } from "@/components/tenants/Activity";
+import { getJson } from "@/lib/poll";
 import { Gauge } from "@/components/tenants/Gauge";
-import { InviteMark, RevokeMark, TailscaleMark, TerminalMark } from "@/components/tenants/icons";
+import { RevokeMark, TailscaleMark, TerminalMark } from "@/components/tenants/icons";
 import { RevokeCascade } from "@/components/tenants/RevokeCascade";
 import type { ProvisionRequest } from "@/components/tenants/ProvisionDialog";
 
@@ -155,7 +156,6 @@ function Details({
 }) {
   const [shell, setShell] = useState(false);
   const [ssh, setSsh] = useState(false);
-  const [invite, setInvite] = useState(false);
   const provisioning = tenant.status === "provisioning";
   const revoked = tenant.status === "revoked";
 
@@ -165,7 +165,7 @@ function Details({
       onClick={onClose}
     >
       <div
-        className="max-h-[88vh] w-full max-w-xl overflow-y-auto rounded-2xl border border-neutral-800 bg-neutral-950 p-6 duration-200 animate-in fade-in-0 zoom-in-95"
+        className="max-h-[88vh] w-full max-w-3xl overflow-y-auto rounded-2xl border border-neutral-800 bg-neutral-950 p-6 duration-200 animate-in fade-in-0 zoom-in-95"
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
@@ -226,10 +226,15 @@ function Details({
             {shell && tenant.agent && (
               <Terminal tenant={tenant.label} agent={tenant.agent} onClose={() => setShell(false)} />
             )}
-            <div className="mt-6 grid grid-cols-3 gap-2">
+            {/* Two things, not three. Joining the mesh is not a separate
+                feature from reaching the machine over SSH — it is how you
+                get there, and having both as buttons implied a choice
+                nobody has. */}
+            <div className="mt-6 grid grid-cols-2 gap-2">
               {tenant.agent && (
                 <Action icon={<TerminalMark className="h-5 w-5" />} onClick={() => setShell(true)}>
                   Terminal
+                  <span className="mt-0.5 block text-[11px] text-neutral-600">In the browser</span>
                 </Action>
               )}
               <Action
@@ -238,22 +243,16 @@ function Details({
                 on={ssh}
               >
                 Use over SSH
-              </Action>
-              <Action icon={<InviteMark className="h-5 w-5" />} onClick={() => setInvite((v) => !v)} on={invite}>
-                Invite to mesh
+                <span className="mt-0.5 block text-[11px] text-neutral-600">From your own shell</span>
               </Action>
             </div>
-
-            {/* Reaching it from your own shell needs nothing from us but the
-                name — the mesh and the chain do the rest. */}
-            {ssh && tenant.agent && (
-              <pre className="mt-3 overflow-x-auto rounded-lg border border-neutral-900 bg-neutral-950 px-4 py-3 font-mono text-xs text-neutral-300">
-                ssh runner@{tenant.agent}.{tenant.label}.harness.eth
-              </pre>
-            )}
             {/* The machine has no public address, so reaching it is a separate,
                 deliberate act — and one that expires on its own. */}
-            {invite && (
+            {/* The invite and the command are one flow: the mesh is how a
+                shell on somebody else's laptop reaches a machine with no
+                public address, and the name only resolves once they are on
+                it. Shown together, in that order. */}
+            {ssh && (
               <MeshInvite
                 machine={tenant.label}
                 agent={tenant.agent}
@@ -264,6 +263,7 @@ function Details({
             )}
 
             <Asks
+              agent={tenant.agent ?? undefined}
               tenant={tenant.label}
               currentCapUsd={capUsd(tenant)}
               onApprove={(ask, newCap) => onRaise(tenant, ask, newCap)}
@@ -321,12 +321,11 @@ function Spend({
   useEffect(() => {
     let stop = false;
     const ask = () =>
-      fetch(`/api/spend?tenant=${tenant}&label=${agent}`, { cache: "no-store" })
-        .then((r) => (r.ok ? r.json() : null))
-        .then((v) => !stop && v && setD(v))
-        .catch(() => {});
+      getJson<{ capUsd: number; spentUsd: number; windowEnds: number | null }>(
+        `/api/spend?tenant=${tenant}&label=${agent}`,
+      ).then((v) => !stop && v && setD(v));
     ask();
-    const every = setInterval(ask, 8_000);
+    const every = setInterval(ask, 20_000);
     return () => {
       stop = true;
       clearInterval(every);

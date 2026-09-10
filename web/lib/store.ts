@@ -62,18 +62,26 @@ export type TenantRecord = {
 };
 
 /**
- * One client for the process.
+ * One client for the process — and it has to be pinned to the global object
+ * to be one.
  *
- * The driver pools connections itself, so a second client would be a second
- * pool for no reason. Held as the promise rather than the resolved value so
- * that concurrent first callers wait on one connect instead of racing.
+ * A module-scope variable is not process-scope here: the bundler gives each
+ * route its own copy of this module, so `/api/spend`, `/api/activity` and
+ * `/api/asks` each built their own MongoClient and each paid its own Atlas
+ * handshake. Measured at five to twenty seconds apiece, and concurrently
+ * when a panel opened and three routes were asked at once — which is what
+ * made the dashboard look broken while curl on any single endpoint stayed
+ * comfortably under a fifth of a second.
+ *
+ * Held as the promise rather than the resolved value so concurrent first
+ * callers wait on one connect instead of racing to make several.
  */
-let opening: Promise<Db> | null = null;
+const shared = globalThis as unknown as { __harnessDb?: Promise<Db> | null };
 
 function db(): Promise<Db> {
   if (!URI) throw new Error("set MONGODB_URI — the metadata store is not optional");
-  if (!opening) {
-    opening = new MongoClient(URI, {
+  if (!shared.__harnessDb) {
+    shared.__harnessDb = new MongoClient(URI, {
       serverSelectionTimeoutMS: 5_000,
       // Hold one connection open. A hosted cluster's first handshake costs
       // seconds — SRV lookup, TLS, auth — and letting the pool drain to zero
@@ -92,12 +100,12 @@ function db(): Promise<Db> {
       .catch((err) => {
         // Otherwise a failed connect is cached and every later call fails
         // against a promise from minutes ago.
-        opening = null;
+        shared.__harnessDb = null;
         // Deliberately not naming the URI: it carries the password.
         throw new Error(`cannot reach the metadata store: ${err.message}`);
       });
   }
-  return opening;
+  return shared.__harnessDb;
 }
 
 /**

@@ -15,6 +15,9 @@ export const dynamic = "force-dynamic";
 
 const label = /^[a-z0-9][a-z0-9-]*$/;
 
+/** How long an unanswered ask stays worth showing. */
+const STALE_MS = 24 * 60 * 60 * 1000;
+
 /**
  * What approving would need to know, so nobody has to type it.
  *
@@ -30,6 +33,8 @@ async function machine(tenant: string, agent: string) {
       registry: g.registry,
       capUsd: Number(g.cap ?? 0) / 1e6,
       days: Math.max(1, Math.round(((g.end ?? 0) - (g.start ?? 0)) / 86400)),
+      /** When this Grant began. Asks older than it are another Grant's. */
+      since: Number(g.start ?? 0),
     };
   } catch {
     return null;
@@ -40,12 +45,31 @@ export async function GET(request: Request) {
   const tenant = new URL(request.url).searchParams.get("tenant") ?? "";
   if (!label.test(tenant)) return NextResponse.json({ error: "which machine?" }, { status: 400 });
 
+  const agent = new URL(request.url).searchParams.get("agent") ?? "";
+
   try {
-    const asks = asksFor(tenant);
-    // Every ask names its agent, so the machine's details come free.
-    const of = asks[0]?.label;
+    let asks = asksFor(tenant);
+
+    // One agent's asks, not the whole machine's. Two agents under one tenant
+    // were showing each other's requests.
+    if (agent) asks = asks.filter((a) => a.label === agent);
+
+    const of = agent || asks[0]?.label;
+    const details = of ? await machine(tenant, of) : null;
+
+    // Anything asked before the current Grant was signed belongs to a
+    // different Grant — a different agent key, very often a machine since
+    // rebuilt under the same name. Approving one would raise a ceiling
+    // nobody asked about.
+    if (details?.since) asks = asks.filter((a) => a.asked >= details.since * 1000);
+
+    // And an ask nobody answered for a day is not waiting, it is litter.
+    // The agent was told not to retry and has long since moved on.
+    const cutoff = Date.now() - STALE_MS;
+    asks = asks.filter((a) => a.asked >= cutoff);
+
     return NextResponse.json(
-      { asks, machine: of ? await machine(tenant, of) : null },
+      { asks, machine: details },
       { headers: { "cache-control": "no-store, private" } },
     );
   } catch {

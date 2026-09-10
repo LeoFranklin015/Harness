@@ -7,6 +7,19 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 /**
+ * Answers held briefly, per agent.
+ *
+ * Every open panel polls this, and each miss is a chain read over a public
+ * RPC that can take seconds. Without a cache, two panels on one machine
+ * double the RPC load for an answer that cannot change faster than a block.
+ * Ten seconds is well under a block time, so nothing is ever stale in a way
+ * that matters, and a burst of polls costs one read.
+ */
+type Answer = { capUsd: number; spentUsd: number; windowEnds: number | null };
+const HELD_MS = 10_000;
+const held = new Map<string, { at: number; value: Answer }>();
+
+/**
  * What an Agent has drawn against its ceiling.
  *
  * Read from the chain rather than from the broker, for two reasons. Spend is
@@ -28,6 +41,12 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "which agent?" }, { status: 400 });
   }
 
+  const key = `${tenant}.${label}`;
+  const fresh = held.get(key);
+  if (fresh && Date.now() - fresh.at < HELD_MS) {
+    return NextResponse.json(fresh.value, { headers: { "cache-control": "no-store" } });
+  }
+
   try {
     const g = await findGrant(tenant, label);
     if (!g) return NextResponse.json({ error: "no such agent" }, { status: 404 });
@@ -47,14 +66,13 @@ export async function GET(request: Request) {
     const open = Number(period.end) > now;
     const spent = open ? period.spend : 0n;
 
-    return NextResponse.json(
-      {
-        capUsd: Number(allowance) / 1e6,
-        spentUsd: Number(spent) / 1e6,
-        windowEnds: open ? Number(period.end) : null,
-      },
-      { headers: { "cache-control": "no-store" } },
-    );
+    const value: Answer = {
+      capUsd: Number(allowance) / 1e6,
+      spentUsd: Number(spent) / 1e6,
+      windowEnds: open ? Number(period.end) : null,
+    };
+    held.set(key, { at: Date.now(), value });
+    return NextResponse.json(value, { headers: { "cache-control": "no-store" } });
   } catch (err) {
     return NextResponse.json({ error: (err as Error).message }, { status: 502 });
   }

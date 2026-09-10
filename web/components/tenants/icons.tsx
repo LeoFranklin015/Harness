@@ -50,17 +50,6 @@ export function TerminalMark({ className = "" }: { className?: string }) {
   );
 }
 
-/** A door opened for somebody else. */
-export function InviteMark({ className = "" }: { className?: string }) {
-  return (
-    <svg {...box} className={className}>
-      <path d="M14 3.5 H18.5 A2 2 0 0 1 20.5 5.5 V18.5 A2 2 0 0 1 18.5 20.5 H14" {...line} />
-      <path d="M3.5 12 H14" {...line} />
-      <path d="M10.5 8.5 L14 12 L10.5 15.5" {...line} />
-    </svg>
-  );
-}
-
 /** Cut. Not a bin — nothing is deleted, authority ends. */
 export function RevokeMark({ className = "" }: { className?: string }) {
   return (

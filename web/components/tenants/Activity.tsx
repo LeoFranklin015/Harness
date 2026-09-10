@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { getJson } from "@/lib/poll";
 
 /**
  * What the machine has actually done.
@@ -26,12 +27,11 @@ export function Activity({ tenant, agent }: { tenant: string; agent: string }) {
   useEffect(() => {
     let stop = false;
     const ask = () =>
-      fetch(`/api/activity?tenant=${tenant}&label=${agent}`, { cache: "no-store" })
-        .then((r) => (r.ok ? r.json() : null))
-        .then((d) => !stop && d && setSpends(d.spends ?? []))
-        .catch(() => {});
+      getJson<{ spends: Spend[] }>(`/api/activity?tenant=${tenant}&label=${agent}`).then(
+        (d) => !stop && d && setSpends(d.spends ?? []),
+      );
     ask();
-    const every = setInterval(ask, 10_000);
+    const every = setInterval(ask, 20_000);
     return () => {
       stop = true;
       clearInterval(every);
