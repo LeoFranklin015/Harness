@@ -1,6 +1,7 @@
 "use client";
 
 import { BorderBeam } from "@/components/ui/border-beam";
+import { MeshInvite } from "@/components/tenants/MeshInvite";
 import type { ProvisionRequest } from "@/components/tenants/ProvisionDialog";
 
 export type Tenant = {
@@ -116,12 +117,17 @@ function FilledSlot({
       )}
 
       {tenant.status === "live" && (
-        <button
-          onClick={() => onRevoke(tenant)}
-          className="mt-6 rounded-full border border-red-900/60 px-4 py-1.5 text-xs text-red-400/90 transition hover:border-red-800 hover:bg-red-950/40"
-        >
-          Revoke
-        </button>
+        <>
+          <button
+            onClick={() => onRevoke(tenant)}
+            className="mt-6 rounded-full border border-red-900/60 px-4 py-1.5 text-xs text-red-400/90 transition hover:border-red-800 hover:bg-red-950/40"
+          >
+            Revoke
+          </button>
+          {/* The machine has no public address, so reaching it is a separate,
+              deliberate act — and one that expires on its own. */}
+          <MeshInvite machine={tenant.label} meshAddress={tenant.meshAddress} />
+        </>
       )}
 
       {revoked && (

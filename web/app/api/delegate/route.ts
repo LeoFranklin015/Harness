@@ -6,6 +6,7 @@ import { sepolia } from "viem/chains";
 import { DELEGATE, delegateFrom } from "@/lib/delegation";
 import { explain } from "@/lib/explain";
 import { sepoliaTransport } from "@/lib/rpc";
+import { secret } from "@/lib/secrets";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -23,18 +24,6 @@ export const dynamic = "force-dynamic";
  * them and it recovers to a different account and does nothing. The relayer's
  * only power is to publish it or not.
  */
-
-function secret(name: string): string {
-  const fromEnv = process.env[name];
-  if (fromEnv) return fromEnv;
-  const file = "/home/opc/hackathon/contracts/.env";
-  if (!existsSync(file)) throw new Error(`${name} not set and ${file} missing`);
-  for (const line of readFileSync(file, "utf8").split("\n")) {
-    const m = line.match(/^\s*(?:export\s+)?([A-Z_]+)=(.*)$/);
-    if (m && m[1] === name) return m[2]!.trim().replace(/^["']|["']$/g, "");
-  }
-  throw new Error(`${name} not found`);
-}
 
 const pub = () => createPublicClient({ chain: sepolia, transport: sepoliaTransport() });
 

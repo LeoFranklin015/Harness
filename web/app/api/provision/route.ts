@@ -12,6 +12,7 @@ import { privateKeyToAccount } from "viem/accounts";
 import { sepolia } from "viem/chains";
 import { explain } from "@/lib/explain";
 import { sepoliaTransport } from "@/lib/rpc";
+import { secret } from "@/lib/secrets";
 import { agentKeyFor } from "@/lib/agent-root";
 
 /**
@@ -75,18 +76,6 @@ const REGISTRY_ABI = [
 const ZERO = "0x0000000000000000000000000000000000000000" as Address;
 
 /** Reads a variable out of contracts/.env without pulling the file into env. */
-function secret(name: string): string {
-  const fromEnv = process.env[name];
-  if (fromEnv) return fromEnv;
-  const file = "/home/opc/hackathon/contracts/.env";
-  if (!existsSync(file)) throw new Error(`${name} not set and ${file} missing`);
-  for (const line of readFileSync(file, "utf8").split("\n")) {
-    const m = line.match(/^\s*(?:export\s+)?([A-Z_]+)=(.*)$/);
-    if (m && m[1] === name) return m[2]!.trim().replace(/^["']|["']$/g, "");
-  }
-  throw new Error(`${name} not found`);
-}
-
 export async function POST(req: Request) {
   const body = (await req.json()) as {
     label: string;
