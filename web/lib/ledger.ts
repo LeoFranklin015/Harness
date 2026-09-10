@@ -1,170 +1,122 @@
 "use client";
 
-import { firstValueFrom } from "rxjs";
-import {
-  DeviceActionStatus,
-  DeviceManagementKitBuilder,
-  OpenAppDeviceAction,
-  UserInteractionRequired,
-} from "@ledgerhq/device-management-kit";
-import {
-  webHidIdentifier,
-  webHidTransportFactory,
-} from "@ledgerhq/device-transport-kit-web-hid";
 import { SignerEthBuilder } from "@ledgerhq/device-signer-kit-ethereum";
+import {
+  createPublicClient,
+  hexToBytes,
+  http,
+  padHex,
+  serializeTransaction,
+  type Address,
+  type Hex,
+  type TransactionReceipt,
+} from "viem";
+import { sepolia } from "viem/chains";
+import { openApp, runDeviceAction, type Step } from "./device-app";
+
+export { isSupported, RejectedOnDevice, type Step } from "./device-app";
 
 /**
- * The device, as the rest of the app needs it.
+ * The Ethereum side of the device: an address, and signatures.
  *
- * One session, opened once and kept. A session is a transport connection, not
- * an authorisation, so it is held across operations rather than reopened —
- * reconnecting per action would make the browser re-enumerate the device and
- * cost a prompt every time.
+ * Built on `openApp` rather than owning a connection of its own — there is one
+ * way to reach the Ledger in this app, and this is a layer over it, not a
+ * second one.
  */
 
-export type Device = {
-  /** The address that will be `rootDevice` on this Tenant's registry. */
-  address: `0x${string}`;
-  /** BIP-44 path the address came from. Never guessed, never normalised. */
-  path: string;
-  model: string;
-  disconnect: () => Promise<void>;
-};
+const RPC = "https://ethereum-sepolia-rpc.publicnode.com";
 
 /** Where the Tenant's authority lives. Fixed, not user input. */
 export const DEVICE_PATH = "44'/60'/0'/0/0";
 
-export function isSupported(): boolean {
-  return typeof navigator !== "undefined" && "hid" in navigator;
-}
+export type Device = {
+  /** The address that will be `rootDevice` on this Tenant's registry. */
+  address: Address;
+  /** BIP-44 path the address came from. Never guessed, never normalised. */
+  path: string;
+  model: string;
+  /**
+   * Signs a transaction on the device and broadcasts it.
+   *
+   * The device is the only signer for anything inside a Tenant's registry —
+   * there is no server key that could do this on its behalf, which is the
+   * whole point. Every wait is named through `onStep`, because the person is
+   * looking at the device, not the screen.
+   */
+  send: (tx: { to: Address; data: Hex; value?: bigint }, onStep: Step) => Promise<TransactionReceipt>;
+  /** Give the device back — needed before the ring's transport can take it. */
+  disconnect: () => Promise<void>;
+};
 
-export type Step = (message: string) => void;
-
-/**
- * Connects, opens the Ethereum app, and reads the address that will hold
- * authority.
- *
- * Must be called from a user gesture: WebHID's picker does not appear
- * otherwise, and it fails silently rather than throwing.
- */
+/** Opens the Ethereum app and reads the address that will hold authority. */
 export async function connect(onStep: Step): Promise<Device> {
-  if (!isSupported()) {
-    throw new Error(
-      "This browser has no WebHID. Use Chrome, Edge or Brave to connect a Ledger.",
-    );
-  }
-
-  const dmk = new DeviceManagementKitBuilder()
-    .addTransport(webHidTransportFactory)
-    .build();
-
-  onStep("Select your Ledger in the browser prompt");
-  const discovered = await firstValueFrom(
-    dmk.startDiscovering({ transport: webHidIdentifier }),
-  );
-
-  const sessionId = await dmk.connect({
-    device: discovered,
-    sessionRefresherOptions: { isRefresherDisabled: false },
-  });
+  const session = await openApp("Ethereum", onStep);
+  const { dmk, sessionId } = session;
 
   try {
-    onStep("Open the Ethereum app on your device");
-    await runDeviceAction(
-      dmk.executeDeviceAction({
-        sessionId,
-        deviceAction: new OpenAppDeviceAction({ input: { appName: "Ethereum" } }),
-      }),
-      onStep,
-    );
-
     onStep("Reading the account that will hold authority");
     const signer = new SignerEthBuilder({ dmk, sessionId, originToken: "harness" }).build();
     const { observable } = signer.getAddress(DEVICE_PATH, { checkOnDevice: false });
-    const out = (await runDeviceAction({ observable }, onStep)) as { address: string };
+    const out = (await runDeviceAction({ observable }, onStep, "Ethereum")) as { address: string };
+    const address = out.address as Address;
+    const pub = createPublicClient({ chain: sepolia, transport: http(RPC) });
 
     return {
-      address: out.address as `0x${string}`,
+      address,
       path: DEVICE_PATH,
-      model: discovered.deviceModel?.model ?? "Ledger",
-      disconnect: async () => {
-        await dmk.disconnect({ sessionId }).catch(() => {});
+      model: session.model,
+
+      send: async (tx, step) => {
+        step("Preparing the transaction");
+        const [nonce, fees, gas] = await Promise.all([
+          pub.getTransactionCount({ address, blockTag: "pending" }),
+          pub.estimateFeesPerGas(),
+          pub.estimateGas({ account: address, to: tx.to, data: tx.data, value: tx.value ?? BigInt(0) }),
+        ]);
+
+        const unsigned = {
+          chainId: sepolia.id,
+          type: "eip1559" as const,
+          to: tx.to,
+          data: tx.data,
+          value: tx.value ?? BigInt(0),
+          nonce,
+          // A fifth over the estimate: a clone's first write to a fresh slot
+          // costs more than the estimate against current state suggests.
+          gas: gas + gas / BigInt(5),
+          maxFeePerGas: fees.maxFeePerGas,
+          maxPriorityFeePerGas: fees.maxPriorityFeePerGas,
+        };
+
+        // The device signs the serialised transaction bytes — it parses and
+        // shows them itself, so what it displays is what is broadcast.
+        step("Review and approve on your Ledger");
+        const { observable: signing } = signer.signTransaction(
+          DEVICE_PATH,
+          hexToBytes(serializeTransaction(unsigned)),
+        );
+        const sig = (await runDeviceAction({ observable: signing }, step, "Ethereum")) as {
+          r: string;
+          s: string;
+          v: number;
+        };
+
+        const hex = (x: string) => padHex((x.startsWith("0x") ? x : `0x${x}`) as Hex, { size: 32 });
+        const yParity = sig.v >= 27 ? sig.v - 27 : sig.v;
+        const signed = serializeTransaction(unsigned, { r: hex(sig.r), s: hex(sig.s), yParity });
+
+        step("Broadcasting");
+        const hash = await pub.sendRawTransaction({ serializedTransaction: signed });
+        step("Waiting for confirmation");
+        const receipt = await pub.waitForTransactionReceipt({ hash });
+        if (receipt.status !== "success") throw new Error(`Transaction reverted: ${hash}`);
+        return receipt;
       },
+
+      disconnect: session.release,
     };
   } catch (err) {
-    await dmk.disconnect({ sessionId }).catch(() => {});
+    await session.release();
     throw err;
   }
-}
-
-/**
- * Drives one device action to its end.
- *
- * `Pending` carries what the device is waiting for, and the user cannot see the
- * device and the screen at once — so every wait is named rather than left as a
- * spinner. A refusal is not an error: someone declining on the device is the
- * system working, and it is reported as its own outcome.
- */
-async function runDeviceAction(
-  action: { observable: any },
-  onStep: Step,
-): Promise<unknown> {
-  return new Promise((resolve, reject) => {
-    const sub = action.observable.subscribe({
-      next: (state: any) => {
-        switch (state.status) {
-          case DeviceActionStatus.Pending: {
-            const need = state.intermediateValue?.requiredUserInteraction;
-            if (need === UserInteractionRequired.UnlockDevice) {
-              onStep("Enter your PIN on the device");
-            } else if (need === UserInteractionRequired.ConfirmOpenApp) {
-              onStep("Confirm opening the app on the device");
-            } else if (need && need !== UserInteractionRequired.None) {
-              onStep("Check your device");
-            }
-            break;
-          }
-          case DeviceActionStatus.Completed:
-            sub.unsubscribe();
-            resolve(state.output);
-            break;
-          case DeviceActionStatus.Stopped:
-            sub.unsubscribe();
-            reject(new RejectedOnDevice());
-            break;
-          case DeviceActionStatus.Error:
-            sub.unsubscribe();
-            reject(classify(state.error));
-            break;
-        }
-      },
-      error: (err: unknown) => {
-        sub.unsubscribe();
-        reject(classify(err));
-      },
-    });
-  });
-}
-
-/** Someone said no on the device. Not a failure — an answer. */
-export class RejectedOnDevice extends Error {
-  constructor() {
-    super("Declined on the device.");
-    this.name = "RejectedOnDevice";
-  }
-}
-
-function classify(err: unknown): Error {
-  const name = (err as { _tag?: string; name?: string })?._tag ?? (err as Error)?.name ?? "";
-  const message = String((err as Error)?.message ?? err ?? "");
-
-  if (/Refused|5501|6985/i.test(name + message)) return new RejectedOnDevice();
-  if (/locked/i.test(message)) return new Error("The device is locked. Enter your PIN and try again.");
-  if (/not installed|6a82|6807/i.test(name + message)) {
-    return new Error("The Ethereum app is not installed. Install it from Ledger Live and try again.");
-  }
-  if (/denied|permission/i.test(message)) {
-    return new Error("The browser denied access to the device. Click connect and allow it.");
-  }
-  return new Error("Lost contact with the device. Reconnect it and try again.");
 }

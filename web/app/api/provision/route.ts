@@ -1,0 +1,257 @@
+import { execFile } from "node:child_process";
+import { existsSync, readFileSync } from "node:fs";
+import { hkdfSync, randomBytes } from "node:crypto";
+import { promisify } from "node:util";
+import {
+  createPublicClient,
+  createWalletClient,
+  http,
+  parseEventLogs,
+  type Address,
+  type Hex,
+} from "viem";
+import { privateKeyToAccount } from "viem/accounts";
+import { sepolia } from "viem/chains";
+
+/**
+ * The platform's half of making a machine.
+ *
+ * Onboarding a Tenant is a platform act — `onboardTenant` is gated on the
+ * platform's registrar role — so it is signed here with the deployer key. What
+ * comes back is a registry whose `rootDevice` is the visitor's Ledger, and from
+ * that point the platform can do nothing further inside it. `setExecutor`,
+ * `setHost` and `grant` all require the device, and the browser asks it.
+ *
+ * Streams NDJSON, one event per step, so the slot on the page narrates what is
+ * happening instead of spinning for a minute.
+ */
+
+const exec = promisify(execFile);
+
+const RPC = process.env.HARNESS_RPC ?? "https://ethereum-sepolia-rpc.publicnode.com";
+const PLATFORM = (process.env.PLATFORM_REGISTRY ??
+  "0xbDF56e17F8956268Fc018B77Dac2ebEa7b3928F7") as Address;
+const RESOLVER = (process.env.AGENT_RESOLVER ??
+  "0x3735923a7e3CeCdc37F99eDdD8f22df70BB7e93f") as Address;
+const RUNNER_DIR = process.env.RUNNER_DIR ?? "/home/opc/hackathon/runner";
+const AGENT_ROOT = process.env.AGENT_ROOT ?? "/home/opc/hackathon/x402/.agent-root";
+
+const PLATFORM_ABI = [
+  {
+    type: "function",
+    name: "onboardTenant",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "label", type: "string" },
+      { name: "device", type: "address" },
+      { name: "tenant", type: "address" },
+      { name: "executor", type: "address" },
+      { name: "resolver", type: "address" },
+    ],
+    outputs: [{ type: "address" }],
+  },
+  {
+    type: "function",
+    name: "getSubregistry",
+    stateMutability: "view",
+    inputs: [{ name: "label", type: "string" }],
+    outputs: [{ type: "address" }],
+  },
+  {
+    type: "event",
+    name: "TenantOnboarded",
+    inputs: [
+      { name: "label", type: "string", indexed: false },
+      { name: "device", type: "address", indexed: true },
+      { name: "tenant", type: "address", indexed: true },
+      { name: "registry", type: "address", indexed: false },
+    ],
+  },
+] as const;
+
+const REGISTRY_ABI = [
+  { type: "function", name: "rootDevice", stateMutability: "view", inputs: [], outputs: [{ type: "address" }] },
+] as const;
+
+const ZERO = "0x0000000000000000000000000000000000000000" as Address;
+
+/** Reads a variable out of contracts/.env without pulling the file into env. */
+function secret(name: string): string {
+  const fromEnv = process.env[name];
+  if (fromEnv) return fromEnv;
+  const file = "/home/opc/hackathon/contracts/.env";
+  if (!existsSync(file)) throw new Error(`${name} not set and ${file} missing`);
+  for (const line of readFileSync(file, "utf8").split("\n")) {
+    const m = line.match(/^\s*(?:export\s+)?([A-Z_]+)=(.*)$/);
+    if (m && m[1] === name) return m[2]!.trim().replace(/^["']|["']$/g, "");
+  }
+  throw new Error(`${name} not found`);
+}
+
+/**
+ * The Agent's key, from the VPS root.
+ *
+ * Same derivation as `x402/keys.ts`. The root is sealed by the ring in
+ * production; here it is a file. The container gets only the derived key.
+ */
+function agentKeyFor(tenant: string, label: string): { pk: Hex; address: Address } {
+  if (!existsSync(AGENT_ROOT)) throw new Error("agent root missing — run x402/keys.ts once");
+  const root = Buffer.from(readFileSync(AGENT_ROOT, "utf8").trim(), "hex");
+  const bytes = hkdfSync("sha256", root, Buffer.alloc(0), `harness/agent/${tenant}/${label}`, 32);
+  const pk = `0x${Buffer.from(bytes).toString("hex")}` as Hex;
+  return { pk, address: privateKeyToAccount(pk).address };
+}
+
+export async function POST(req: Request) {
+  const body = (await req.json()) as {
+    label: string;
+    agent: string;
+    capUsd: string;
+    days: string;
+    /** Optional. Absent means nobody may SSH in until the device says so. */
+    sshFingerprint?: string;
+    device: Address;
+  };
+
+  if (!/^[a-z0-9][a-z0-9-]{2,}$/.test(body.label)) return new Response("bad label", { status: 400 });
+  if (body.sshFingerprint && !/^SHA256:[A-Za-z0-9+/]{43}$/.test(body.sshFingerprint)) {
+    return new Response("bad fingerprint", { status: 400 });
+  }
+
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream({
+    async start(controller) {
+      const emit = (o: Record<string, unknown>) =>
+        controller.enqueue(encoder.encode(JSON.stringify(o) + "\n"));
+
+      try {
+        const deployer = privateKeyToAccount(secret("PRIVATE_KEY") as Hex);
+        const pub = createPublicClient({ chain: sepolia, transport: http(RPC) });
+        const wallet = createWalletClient({ account: deployer, chain: sepolia, transport: http(RPC) });
+
+        // 1. The machine, so its host key exists before the name does.
+        emit({ step: "Generating the machine's host key" });
+        const built = await exec(`${RUNNER_DIR}/build-tenant.sh`, [body.label, body.agent], {
+          cwd: RUNNER_DIR,
+        });
+        const hostKey = built.stdout.trim().split("\n").pop()!.trim() as Hex;
+        if (!/^0x[0-9a-f]{64}$/.test(hostKey)) throw new Error(`host key: ${built.stdout}`);
+
+        // 2. The Tenant, rooted in the visitor's device. After this the platform
+        //    holds no authority inside it.
+        //    A name is minted once. If an earlier attempt got this far and then
+        //    stopped, the registry is already there and rooted in this device;
+        //    it is reused, not re-registered — and a name rooted in some other
+        //    device is refused, whoever is asking.
+        let registry: Address;
+        const existing = await pub.readContract({
+          address: PLATFORM,
+          abi: PLATFORM_ABI,
+          functionName: "getSubregistry",
+          args: [body.label],
+        });
+        if (existing !== ZERO) {
+          const root = await pub.readContract({ address: existing, abi: REGISTRY_ABI, functionName: "rootDevice" });
+          if (root.toLowerCase() !== body.device.toLowerCase()) {
+            throw new Error(`${body.label}.harness.eth answers to a different device`);
+          }
+          registry = existing;
+          emit({ registry, step: "Tenant already registered — resuming" });
+        } else {
+          emit({ step: "Registering the tenant on ENS" });
+          const hash = await wallet.writeContract({
+            address: PLATFORM,
+            abi: PLATFORM_ABI,
+            functionName: "onboardTenant",
+            args: [body.label, body.device, body.device, ZERO, RESOLVER],
+          });
+          const receipt = await pub.waitForTransactionReceipt({ hash });
+          const [ev] = parseEventLogs({ abi: PLATFORM_ABI, eventName: "TenantOnboarded", logs: receipt.logs });
+          if (!ev) throw new Error("onboardTenant emitted nothing");
+          registry = ev.args.registry as Address;
+          emit({ registry, step: "Tenant registered" });
+        }
+
+        // 2b. Its executor. Anyone may deploy the contract — it is bound to the
+        //     registry at construction and holds nothing — but only the device
+        //     may tell the registry to use it, which is the browser's job next.
+        emit({ step: "Deploying the tenant's executor" });
+        const artifact = JSON.parse(
+          readFileSync(
+            "/home/opc/hackathon/contracts/out/AllowanceExecutor.sol/AllowanceExecutor.json",
+            "utf8",
+          ),
+        ) as { abi: unknown[]; bytecode: { object: Hex } };
+        const deployHash = await wallet.deployContract({
+          abi: artifact.abi as never,
+          bytecode: artifact.bytecode.object,
+          args: [registry] as never,
+        });
+        const deployed = await pub.waitForTransactionReceipt({ hash: deployHash });
+        const executor = deployed.contractAddress as Address;
+        if (!executor) throw new Error("executor deployment returned no address");
+        emit({ executor, step: "Executor deployed" });
+
+        // 3. Start it on the mesh.
+        emit({ step: "Starting the machine on the mesh" });
+        const ip = `10.88.0.${20 + (Math.abs(hashCode(body.label)) % 200)}`;
+        // No environment across sudo: the script reads the mesh key from the
+        // secrets file itself, so nothing secret sits in a command line.
+        await exec("sudo", ["-n", `${RUNNER_DIR}/run-tenant.sh`, body.label, ip], {
+          cwd: RUNNER_DIR,
+        });
+
+        let mesh: string | null = null;
+        for (let i = 0; i < 30 && !mesh; i++) {
+          await new Promise((r) => setTimeout(r, 2000));
+          const { stdout } = await exec("sudo", [
+            "-n", "podman", "exec", `harness-${body.label}`,
+            "tailscale", "--socket=/run/tailscale/tailscaled.sock", "ip", "-4",
+          ]).catch(() => ({ stdout: "" }));
+          mesh = stdout.trim().split("\n")[0] || null;
+        }
+        if (!mesh) throw new Error("the machine never reached the mesh");
+        emit({ meshAddress: mesh, step: "On the mesh" });
+
+        // 4. Everything the device now has to sign for. The key is derived
+        //    here and never sent — only its address is.
+        const agent = agentKeyFor(body.label, body.agent);
+        // Who may SSH in. Zero admits nobody: the machine starts with that door
+        // shut, and opening it is a later `setHost` — a separate decision, and a
+        // separate signature, about a machine that already exists.
+        const operator = body.sshFingerprint
+          ? (`0x${Buffer.from(body.sshFingerprint.slice(7) + "=", "base64").toString("hex")}` as Hex)
+          : (`0x${"0".repeat(64)}` as Hex);
+
+        emit({
+          step: "Waiting for the device",
+          ready: {
+            registry,
+            meshAddress: mesh,
+            hostKey,
+            operator,
+            agentKey: agent.address,
+            ipv4: `0x${mesh.split(".").map((o) => Number(o).toString(16).padStart(2, "0")).join("")}`,
+          },
+        });
+      } catch (err) {
+        emit({ error: (err as Error).message });
+      } finally {
+        controller.close();
+      }
+    },
+  });
+
+  return new Response(stream, {
+    headers: { "content-type": "application/x-ndjson", "cache-control": "no-store" },
+  });
+}
+
+function hashCode(s: string): number {
+  let h = 0;
+  for (const c of s) h = (h * 31 + c.charCodeAt(0)) | 0;
+  return h;
+}
+
+// Silence the unused import in environments that tree-shake differently.
+void randomBytes;

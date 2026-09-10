@@ -17,6 +17,13 @@ set -euo pipefail
 
 tenant="${1:?usage: run-tenant.sh <tenant> <ip>}"
 ip="${2:?}"
+
+# The mesh key is read from the secrets file rather than passed in. This script
+# is run through sudo by the web server, and an environment handed across sudo
+# either gets dropped by the policy or shows up in the process list.
+if [ -z "${TS_AUTHKEY:-}" ] && [ -r /home/opc/hackathon/contracts/.env ]; then
+    TS_AUTHKEY=$(sed -n 's/^\s*\(export \)\?TS_AUTHKEY=//p' /home/opc/hackathon/contracts/.env | tr -d "\"'" | head -1)
+fi
 mem="${MEM:-384m}"   # tailscaled wants ~50MB of its own
 cpus="${CPUS:-0.5}"
 

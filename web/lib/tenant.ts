@@ -1,0 +1,177 @@
+import { encodeFunctionData, parseEventLogs, type Address, type Hex, type Log } from "viem";
+
+/**
+ * What the device signs, and how to build it.
+ *
+ * Three calls make a Tenant real, and every one of them is gated on
+ * `rootDevice` — so every one is a signature on the Ledger, not a request to a
+ * server. The platform onboarded the Tenant; from here on it can only watch.
+ */
+
+export const USDC = "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238" as Address;
+
+/** `transfer(address,uint256)` — the one call an Agent's Grant permits. */
+const TRANSFER = "0xa9059cbb" as Hex;
+
+/** Period.Day in the contract's enum. */
+const DAY = 2;
+
+export const REGISTRY_ABI = [
+  {
+    type: "function",
+    name: "setExecutor",
+    stateMutability: "nonpayable",
+    inputs: [{ name: "executor_", type: "address" }],
+    outputs: [],
+  },
+  {
+    type: "function",
+    name: "setHost",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "ipv4", type: "bytes4" },
+      { name: "sshHostKey", type: "bytes32" },
+      { name: "operator", type: "bytes32" },
+    ],
+    outputs: [],
+  },
+  {
+    type: "function",
+    name: "grant",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "g", type: "tuple", components: GRANT_COMPONENTS() },
+      { name: "parentGrant", type: "tuple", components: GRANT_COMPONENTS() },
+    ],
+    outputs: [{ name: "agentId", type: "bytes32" }],
+  },
+  {
+    type: "function",
+    name: "revoke",
+    stateMutability: "nonpayable",
+    inputs: [{ name: "agentId", type: "bytes32" }],
+    outputs: [],
+  },
+  {
+    type: "event",
+    name: "Granted",
+    inputs: [
+      { name: "agentId", type: "bytes32", indexed: true },
+      { name: "parent", type: "bytes32", indexed: true },
+      { name: "label", type: "string", indexed: false },
+      { name: "agentKey", type: "address", indexed: false },
+    ],
+  },
+] as const;
+
+function GRANT_COMPONENTS() {
+  return [
+    { name: "parent", type: "bytes32" },
+    { name: "label", type: "string" },
+    { name: "agentKey", type: "address" },
+    { name: "start", type: "uint48" },
+    { name: "end", type: "uint48" },
+    { name: "salt", type: "uint256" },
+    {
+      name: "calls",
+      type: "tuple[]",
+      components: [
+        { name: "target", type: "address" },
+        { name: "selector", type: "bytes4" },
+        { name: "maxValue", type: "uint128" },
+        { name: "checker", type: "address" },
+        { name: "checkerCodeHash", type: "bytes32" },
+      ],
+    },
+    {
+      name: "spends",
+      type: "tuple[]",
+      components: [
+        { name: "token", type: "address" },
+        { name: "allowance", type: "uint160" },
+        { name: "unit", type: "uint8" },
+        { name: "multiplier", type: "uint16" },
+      ],
+    },
+  ] as const;
+}
+
+export type Grant = {
+  parent: Hex;
+  label: string;
+  agentKey: Address;
+  start: number;
+  end: number;
+  salt: bigint;
+  calls: readonly {
+    target: Address;
+    selector: Hex;
+    maxValue: bigint;
+    checker: Address;
+    checkerCodeHash: Hex;
+  }[];
+  spends: readonly { token: Address; allowance: bigint; unit: number; multiplier: number }[];
+};
+
+const ZERO32 = `0x${"0".repeat(64)}` as Hex;
+const ZERO_ADDR = "0x0000000000000000000000000000000000000000" as Address;
+
+/** An empty Grant — what a Tenant's root passes as `parentGrant`. */
+export const NO_PARENT: Grant = {
+  parent: ZERO32,
+  label: "",
+  agentKey: ZERO_ADDR,
+  start: 0,
+  end: 0,
+  salt: BigInt(0),
+  calls: [],
+  spends: [],
+};
+
+/**
+ * A first Agent: USDC transfers only, a daily ceiling, a fixed window.
+ *
+ * `start` is a minute in the past so a block that lands a few seconds early
+ * still finds the Grant live. The struct is what the device shows and what the
+ * chain hashes — nothing here may be changed after signing without producing a
+ * different Agent.
+ */
+export function firstGrant(opts: {
+  label: string;
+  agentKey: Address;
+  capUsd: number;
+  days: number;
+}): Grant {
+  const now = Math.floor(Date.now() / 1000);
+  return {
+    parent: ZERO32,
+    label: opts.label,
+    agentKey: opts.agentKey,
+    start: now - 60,
+    end: now + Math.round(opts.days * 86400),
+    salt: BigInt(0),
+    calls: [
+      { target: USDC, selector: TRANSFER, maxValue: BigInt(0), checker: ZERO_ADDR, checkerCodeHash: ZERO32 },
+    ],
+    spends: [
+      { token: USDC, allowance: BigInt(Math.round(opts.capUsd * 1_000_000)), unit: DAY, multiplier: 1 },
+    ],
+  };
+}
+
+export const calldata = {
+  setExecutor: (executor: Address) =>
+    encodeFunctionData({ abi: REGISTRY_ABI, functionName: "setExecutor", args: [executor] }),
+  setHost: (ipv4: Hex, hostKey: Hex, operator: Hex) =>
+    encodeFunctionData({ abi: REGISTRY_ABI, functionName: "setHost", args: [ipv4, hostKey, operator] }),
+  grant: (g: Grant) =>
+    encodeFunctionData({ abi: REGISTRY_ABI, functionName: "grant", args: [g, NO_PARENT] }),
+  revoke: (agentId: Hex) =>
+    encodeFunctionData({ abi: REGISTRY_ABI, functionName: "revoke", args: [agentId] }),
+};
+
+/** The Agent's id, read back from the receipt rather than recomputed. */
+export function agentIdFrom(logs: Log[]): Hex | null {
+  const [ev] = parseEventLogs({ abi: REGISTRY_ABI, eventName: "Granted", logs });
+  return (ev?.args.agentId as Hex) ?? null;
+}

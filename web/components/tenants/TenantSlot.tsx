@@ -1,6 +1,7 @@
 "use client";
 
 import { BorderBeam } from "@/components/ui/border-beam";
+import type { ProvisionRequest } from "@/components/tenants/ProvisionDialog";
 
 export type Tenant = {
   label: string;
@@ -10,6 +11,12 @@ export type Tenant = {
   cap: string;
   status: "provisioning" | "live" | "revoked";
   step?: string;
+  /** Set once the first Grant lands; what `revoke` is addressed to. */
+  agentId?: `0x${string}`;
+  /** The ring is done; the chain half is waiting on a click to reach the device. */
+  awaiting?: boolean;
+  /** What was asked for, kept on the slot so a refresh does not lose it. */
+  request?: ProvisionRequest;
 };
 
 /**
@@ -22,14 +29,16 @@ export type Tenant = {
 export function TenantSlot({
   tenant,
   onAdd,
+  onContinue,
   onRevoke,
 }: {
   tenant: Tenant | null;
   onAdd: () => void;
+  onContinue: (t: Tenant) => void;
   onRevoke: (t: Tenant) => void;
 }) {
   if (!tenant) return <EmptySlot onAdd={onAdd} />;
-  return <FilledSlot tenant={tenant} onRevoke={onRevoke} />;
+  return <FilledSlot tenant={tenant} onContinue={onContinue} onRevoke={onRevoke} />;
 }
 
 function EmptySlot({ onAdd }: { onAdd: () => void }) {
@@ -50,9 +59,11 @@ function EmptySlot({ onAdd }: { onAdd: () => void }) {
 
 function FilledSlot({
   tenant,
+  onContinue,
   onRevoke,
 }: {
   tenant: Tenant;
+  onContinue: (t: Tenant) => void;
   onRevoke: (t: Tenant) => void;
 }) {
   const provisioning = tenant.status === "provisioning";
@@ -73,14 +84,29 @@ function FilledSlot({
       </div>
 
       {provisioning ? (
-        <p
-          className="mt-8 flex items-center gap-2 text-sm text-neutral-400"
-          role="status"
-          aria-live="polite"
-        >
-          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-sky-400" />
-          {tenant.step ?? "Starting"}
-        </p>
+        <>
+          <p
+            className="mt-8 flex items-center gap-2 text-sm text-neutral-400"
+            role="status"
+            aria-live="polite"
+          >
+            <span
+              className={`h-1.5 w-1.5 rounded-full ${tenant.awaiting ? "bg-emerald-400" : "animate-pulse bg-sky-400"}`}
+            />
+            {tenant.step ?? "Starting"}
+          </p>
+
+          {/* The ring is done; reaching the device again needs a click, and
+              this is it. Not a spinner that will resolve on its own. */}
+          {tenant.awaiting && (
+            <button
+              onClick={() => onContinue(tenant)}
+              className="relative mt-4 rounded-full bg-neutral-50 px-4 py-1.5 text-xs font-medium text-neutral-950 transition hover:bg-white"
+            >
+              Continue in Ethereum →
+            </button>
+          )}
+        </>
       ) : (
         <dl className="mt-6 space-y-2.5 text-sm">
           <Row label="Agent" value={tenant.agent ? `${tenant.agent}.${tenant.label}.harness.eth` : "—"} mono />
