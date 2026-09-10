@@ -9,7 +9,11 @@ FROM docker.io/library/alpine:3.21
 # agent can actually think on rather than only spend from. It is installed
 # whether or not this Tenant asked for it — the image is shared, and the thing
 # that decides is whether a credential was sealed for this Agent.
-RUN apk add --no-cache openssh-server python3 tailscale nodejs npm git curl \
+# bash, because an agent that cannot run a command is a chat window. Claude
+# Code and Codex both refuse to use their shell tool without it — "No suitable
+# shell found" — and busybox ash does not satisfy them. Login shells stay
+# /bin/sh; this is only so the tools have something they will accept.
+RUN apk add --no-cache openssh-server python3 tailscale nodejs npm git curl bash \
  && adduser -D -s /bin/sh runner \
  # `adduser -D` leaves the account locked ("!" in shadow), and sshd refuses a
  # locked account even for public-key auth. The Agent has no password at all —
@@ -48,7 +52,43 @@ RUN mkdir -p /var/lib/tailscale && chown root:root /var/lib/tailscale && chmod 7
 COPY agent.py /usr/local/bin/agent
 RUN chmod 755 /usr/local/bin/agent
 
-RUN npm install -g @anthropic-ai/claude-code && npm cache clean --force
+# Both, because people have one or the other and rarely both. Which one starts
+# is decided per Agent by HARNESS_BRAIN, sealed alongside the credential it
+# needs, so a machine only ever launches something it can authenticate.
+RUN npm install -g @anthropic-ai/claude-code @openai/codex && npm cache clean --force
+
+# What the agent knows about this machine before anyone tells it anything: how
+# x402 works here, that it cannot sign and must ask the broker, where the
+# ceiling comes from, and why wallet-cli lives on the host. Claude Code reads
+# CLAUDE.md from the working directory; Codex reads AGENTS.md.
+# What a fresh home starts as.
+#
+# It lives here rather than in /home/runner because the home itself is a tmpfs:
+# the root filesystem is read-only, and a CLI that cannot write its own config
+# asks its first-run questions on every single launch — theme, then trust, then
+# theme again — which is unusable. A tmpfs makes it writable, and mounting one
+# would hide anything the image had put there, so the image seeds it instead and
+# the entrypoint copies it in.
+#
+# Wiped on restart, which is the right side to err on: whatever a CLI caches
+# about who it is goes with it, so a revoked Agent does not quietly keep working
+# from a credential it wrote down earlier.
+COPY CLAUDE.md /etc/harness/skel/CLAUDE.md
+COPY skel/ /etc/harness/skel/
+RUN cp /etc/harness/skel/CLAUDE.md /etc/harness/skel/AGENTS.md \
+ && mkdir -p /etc/harness/skel/.codex
+
+# A plan token is enough for `claude -p` and not for the interactive UI, which
+# reads a credentials file and otherwise says "Not logged in" at somebody with
+# no browser to log in with.
+COPY brain-login /usr/local/bin/brain-login
+RUN chmod 755 /usr/local/bin/brain-login
+
+# Paying for something, without a key. The one privileged step is a request to
+# the broker, so this is the tool rather than a paragraph telling an agent to
+# hand-roll the same three calls.
+COPY x402-fetch /usr/local/bin/x402-fetch
+RUN chmod 755 /usr/local/bin/x402-fetch
 
 COPY fetch-secrets /usr/local/bin/fetch-secrets
 RUN chmod 755 /usr/local/bin/fetch-secrets
@@ -57,11 +97,8 @@ RUN chmod 755 /usr/local/bin/fetch-secrets
 # on a tmpfs and is written at start by fetch-secrets, so it is absent until
 # the broker has said this Agent may still act — and absent again after a
 # restart if the chain has changed its mind.
-RUN printf '%s\n' \
-    '# Opened for this agent at start, from the broker, under the ring.' \
-    '[ -r /run/harness/env ] && . /run/harness/env' \
-    > /etc/profile.d/harness.sh \
- && chmod 644 /etc/profile.d/harness.sh
+COPY profile.sh /etc/profile.d/harness.sh
+RUN chmod 644 /etc/profile.d/harness.sh
 
 COPY entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod 755 /usr/local/bin/entrypoint.sh

@@ -1,0 +1,119 @@
+#!/usr/bin/env python3
+"""Fetch a URL, paying for it if it asks.
+
+    x402-fetch <url> [--method POST] [--data '{"q":"..."}'] [--quiet]
+
+Most URLs are free and this is then a slow curl. When one answers `402 Payment
+Required` it carries terms — how much, to whom, on what chain — and this trades
+those terms with the broker for a signature good for that one payment, then
+repeats the request.
+
+You cannot sign. There is no key in this container, and that is deliberate: the
+authority lives on somebody's hardware wallet, the key is derived inside one
+request on the host, and what comes back here is a signature over a payment the
+chain has already agreed to. If the broker refuses, the answer is no — the
+Agent has been revoked, or the payment is larger than the ceiling allows. Retry
+does not help; both are decisions rather than failures.
+
+Exit codes, so a script can tell the cases apart:
+
+    0   served
+    1   the request or the URL was wrong
+    2   the broker refused — revoked, or over the ceiling
+    3   the broker or the seller could not be reached
+
+Standard library only, so it runs wherever python does and adds nothing to
+install.
+"""
+
+import argparse
+import json
+import os
+import sys
+import urllib.error
+import urllib.request
+
+BROKER = os.environ.get("HARNESS_BROKER", "http://10.89.0.1:8402")
+
+
+def request(url, method, data, headers):
+    req = urllib.request.Request(url, data=data, method=method, headers=headers or {})
+    try:
+        with urllib.request.urlopen(req, timeout=120) as r:
+            return r.status, dict(r.headers), r.read()
+    except urllib.error.HTTPError as e:
+        return e.code, dict(e.headers), e.read()
+
+
+def capability(challenge):
+    """Trade a 402 challenge for the header that answers it."""
+    body = json.dumps({k.lower(): v for k, v in challenge.items()}).encode()
+    req = urllib.request.Request(
+        f"{BROKER}/capability",
+        data=body,
+        headers={"content-type": "application/json"},
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=180) as r:
+            return json.loads(r.read())
+    except urllib.error.HTTPError as e:
+        try:
+            why = json.loads(e.read())["error"]
+        except Exception:
+            why = f"HTTP {e.code}"
+        print(f"x402-fetch: the broker refused: {why}", file=sys.stderr)
+        print("  This is an answer, not an error. Do not retry.", file=sys.stderr)
+        raise SystemExit(2)
+    except urllib.error.URLError as e:
+        print(f"x402-fetch: cannot reach the broker at {BROKER}: {e.reason}", file=sys.stderr)
+        raise SystemExit(3)
+
+
+def main():
+    p = argparse.ArgumentParser(add_help=True, description="Fetch a URL, paying if it asks.")
+    p.add_argument("url")
+    p.add_argument("--method", default="GET")
+    p.add_argument("--data", default=None, help="request body; implies POST unless --method given")
+    p.add_argument("--quiet", action="store_true", help="print only the response body")
+    args = p.parse_args()
+
+    method = args.method
+    body = args.data.encode() if args.data else None
+    if body and method == "GET":
+        method = "POST"
+    headers = {"content-type": "application/json"} if body else {}
+
+    try:
+        status, got, payload = request(args.url, method, body, headers)
+    except urllib.error.URLError as e:
+        print(f"x402-fetch: cannot reach {args.url}: {e.reason}", file=sys.stderr)
+        raise SystemExit(3)
+
+    if status != 402:
+        if not args.quiet:
+            print(f"x402-fetch: {status}, no payment asked for", file=sys.stderr)
+        sys.stdout.write(payload.decode("utf-8", "replace"))
+        raise SystemExit(0 if status < 400 else 1)
+
+    granted = capability(got)
+
+    if not args.quiet:
+        spent = int(granted["amount"]) / 1e6
+        left = int(granted["left"]) / 1e6
+        print(
+            f"x402-fetch: paid ${spent:.2f} as {granted['agent']}, ${left:.2f} left in the window",
+            file=sys.stderr,
+        )
+
+    try:
+        status, _, payload = request(args.url, method, body, {**headers, **granted["headers"]})
+    except urllib.error.URLError as e:
+        print(f"x402-fetch: cannot reach {args.url} after paying: {e.reason}", file=sys.stderr)
+        raise SystemExit(3)
+
+    sys.stdout.write(payload.decode("utf-8", "replace"))
+    raise SystemExit(0 if status < 400 else 1)
+
+
+if __name__ == "__main__":
+    main()

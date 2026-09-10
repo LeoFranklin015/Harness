@@ -14,7 +14,7 @@ import { explain } from "@/lib/explain";
 import { sepoliaTransport } from "@/lib/rpc";
 import { secret } from "@/lib/secrets";
 import { visitorKeyFor } from "@/lib/sshkey";
-import { CLAUDE_VARS, sealSecrets, validName, type ClaudeAuth } from "@/lib/vault";
+import { BRAIN_VAR, BRAINS, sealSecrets, validName, type BrainChoice } from "@/lib/vault";
 import { agentKeyFor } from "@/lib/agent-root";
 
 /**
@@ -87,9 +87,9 @@ export async function POST(req: Request) {
     /** Optional. Absent means nobody may SSH in until the device says so. */
     sshFingerprint?: string;
     device: Address;
-    /** How Claude Code signs in, and with what. Optional. */
-    claudeAuth?: ClaudeAuth;
-    claudeSecret?: string;
+    /** Which brain the machine runs, and its credential. Optional. */
+    brain?: BrainChoice;
+    brainSecret?: string;
     /** Anything else the Agent was given, one NAME=value per line. */
     extraSecrets?: string;
   };
@@ -212,8 +212,20 @@ export async function POST(req: Request) {
         // there is nothing to seal with, and a secret sitting in this process
         // waiting for one is a secret in the wrong place.
         const secrets: Record<string, string> = {};
-        if (body.claudeAuth && body.claudeAuth !== "none" && body.claudeSecret?.trim()) {
-          secrets[CLAUDE_VARS[body.claudeAuth]] = body.claudeSecret.trim();
+        if (body.brain && body.brain !== "none" && body.brainSecret?.trim()) {
+          const chosen = BRAINS[body.brain];
+          // Every whitespace character, not just the ends. `claude
+          // setup-token` prints a token longer than most terminals are wide,
+          // and copying it out of a wrapped display turns each line break into
+          // a space inside the value. It looks right, it seals cleanly, and it
+          // comes back "OAuth access token is invalid" hours later with
+          // nothing to point at. No key or token of any provider contains
+          // whitespace, so removing it can only help.
+          secrets[chosen.env] = body.brainSecret.replace(/\s+/g, "");
+          // Sealed with the credential on purpose: an Agent the chain will no
+          // longer release secrets to is not told what to launch either, and
+          // falls back to a plain shell rather than a CLI that cannot sign in.
+          secrets[BRAIN_VAR] = chosen.brain;
         }
         for (const line of (body.extraSecrets ?? "").split("\n")) {
           const at = line.indexOf("=");

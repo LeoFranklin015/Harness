@@ -50,6 +50,34 @@ tailscale --socket=/run/tailscale/tailscaled.sock up \
 # with "Address in use".
 tailscale --socket=/run/tailscale/tailscaled.sock serve reset 2>/dev/null || true
 
+# Seed the tmpfs home. Mounting over /home/runner hides whatever the image put
+# there, so the image keeps it in /etc/harness/skel and it is copied in here —
+# the CLAUDE.md an agent reads before it is told anything, and room for a CLI to
+# write its own config so it stops asking the same questions every launch.
+if [ -d /etc/harness/skel ]; then
+    cp -a /etc/harness/skel/. /home/runner/ 2>/dev/null || true
+
+    # Owned before anything is run as its owner. The tmpfs mounts as root, and
+    # `git init` as `runner` in a directory root still owns fails quietly.
+    chown -R runner:runner /home/runner 2>/dev/null || true
+
+    # A git repository, because Codex refuses to run anywhere that is not one
+    # unless told to skip the check, and because an agent that edits files
+    # should have something to diff against. The first commit is the machine as
+    # it was provisioned.
+    if [ ! -d /home/runner/.git ]; then
+        su runner -s /bin/sh -c '
+            cd /home/runner &&
+            git init -q . &&
+            git add -A &&
+            git -c user.email=agent@harness.eth -c user.name="harness agent" \
+                commit -qm "the machine as provisioned"
+        ' >/dev/null 2>&1 || true
+    fi
+
+    chown -R runner:runner /home/runner 2>/dev/null || true
+fi
+
 # What this Agent was given, opened by the broker if the chain still allows it.
 # In the background, because the broker binds a gateway that does not exist
 # until a container is running on the network — which is to say, until this one

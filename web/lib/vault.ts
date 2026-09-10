@@ -72,21 +72,25 @@ export function hasSecrets(tenant: string, agent: string): boolean {
 }
 
 /**
- * How Claude Code is told who it is.
+ * How an Agent's brain is told who it is.
  *
- * Two ways, because people have one or the other and rarely both. An API key
- * bills per token against an Anthropic account. A subscription token comes
+ * Three ways, because people have one of them and rarely two. An API key bills
+ * per token against an Anthropic or OpenAI account. A subscription token comes
  * from `claude setup-token` on a machine where somebody has already signed in
  * to a Pro, Max or Team plan, and bills against that plan instead — which is
  * the one most people actually have.
  *
- * Both are just secrets to us. The only reason this is named at all is that
- * the Runner has to know which variable to set, and getting it wrong leaves
- * Claude Code asking a question nobody is there to answer.
+ * They are all just secrets. The only reason any of this is named is that the
+ * Runner has to know which variable to set and which command to launch, and
+ * getting either wrong leaves a CLI asking a question with nobody there.
  */
-export const CLAUDE_VARS = {
-  apiKey: "ANTHROPIC_API_KEY",
-  subscription: "CLAUDE_CODE_OAUTH_TOKEN",
+export const BRAINS = {
+  "claude-plan": { env: "CLAUDE_CODE_OAUTH_TOKEN", brain: "claude" },
+  "claude-key": { env: "ANTHROPIC_API_KEY", brain: "claude" },
+  "codex-key": { env: "OPENAI_API_KEY", brain: "codex" },
 } as const;
 
-export type ClaudeAuth = keyof typeof CLAUDE_VARS | "none";
+export type BrainChoice = keyof typeof BRAINS | "none";
+
+/** Which command a Runner starts a shell in. Sealed with the credential. */
+export const BRAIN_VAR = "HARNESS_BRAIN";

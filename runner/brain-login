@@ -1,0 +1,50 @@
+#!/bin/sh
+# Turn a credential in the environment into whatever the CLI actually reads.
+#
+# Neither tool is satisfied by an environment variable alone:
+#
+#   claude   `CLAUDE_CODE_OAUTH_TOKEN` serves `claude -p` and not the
+#            interactive UI, which reads ~/.claude/.credentials.json and
+#            otherwise says "Not logged in · Run /login" at somebody who has no
+#            browser to log in with.
+#   codex    reads ~/.codex/auth.json. With only OPENAI_API_KEY set it sends no
+#            bearer at all and the API answers "Missing bearer".
+#
+# Both files are the same secret written where it will be looked for. The home
+# is a tmpfs, so they are rebuilt at every start from something the broker only
+# hands over while the chain still says this Agent may act — there is no copy
+# left behind for a revoked Agent to keep working from.
+set -eu
+
+if [ -n "${CLAUDE_CODE_OAUTH_TOKEN:-}" ] && [ ! -s "$HOME/.claude/.credentials.json" ]; then
+    mkdir -p "$HOME/.claude"
+    python3 - "$HOME/.claude/.credentials.json" <<'PY'
+import json, os, sys, time
+
+with open(sys.argv[1], "w") as f:
+    json.dump({
+        "claudeAiOauth": {
+            "accessToken": os.environ["CLAUDE_CODE_OAUTH_TOKEN"],
+            # A setup-token is long-lived and carries nothing to refresh with.
+            # Claiming a year is honest enough: if it expires the API says so,
+            # which is a better failure than a client refusing to try.
+            "refreshToken": "",
+            "expiresAt": int((time.time() + 365 * 24 * 3600) * 1000),
+            "scopes": ["user:inference", "user:profile"],
+            "subscriptionType": "max",
+        }
+    }, f)
+PY
+    chmod 600 "$HOME/.claude/.credentials.json"
+fi
+
+if [ -n "${OPENAI_API_KEY:-}" ] && [ ! -s "$HOME/.codex/auth.json" ]; then
+    mkdir -p "$HOME/.codex"
+    python3 - "$HOME/.codex/auth.json" <<'PY'
+import json, os, sys
+
+with open(sys.argv[1], "w") as f:
+    json.dump({"OPENAI_API_KEY": os.environ["OPENAI_API_KEY"]}, f)
+PY
+    chmod 600 "$HOME/.codex/auth.json"
+fi

@@ -61,6 +61,14 @@ sudo podman run -d \
     -e HARNESS_SELLER="${HARNESS_SELLER:-http://${gateway}:4023}" \
     --label "harness.tenant=${tenant}" \
     --label "harness.agent=${agent}" \
+    `# The name it answers to on chain, so a prompt and a hostname say something` \
+    `# a person can act on rather than a container id nobody chose.` \
+    --hostname "${agent}.${tenant}.harness.eth" \
+    `# A writable home on a tmpfs. The root filesystem is read-only, and a CLI` \
+    `# that cannot save its own config re-asks its first-run questions on every` \
+    `# launch. Wiped on restart, so nothing a CLI cached about who it is` \
+    `# outlives the moment the chain stops vouching for this Agent.` \
+    --tmpfs "/home/runner:rw,mode=0755,size=256m" \
     -v "harness-${tenant}-ts:/var/lib/tailscale" \
     `# A real TUN. Userspace networking could not establish a path to a peer` \
     `# out on the internet, so a visitor's connection hung rather than being` \

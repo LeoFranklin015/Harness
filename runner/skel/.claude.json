@@ -1,0 +1,19 @@
+{
+  "firstStartTime": "2026-01-01T00:00:00.000Z",
+  "firstStartVersion": "2.1.266",
+  "migrationVersion": 14,
+  "hasCompletedOnboarding": true,
+  "seenNotifications": {},
+  "projects": {
+    "/home/runner": {
+      "hasTrustDialogAccepted": true,
+      "hasCompletedProjectOnboarding": true,
+      "allowedTools": [],
+      "mcpServers": {},
+      "enabledMcpjsonServers": [],
+      "disabledMcpjsonServers": [],
+      "hasClaudeMdExternalIncludesApproved": true,
+      "hasClaudeMdExternalIncludesWarningShown": true
+    }
+  }
+}
