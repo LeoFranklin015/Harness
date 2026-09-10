@@ -1,16 +1,15 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import type { Address, Hex } from "viem";
 import { ConnectLedger } from "@/components/ledger/ConnectLedger";
 import { DeviceHolder } from "@/components/DeviceHolder";
 import { UpgradeAccount } from "@/components/ledger/UpgradeAccount";
-import { ProvisionDialog, type ProvisionRequest } from "@/components/tenants/ProvisionDialog";
+
 import { TenantSlot, type Tenant } from "@/components/tenants/TenantSlot";
 import type { Ask } from "@/components/tenants/Asks";
-import { connectAndOpenApp } from "@/lib/device-app";
 import { RejectedOnDevice, type Device } from "@/lib/ledger";
-import { runRelay } from "@/lib/relay-client";
 import {
   declineUpgrade,
   loadTenants,
@@ -22,6 +21,7 @@ import {
   type Authority,
 } from "@/lib/session";
 import { explain } from "@/lib/explain";
+import { finishOnChain } from "@/lib/provision";
 import { agentIdFrom, allowanceFor, calldata, firstGrant, readHost, REGISTRY_ABI, USDC } from "@/lib/tenant";
 import { sepoliaTransport } from "@/lib/rpc";
 import { createPublicClient } from "viem";
@@ -190,7 +190,7 @@ function Machines({
 }) {
   const { authority } = session;
   const [tenants, setTenants] = useState<(Tenant | null)[]>(() => Array(SLOTS).fill(null));
-  const [adding, setAdding] = useState<number | null>(null);
+  const router = useRouter();
   const [error, setError] = useState<string | null>(null);
 
   // What this device holds is the server's answer, not this tab's memory, so
@@ -246,65 +246,14 @@ function Machines({
   }
 
   /**
-   * Making a machine is two halves with a click between them — and the click
-   * is not decoration.
+   * The second half, for a machine caught mid-flow.
    *
-   * First the ring: the Ledger creates (or recognises) its Key Ring and admits
-   * this host's broker, one confirmation in Ledger Sync, the browser only
-   * forwarding bytes. Everything sealed on the host from here on is recoverable
-   * from that device's seed and nothing else.
-   *
-   * Then the chain: the platform registers the Tenant, and the device signs
-   * three transactions in the Ethereum app. Reaching the device again needs
-   * `navigator.hid.requestDevice`, and the browser only grants that inside a
-   * user gesture — the tail of an async chain does not count, and the request
-   * is silently refused. So the flow stops, says what to open on the device,
-   * and waits for a click. That click is the gesture.
+   * New machines are built on /machines/new now, but a provision interrupted
+   * by a refresh leaves a slot here with its ring already made — and a ring
+   * cannot be made twice for the same name. So the dashboard keeps the way
+   * to finish one, and runs the same code the wizard does rather than a
+   * second copy of it.
    */
-  async function startProvision(slot: number, req: ProvisionRequest) {
-    setAdding(null);
-    setError(null);
-    // Claim the slot first. The cap is the server's to enforce, and finding
-    // out after the Ledger has been tapped would be finding out too late.
-    const claimed = await record(slot, {
-      label: req.label,
-      registry: "0x" as Address,
-      meshAddress: null,
-      agent: req.agent,
-      cap: `$${req.capUsd}/day`,
-      status: "provisioning",
-      step: "Starting",
-      request: req,
-    });
-    if (!claimed) return;
-    const say = (s: string) => narrate(slot, s);
-
-    try {
-      say("Ring — preparing this host's identity");
-      const created = await fetch("/api/enrolments", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ tenant: req.label }),
-      });
-      const enrolment = await created.json();
-      if (!created.ok) throw new Error(enrolment.error ?? "could not start enrolment");
-
-      await session.release();
-      await connectAndOpenApp(RING_APP, say);
-      const ring = await shareRing(enrolment.id, say);
-
-      patch(slot, {
-        awaiting: true,
-        step:
-          (ring.outcome === "created" ? "Ring created. " : "Ring recognised. ") +
-          "Open Ethereum on your device, then continue.",
-      });
-    } catch (err) {
-      fail(slot, err);
-    }
-  }
-
-  /** The second half. Runs from a click, which is what lets it reach the device. */
   async function continueProvision(tenant: Tenant) {
     const slot = tenants.findIndex((t) => t?.label === tenant.label);
     const req = tenant.request;
@@ -314,104 +263,19 @@ function Machines({
     const say = (s: string) => narrate(slot, s);
 
     try {
-      const dev = await session.device(say);
-
-      const res = await fetch("/api/provision", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ ...req, device: dev.address }),
+      const out = await finishOnChain({
+        session,
+        req,
+        upgraded,
+        say,
+        onPartial: (partial) => patch(slot, partial),
       });
-      if (!res.ok || !res.body) throw new Error(`provisioning failed: ${res.status}`);
-
-      let executor: Address | null = null;
-      let ready: {
-        registry: Address;
-        meshAddress: string;
-        hostKey: Hex;
-        operator: Hex;
-        agentKey: Address;
-        ipv4: Hex;
-      } | null = null;
-
-      for await (const ev of ndjson(res.body)) {
-        if (ev.error) throw new Error(ev.error);
-        if (ev.executor) executor = ev.executor;
-        if (ev.ready) ready = ev.ready;
-        patch(slot, {
-          ...(ev.registry && { registry: ev.registry }),
-          ...(ev.meshAddress && { meshAddress: ev.meshAddress }),
-          ...(ev.step && { step: ev.step }),
-        });
-      }
-      if (!ready || !executor) throw new Error("the platform stopped before handing over");
-
-      const grant = firstGrant({
-        label: req.agent,
-        agentKey: ready.agentKey,
-        capUsd: Number(req.capUsd),
-        days: Number(req.days),
-      });
-
-      // The four things that make a machine real. Point it at its executor;
-      // publish where it is and who may reach it; allow the executor to draw on
-      // the Tenant's USDC (funding is a pull, so the token has to be told, and
-      // it is bounded by what the Grant could spend over its whole life); then
-      // set the ceiling, which is what mints the Agent's name.
-      const steps = [
-        { say: "point the tenant at its executor", to: ready.registry, data: calldata.setExecutor(executor) },
-        {
-          say: "publish where the machine is",
-          to: ready.registry,
-          data: calldata.setHost(ready.ipv4, ready.hostKey, ready.operator),
-        },
-        {
-          say: "let the executor draw on your USDC",
-          to: USDC,
-          data: calldata.approve(executor, allowanceFor(Number(req.capUsd), Number(req.days))),
-        },
-        { say: "set the ceiling", to: ready.registry, data: calldata.grant(grant) },
-      ];
-
-      // An upgraded account does all four in one transaction, so it is one
-      // approval. Every call inside it is still made by the Tenant, so the
-      // contracts see exactly what they would have seen one at a time.
-      let receipt;
-      if (upgraded) {
-        say("Ledger — one signature for all four steps");
-        receipt = await dev.sendBatch(steps.map(({ to, data }) => ({ to, data })), say);
-      } else {
-        for (const [i, s] of steps.entries()) {
-          say(`Ledger ${i + 1} of ${steps.length} — ${s.say}`);
-          receipt = await dev.send({ to: s.to, data: s.data }, say);
-        }
-      }
-      if (!receipt) throw new Error("nothing was signed");
-      const agentId = agentIdFrom(receipt.logs);
-      if (!agentId) throw new Error("granted, but the receipt named no agent");
-
-      // The chain keeps only the hash, so the terms are filed here too —
-      // otherwise nothing could ever act under this Grant again.
-      await fetch("/api/grants", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          tenant: req.label,
-          label: req.agent,
-          agentKey: ready.agentKey,
-          start: grant.start,
-          end: grant.end,
-          cap: grant.spends[0]!.allowance.toString(),
-          registry: ready.registry,
-          agentId,
-        }),
-      });
-
       setSlot(slot, {
         label: req.label,
-        registry: ready.registry,
-        meshAddress: ready.meshAddress,
+        registry: out.registry,
+        meshAddress: out.meshAddress,
         agent: req.agent,
-        agentId,
+        agentId: out.agentId,
         cap: `$${req.capUsd}/day`,
         status: "live",
       });
@@ -612,7 +476,7 @@ function Machines({
           <TenantSlot
             key={i}
             tenant={tenant}
-            onAdd={() => setAdding(i)}
+            onAdd={() => router.push("/machines/new")}
             onContinue={continueProvision}
             onRevoke={revoke}
             onAuthorise={authorise}
@@ -621,12 +485,6 @@ function Machines({
         ))}
       </div>
 
-      <ProvisionDialog
-        open={adding !== null}
-        taken={taken}
-        onClose={() => setAdding(null)}
-        onSubmit={(req) => startProvision(adding!, req)}
-      />
     </div>
   );
 }
@@ -682,52 +540,3 @@ async function copyText(text: string) {
   document.body.removeChild(ta);
 }
 
-/**
- * The ring, through the relay.
- *
- * The host runs the LKRP flow and needs the device for it; the browser is the
- * only thing plugged into the device, so it forwards APDUs and nothing more. The
- * server hands back a relay id first, the browser starts forwarding, and the
- * outcome arrives on the same stream when the device has confirmed.
- */
-async function shareRing(enrolmentId: string, say: (s: string) => void) {
-  const controller = new AbortController();
-  say("Confirm on your device");
-
-  const res = await fetch(`/api/enrolments/${enrolmentId}/ring`, { method: "POST" });
-  if (!res.body) throw new Error("no response from the host");
-
-  let relaying: Promise<void> | null = null;
-  let result: { outcome: string; rootId?: string; members?: number } | null = null;
-  try {
-    for await (const msg of ndjson(res.body)) {
-      if (msg.relayId) {
-        relaying = runRelay(msg.relayId, controller.signal);
-        continue;
-      }
-      if (msg.ok === false) throw new Error(msg.error);
-      result = msg;
-    }
-  } finally {
-    controller.abort();
-    await relaying?.catch(() => {});
-  }
-  if (!result) throw new Error("the ring flow ended without a result");
-  return result;
-}
-
-/** NDJSON: one event per line, a partial line held over to the next chunk. */
-async function* ndjson(body: ReadableStream<Uint8Array>): AsyncGenerator<any> {
-  const reader = body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = "";
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
-    const lines = buffer.split("\n");
-    buffer = lines.pop() ?? "";
-    for (const line of lines) if (line.trim()) yield JSON.parse(line);
-  }
-  if (buffer.trim()) yield JSON.parse(buffer);
-}

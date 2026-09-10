@@ -99,7 +99,7 @@ function AgentCard({ tenant, onOpen }: { tenant: Tenant; onOpen: () => void }) {
     <button
       onClick={onOpen}
       aria-label={`${tenant.label}.harness.eth — ${tenant.status}`}
-      className="group relative flex min-h-[280px] w-full items-center justify-center overflow-hidden rounded-2xl border border-neutral-800 bg-neutral-950/60 transition hover:border-neutral-700"
+      className="group relative flex min-h-[280px] w-full items-end justify-center overflow-hidden rounded-2xl border border-neutral-800 bg-neutral-950/60 pb-2 transition hover:border-neutral-700"
     >
       {tenant.status === "provisioning" && <BorderBeam size={220} duration={7} />}
 

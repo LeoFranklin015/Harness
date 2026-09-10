@@ -209,8 +209,15 @@ export function firstGrant(opts: {
   agentKey: Address;
   capUsd: number;
   days: number;
+  /**
+   * What the Agent may call. Defaults to USDC transfers, which is the one
+   * thing every machine needs and the only shape the executor settles — but
+   * the Grant language is more general than that, so the caller chooses.
+   */
+  rules?: readonly { target: Address; selector: Hex }[];
 }): Grant {
   const now = Math.floor(Date.now() / 1000);
+  const rules = opts.rules?.length ? opts.rules : [{ target: USDC, selector: TRANSFER }];
   return {
     parent: ZERO32,
     label: opts.label,
@@ -218,9 +225,13 @@ export function firstGrant(opts: {
     start: now - 60,
     end: now + Math.round(opts.days * 86400),
     salt: BigInt(0),
-    calls: [
-      { target: USDC, selector: TRANSFER, maxValue: BigInt(0), checker: ZERO_ADDR, checkerCodeHash: ZERO32 },
-    ],
+    calls: rules.map((r) => ({
+      target: r.target,
+      selector: r.selector,
+      maxValue: BigInt(0),
+      checker: ZERO_ADDR,
+      checkerCodeHash: ZERO32,
+    })),
     spends: [
       dailyLimit(BigInt(Math.round(opts.capUsd * 1_000_000))),
     ],

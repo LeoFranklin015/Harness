@@ -208,3 +208,38 @@ body {
   5%, 20%   { opacity: 1; translate: 0 0; }
   25%, 100% { opacity: 0; translate: 0 -5px; }
 }
+
+/* --- the machine being assembled ---------------------------------------- */
+
+/*
+ * A part drops in, overshoots, and settles. The overshoot is the whole
+ * difference between something being placed and something appearing: real
+ * mass does not arrive exactly on its mark.
+ */
+@keyframes part-land {
+  0%   { opacity: 0; translate: 0 -22px; scale: 1.04; }
+  55%  { opacity: 1; translate: 0 4px;   scale: 1; }
+  75%  { translate: 0 -2px; }
+  100% { opacity: 1; translate: 0 0; }
+}
+
+.part {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+.part-waiting { opacity: 0; }
+.part-set { opacity: 1; }
+.part-landing { animation: part-land 620ms cubic-bezier(0.2, 0.9, 0.3, 1.2) both; }
+
+/* The step that is currently running. A pulse, not a spinner: a spinner
+   claims motion where there is only waiting. */
+@keyframes step-live {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.35; }
+}
+.step-live { animation: step-live 1.4s ease-in-out infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  .part-landing, .step-live { animation: none; }
+  .part-landing { opacity: 1; }
+}
