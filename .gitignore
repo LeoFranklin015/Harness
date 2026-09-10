@@ -1,0 +1,72 @@
+# Secrets — nothing in here ever reaches a commit
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+*.p12
+secrets/
+keystore/
+deployer.json
+docs/
+CONTEXT.md
+Project-details.md
+SPEC.md
+*.enc.local
+
+# Ledger Key Ring / wallet-cli local state (member private key, trustchain session)
+session.yaml
+.ledger-wallet-cli/
+ledger-wallet-cli/
+
+# Tailscale node state — node identity, auth keys
+tailscaled.state
+tailscale.state
+var/lib/tailscale/
+*.authkey
+
+# Node
+node_modules/
+dist/
+build/
+.next/
+out/
+coverage/
+*.tsbuildinfo
+npm-debug.log*
+yarn-error.log*
+.pnpm-store/
+
+# Foundry (broadcast/ is deliberately kept — deployment records are worth committing)
+cache/
+cache_forge/
+artifacts/
+
+# Go
+*.exe
+*.test
+*.out
+vendor/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Editors / OS
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+
+# Agent tooling — installed, not authored
+.claude/
+.agents/
+skills-lock.json
+
+# Scratch
+tmp/
+scratch/
+*.local
