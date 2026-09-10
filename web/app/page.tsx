@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { Address, Hex } from "viem";
 import { ConnectLedger } from "@/components/ledger/ConnectLedger";
+import { DeviceHolder } from "@/components/DeviceHolder";
 import { UpgradeAccount } from "@/components/ledger/UpgradeAccount";
 import { ProvisionDialog, type ProvisionRequest } from "@/components/tenants/ProvisionDialog";
 import { TenantSlot, type Tenant } from "@/components/tenants/TenantSlot";
@@ -582,7 +583,14 @@ function Machines({
         </p>
       )}
 
-      <div className="grid gap-5 sm:grid-cols-2">
+      {/* This tab can answer for a shell that has no device — see DeviceHolder. */}
+      <DeviceHolder
+        session={session}
+        authority={authority.address}
+        tenants={tenants.filter((t): t is Tenant => !!t && t.status === "live").map((t) => t.label)}
+      />
+
+      <div className="mt-6 grid gap-5 sm:grid-cols-2">
         {tenants.map((tenant, i) => (
           <TenantSlot
             key={i}

@@ -1,44 +1,50 @@
 #!/usr/bin/env python3
-"""Lend your Ledger to a shell on another machine.
+"""Hold a Ledger for a machine that cannot reach one.
 
-Run this on the laptop the device is plugged into. Then, over an ssh session
-to the box, `harness-approve` can sign — the command runs here, the device
-prompts here, and what crosses the wire is a transaction to sign and a result.
+Run this wherever the device is plugged in — your laptop, anyone's laptop.
+It watches the dashboard for transactions waiting to be signed, shows you each
+one, and signs with wallet-cli when you confirm on the device.
 
-    # on the laptop, with the Ledger attached
-    harness-device-agent
+    harness-device-agent --dashboard http://<box>:3000 --tenant acme --account ethereum-1
 
-    # then ssh in with a remote forward, so the box can reach it
-    ssh -R 8799:127.0.0.1:8799 opc@<box>
+Then, from anywhere — an ssh session on the box, most likely:
 
-    # and on the box
-    harness-approve --dashboard http://localhost:3000 --tenant acme \\
-        --registry 0x... --cap 10 --account ethereum-1 \\
-        --device-agent http://127.0.0.1:8799
+    harness-approve --tenant acme
 
-Why this exists: wallet-cli reaches the device over libusb, and the box is a
-cloud VM whose only USB devices are QEMU's virtual keyboard and mouse. usbip
-would forward a real one, but macOS cannot be a usbip host. So the device
-cannot be moved to the shell — the command is moved to the device instead,
-which is the same thing from where you are sitting.
+Nothing is forwarded and nothing listens. This only makes outbound requests,
+so it works from behind any firewall, on any machine, with no ssh flags and no
+ports opened. That matters more than it sounds: the previous version needed
+`ssh -R` and a copy of this repo, which is not something you can hand somebody.
 
-What this will and will not do:
+Why it exists at all: wallet-cli reaches a Ledger over libusb, and the box is
+a cloud VM whose only USB devices are QEMU's virtual keyboard and mouse. The
+device cannot be moved to the shell, so the transaction is moved to the
+device.
 
-  - binds 127.0.0.1 only, so nothing off the laptop can reach it directly; the
-    ssh forward is what lets the box in, and that is a door you opened
-  - signs only what it is given, and shows you the bytes before it does
-  - the device still shows the transaction and still needs your confirmation,
-    which is the part none of this can route around
+What it will and will not do:
 
-Standard library only, so there is nothing to install but wallet-cli itself.
+  - signs only what the dashboard hands it, and prints the bytes first
+  - refuses if the account it holds is not the one the machine answers to,
+    before the device screen lights up
+  - the device still shows the transaction and still needs your button, which
+    is the part none of this can route around
+
+Needs python3 and wallet-cli. Nothing else.
+
+    npm i -g @ledgerhq/wallet-cli
+    wallet-cli account discover --currency ethereum_sepolia
 """
+
 
 import argparse
 import json
 import re
 import subprocess
 import sys
-from http.server import BaseHTTPRequestHandler, HTTPServer
+import time
+import urllib.error
+import urllib.parse
+import urllib.request
 
 WALLET_CLI = "wallet-cli"
 
@@ -68,6 +74,22 @@ def account_address(account):
         found = _find_address(seen.stdout, account)
         if found:
             return found
+
+    # The JSON shape is not contracted to us, so the human output is a real
+    # fallback rather than a nicety. It looks like:
+    #
+    #   ethereum-sepolia-1  account:1:address:ethereum:sepolia:0x2926…:m/44h/60h/0h/0/0
+    #
+    # An address on the line that names this account is unambiguous enough.
+    plain = subprocess.run(
+        [WALLET_CLI, "session", "view"], capture_output=True, text=True
+    )
+    if plain.returncode == 0:
+        for line in plain.stdout.splitlines():
+            if account in line.split():
+                found = _any_address(line)
+                if found:
+                    return found
 
     got = subprocess.run(
         [WALLET_CLI, "receive", "--account", account, "--no-verify", "--output", "json"],
@@ -116,96 +138,89 @@ def _find_address(blob, account):
     return hit[0] if hit else None
 
 
-class Handler(BaseHTTPRequestHandler):
-    def log_message(self, *_):
-        pass  # we print what matters ourselves
+def sign_one(job, account):
+    """Show a job, sign it if the device agrees, and say what happened."""
+    to, data = job["to"], job["data"]
+    expect = job.get("expect") or ""
 
-    def _reply(self, status, body):
-        raw = json.dumps(body).encode()
-        self.send_response(status)
-        self.send_header("content-type", "application/json")
-        self.send_header("content-length", str(len(raw)))
-        self.end_headers()
-        self.wfile.write(raw)
+    # Which Ledger, and which account on it. The registry only accepts the
+    # tenant's root device, so a signature from the wrong account is a revert
+    # somebody has already confirmed on their screen and paid gas for.
+    if expect:
+        signer = account_address(account)
+        if signer is None:
+            say(f"\n!! cannot confirm which address {account!r} signs from.")
+            say(f"   expected {expect}. Refusing rather than guessing.")
+            say("   try: wallet-cli session view")
+            return False, f"cannot confirm the address behind {account!r}"
+        if signer.lower() != expect.lower():
+            say(f"\n!! wrong account. {account!r} is {signer}")
+            say(f"   this machine answers to {expect}")
+            return False, f"{account!r} is {signer}, not {expect}"
 
-    def do_GET(self):
-        if self.path == "/health":
-            return self._reply(200, {"ok": True, "walletCli": WALLET_CLI})
-        self._reply(404, {"error": "not found"})
+    say(f"\n── asked to sign: {job.get('what', 'a transaction')}")
+    say(f"   to     {to}")
+    say(f"   data   {data[:78]}{'…' if len(data) > 78 else ''} ({len(data) // 2} bytes)")
+    say(f"   as     {account}" + (f" ({expect}) — confirmed the right device" if expect else ""))
+    say("   confirm on the device, or reject there to refuse\n")
 
-    def do_POST(self):
-        if self.path != "/sign":
-            return self._reply(404, {"error": "not found"})
+    done = subprocess.run(
+        [WALLET_CLI, "send", "--account", account, "--to", to,
+         "--amount", "0 ETH", "--data", data, "--output", "json"],
+        capture_output=True, text=True,
+    )
+    if done.returncode != 0:
+        err = (done.stderr or done.stdout or "").strip()[-500:]
+        say(f"   refused or failed: {err.splitlines()[-1] if err else 'no output'}")
+        return False, err or "wallet-cli failed"
 
-        length = int(self.headers.get("content-length") or 0)
+    say("   signed.")
+    try:
+        return True, json.loads(done.stdout)
+    except ValueError:
+        return True, {"raw": done.stdout.strip()}
+
+
+def poll(base, tenant, account):
+    """Wait for work, forever, making only outbound requests."""
+    while True:
         try:
-            req = json.loads(self.rfile.read(length) or b"{}")
-        except ValueError:
-            return self._reply(400, {"error": "expected JSON"})
+            with urllib.request.urlopen(
+                f"{base}/api/sign/next?tenant={urllib.parse.quote(tenant)}", timeout=40
+            ) as r:
+                job = json.loads(r.read()).get("job")
+        except urllib.error.URLError as e:
+            say(f"   (dashboard unreachable: {e.reason}; retrying)")
+            time.sleep(5)
+            continue
+        except Exception:
+            # A poll that times out is the normal case, not a problem.
+            continue
 
-        account = str(req.get("account") or "")
-        to = str(req.get("to") or "")
-        data = str(req.get("data") or "")
-        what = str(req.get("what") or "a transaction")
-        amount = str(req.get("amount") or "0 ETH")
+        if not job:
+            continue
 
-        expect = str(req.get("expect") or "")
-
-        if not account or not to.startswith("0x") or not data.startswith("0x"):
-            return self._reply(400, {"error": "need account, to and data"})
-
-        # Which Ledger, and which account on it. The registry only accepts the
-        # tenant's root device, so a signature from the wrong account is a
-        # revert the person has already confirmed on their screen and paid gas
-        # for. Checking costs one device-free call.
-        if expect:
-            signer = account_address(account)
-            if signer is None:
-                say(f"\n!! cannot confirm which address {account!r} signs from.")
-                say(f"   expected {expect}. Refusing rather than guessing.")
-                say("   run: wallet-cli session view")
-                return self._reply(409, {
-                    "error": f"cannot confirm the address behind {account!r}; expected {expect}",
-                })
-            if signer.lower() != expect.lower():
-                say(f"\n!! wrong account. {account!r} is {signer}")
-                say(f"   this machine answers to {expect}")
-                say("   another Ledger, or another account on this one.")
-                return self._reply(409, {
-                    "error": f"{account!r} is {signer}, but this machine answers to {expect}",
-                })
-
-        # Shown before the device is asked, so the person at the laptop sees
-        # what arrived and can refuse by simply not pressing the button.
-        #
-        # Flushed, every line. Python buffers stdout when it is not a
-        # terminal, and a prompt to check some bytes that appears after the
-        # bytes were signed is worse than no prompt at all.
-        say(f"\n── asked to sign: {what}")
-        say(f"   to     {to}")
-        say(f"   data   {data[:78]}{'…' if len(data) > 78 else ''} ({len(data) // 2} bytes)")
-        say(f"   as     {account}" + (f" ({expect}) — confirmed the right device" if expect else ""))
-        say("   confirm on the device, or reject there to refuse\n")
-
-        cmd = [WALLET_CLI, "send", "--account", account, "--to", to,
-               "--amount", amount, "--data", data, "--output", "json"]
-        done = subprocess.run(cmd, capture_output=True, text=True)
-
-        if done.returncode != 0:
-            err = (done.stderr or done.stdout or "").strip()[-600:]
-            say(f"   refused or failed: {err.splitlines()[-1] if err else 'no output'}")
-            return self._reply(502, {"error": err or "wallet-cli failed"})
-
-        say("   signed.")
+        ok, outcome = sign_one(job, account)
+        body = json.dumps(
+            {"id": job["id"], "ok": ok, **({"result": outcome} if ok else {"error": str(outcome)})}
+        ).encode()
         try:
-            return self._reply(200, {"result": json.loads(done.stdout)})
-        except ValueError:
-            return self._reply(200, {"result": {"raw": done.stdout.strip()}})
+            urllib.request.urlopen(
+                urllib.request.Request(
+                    f"{base}/api/sign", data=body, method="PUT",
+                    headers={"content-type": "application/json"},
+                ),
+                timeout=30,
+            )
+        except Exception as e:
+            say(f"   could not report the result back: {e}")
 
 
 def main():
     p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    p.add_argument("--port", type=int, default=8799)
+    p.add_argument("--dashboard", required=True, help="e.g. http://the-box:3000")
+    p.add_argument("--tenant", required=True, help="which machine you are holding the device for")
+    p.add_argument("--account", required=True, help="wallet-cli session label, e.g. ethereum-1")
     p.add_argument("--wallet-cli", default="wallet-cli")
     args = p.parse_args()
 
@@ -219,17 +234,23 @@ def main():
             "  npm i -g @ledgerhq/wallet-cli"
         )
 
-    print("harness-device-agent — your Ledger, lent to a shell elsewhere")
-    print(f"  listening on 127.0.0.1:{args.port} (loopback only)")
-    print(f"  wallet-cli {found.stdout.strip()[:40]}")
-    print("\n  forward it into an ssh session with:")
-    print(f"    ssh -R {args.port}:127.0.0.1:{args.port} <user>@<box>\n")
-    HTTPServer(("127.0.0.1", args.port), Handler).serve_forever()
+    base = args.dashboard.rstrip("/")
+    say("harness-device-agent — holding a Ledger for " + args.tenant)
+    say(f"  dashboard  {base}")
+    say(f"  account    {args.account}")
+    say(f"  wallet-cli {found.stdout.strip()[:40]}")
+
+    where = account_address(args.account)
+    say(f"  address    {where or 'unknown — will refuse anything that names one'}")
+    say("\n  outbound only: nothing is listening, nothing is forwarded.")
+    say("  waiting for something to sign. ctrl-c to stop.\n")
+
+    poll(base, args.tenant, args.account)
 
 
 if __name__ == "__main__":
     try:
         main()
     except KeyboardInterrupt:
-        print("\nstopped. the device is no longer lent to anything.")
+        print("\nstopped. the device is no longer held for anything.")
         sys.exit(0)
