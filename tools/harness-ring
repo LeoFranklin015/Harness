@@ -1,0 +1,64 @@
+#!/usr/bin/env bash
+# Seal and open secrets under one Tenant's Ledger Key Ring, with wallet-cli.
+#
+#   harness-ring <tenant> encrypt --key <name> [-i FILE] [-o FILE]
+#   harness-ring <tenant> decrypt --key <name> [-i FILE] [-o FILE]
+#
+# wallet-cli expects to have joined the ring itself, over USB, and keeps the
+# member key in the OS keychain. This host joined through the browser relay
+# instead, so the member it holds is handed to wallet-cli the way it looks for
+# it: a session.yaml in a state directory of its own per Tenant, and the member
+# key in the kernel session keyring under the name it searches for. The keyring
+# is created for this one command and dies with it, so the key is never resident
+# anywhere but the Tenant's 0600 file and one short-lived process.
+#
+# Each Tenant is its own ring — its Ledger's — so each gets its own state
+# directory; wallet-cli only knows one ring per directory.
+set -euo pipefail
+
+tenant="${1:?usage: harness-ring <tenant> encrypt|decrypt --key <name> [-i FILE] [-o FILE]}"
+op="${2:?usage: harness-ring <tenant> encrypt|decrypt --key <name> [-i FILE] [-o FILE]}"
+shift
+
+root="${ENROLMENT_DIR:-$HOME/.config/agentauth/enrolments}"
+record="$root/tenants/$tenant.json"
+keyfile="$root/keys/$tenant.key"
+[ -r "$record" ] || { echo "harness-ring: $tenant has not been through the ring" >&2; exit 2; }
+[ -r "$keyfile" ] || { echo "harness-ring: no member key for $tenant" >&2; exit 2; }
+
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cli="${WALLET_CLI:-$here/../web/node_modules/@ledgerhq/wallet-cli/bin/wallet-cli}"
+[ -x "$cli" ] || { echo "harness-ring: wallet-cli not found at $cli" >&2; exit 2; }
+
+# A fresh session keyring for this invocation only.
+if [ -z "${HARNESS_RING_SESSION:-}" ]; then
+    export HARNESS_RING_SESSION=1
+    exec keyctl session - "$0" "$tenant" "$@" 2> >(grep -v '^Joined session keyring' >&2)
+fi
+
+export XDG_STATE_HOME="$root/wallet-cli/$tenant"
+state="$XDG_STATE_HOME/ledger-wallet-cli"
+# The account name wallet-cli derives from its own state directory.
+account="member-private-key-$(printf %s "$state" | sha256sum | cut -c1-16)"
+
+mkdir -p -m 700 "$XDG_STATE_HOME" "$state"
+
+if [ ! -f "$state/session.yaml" ]; then
+    python3 - "$record" > "$state/session.yaml" <<'PY'
+import json, sys
+t = json.load(open(sys.argv[1]))
+print("trustchain:")
+print(f'  rootId: "{t["rootId"]}"')
+print(f'  applicationPath: "{t["applicationPath"]}"')
+print("domains: []")
+PY
+    chmod 600 "$state/session.yaml"
+fi
+
+pubkey=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["memberPubkey"])' "$record")
+payload="$(cat "$keyfile")
+$pubkey"
+keyctl padd user "keyring:${account}@ledger-wallet-cli" @s <<<"$payload" >/dev/null
+unset payload
+
+exec "$cli" ring "$op" "$@"

@@ -8,9 +8,10 @@
 //
 // So the ring seals, and a separate root derives:
 //
-//   the VPS holds an agent root secret, sealed at rest by the ring
-//     (`wallet-cli ring encrypt --key harness-agents`), recoverable on any
-//     machine in the ring and therefore from the Ledger seed
+//   each Tenant has an agent root secret, sealed at rest under that Tenant's
+//     ring with `wallet-cli ring encrypt --key harness-agents` (through
+//     `tools/harness-ring`, which lends wallet-cli the member this host joined
+//     as). Recoverable on any machine in the ring, therefore from the Ledger seed.
 //
 //   each Agent's key is HKDF(root, "harness/agent/<tenant>/<label>")
 //
@@ -21,22 +22,35 @@
 // which is what lets the device sign a Grant ahead of time rather than once per
 // container start.
 
+import { execFileSync } from "node:child_process";
 import { hkdfSync, randomBytes } from "node:crypto";
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
-import { chmodSync } from "node:fs";
+import { chmodSync, existsSync, readFileSync, writeFileSync } from "node:fs";
+import { homedir } from "node:os";
+import path from "node:path";
 import { privateKeyToAccount } from "viem/accounts";
 import type { Hex } from "viem";
 
 const ROOT_PATH = new URL("./.agent-root", import.meta.url);
+const ENROLMENT_DIR =
+  process.env.ENROLMENT_DIR || path.join(homedir(), ".config", "agentauth", "enrolments");
+const RING = new URL("../tools/harness-ring", import.meta.url).pathname;
 
 /**
- * The agent root secret.
+ * The agent root secret for one Tenant.
  *
- * In production this file is the ring's ciphertext and is decrypted on use. Here
- * it is written in the clear on first run, which is why it is gitignored and why
- * this is a development path rather than the design.
+ * A Tenant that has been through the ring has its root sealed at
+ * `roots/<tenant>.enc`, and it is opened here on each use, never written in the
+ * clear. Tenants from before the ring (the scripted demo ones) fall back to the
+ * shared plaintext file, which is why that file is gitignored.
  */
-export function agentRoot(): Buffer {
+export function agentRoot(tenant?: string): Buffer {
+  const sealed = tenant && path.join(ENROLMENT_DIR, "roots", `${tenant}.enc`);
+  if (sealed && existsSync(sealed)) {
+    return execFileSync(RING, [tenant, "decrypt", "--key", "harness-agents"], {
+      input: readFileSync(sealed),
+      stdio: ["pipe", "pipe", "pipe"],
+    });
+  }
   if (!existsSync(ROOT_PATH)) {
     const secret = randomBytes(32);
     writeFileSync(ROOT_PATH, secret.toString("hex"));
@@ -49,7 +63,7 @@ export function agentRoot(): Buffer {
 /** The key for one Agent, and nothing else. */
 export function agentKey(tenant: string, label: string): Hex {
   const info = `harness/agent/${tenant}/${label}`;
-  const bytes = hkdfSync("sha256", agentRoot(), Buffer.alloc(0), info, 32);
+  const bytes = hkdfSync("sha256", agentRoot(tenant), Buffer.alloc(0), info, 32);
   return `0x${Buffer.from(bytes).toString("hex")}` as Hex;
 }
 

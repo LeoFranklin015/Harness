@@ -29,7 +29,7 @@ export async function POST(_request: Request, { params }: Params) {
   openSession(relayId);
 
   // The browser needs the relay id before the exchange starts, so hand it over
-  // in a header and stream the outcome as the body once the flow completes.
+  // first and stream the outcome as the body once the flow completes.
   const credentials = brokerCredentials(enrolment.tenant);
   const work = joinRing(relayId, `${enrolment.tenant}-broker`, credentials)
     .then(({ trustchain, outcome, members }) => {

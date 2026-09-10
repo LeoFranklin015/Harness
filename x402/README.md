@@ -63,9 +63,11 @@ So the ring seals and a separate root derives (`keys.ts`):
 | | |
 |---|---|
 | ring membership | the VPS — the USB-less enrolment |
-| agent root secret | held by the VPS, sealed at rest by the ring, so it survives reboots and is recoverable from the Ledger seed |
+| agent root secret | one per Tenant, held by the VPS as `wallet-cli ring encrypt --key harness-agents` ciphertext under that Tenant's ring; opened only to derive. Survives reboots, recoverable from the Ledger seed, dead once the host is removed from the ring |
 | an Agent's key | `HKDF(root, "harness/agent/<tenant>/<label>")` |
 | the container | gets only its own key, never the root — so it can derive nothing but itself |
+
+wallet-cli expects to have joined the ring itself over USB. `tools/harness-ring` lends it the member this host joined as through the browser relay: a per-Tenant state directory and the member key in a kernel session keyring that lives for one command. You can open the same ciphertext on any laptop in your ring with `wallet-cli ring decrypt --key harness-agents`.
 
 This also settles an ordering problem. Because the VPS holds the root, it can
 compute an Agent's address **before its container exists**, so the device signs

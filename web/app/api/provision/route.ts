@@ -1,6 +1,5 @@
 import { execFile } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
-import { hkdfSync, randomBytes } from "node:crypto";
 import { promisify } from "node:util";
 import {
   createPublicClient,
@@ -12,6 +11,7 @@ import {
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { sepolia } from "viem/chains";
+import { agentKeyFor } from "@/lib/agent-root";
 
 /**
  * The platform's half of making a machine.
@@ -34,7 +34,6 @@ const PLATFORM = (process.env.PLATFORM_REGISTRY ??
 const RESOLVER = (process.env.AGENT_RESOLVER ??
   "0x3735923a7e3CeCdc37F99eDdD8f22df70BB7e93f") as Address;
 const RUNNER_DIR = process.env.RUNNER_DIR ?? "/home/opc/hackathon/runner";
-const AGENT_ROOT = process.env.AGENT_ROOT ?? "/home/opc/hackathon/x402/.agent-root";
 
 const PLATFORM_ABI = [
   {
@@ -86,20 +85,6 @@ function secret(name: string): string {
     if (m && m[1] === name) return m[2]!.trim().replace(/^["']|["']$/g, "");
   }
   throw new Error(`${name} not found`);
-}
-
-/**
- * The Agent's key, from the VPS root.
- *
- * Same derivation as `x402/keys.ts`. The root is sealed by the ring in
- * production; here it is a file. The container gets only the derived key.
- */
-function agentKeyFor(tenant: string, label: string): { pk: Hex; address: Address } {
-  if (!existsSync(AGENT_ROOT)) throw new Error("agent root missing — run x402/keys.ts once");
-  const root = Buffer.from(readFileSync(AGENT_ROOT, "utf8").trim(), "hex");
-  const bytes = hkdfSync("sha256", root, Buffer.alloc(0), `harness/agent/${tenant}/${label}`, 32);
-  const pk = `0x${Buffer.from(bytes).toString("hex")}` as Hex;
-  return { pk, address: privateKeyToAccount(pk).address };
 }
 
 export async function POST(req: Request) {
@@ -213,8 +198,9 @@ export async function POST(req: Request) {
         if (!mesh) throw new Error("the machine never reached the mesh");
         emit({ meshAddress: mesh, step: "On the mesh" });
 
-        // 4. Everything the device now has to sign for. The key is derived
-        //    here and never sent — only its address is.
+        // 4. Everything the device now has to sign for. The key derives from a
+        //    root sealed under this Tenant's ring — the ring step earlier is
+        //    what makes that possible — and only its address leaves this process.
         const agent = agentKeyFor(body.label, body.agent);
         // Who may SSH in. Zero admits nobody: the machine starts with that door
         // shut, and opening it is a later `setHost` — a separate decision, and a
@@ -252,6 +238,3 @@ function hashCode(s: string): number {
   for (const c of s) h = (h * 31 + c.charCodeAt(0)) | 0;
   return h;
 }
-
-// Silence the unused import in environments that tree-shake differently.
-void randomBytes;
