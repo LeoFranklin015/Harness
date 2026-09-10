@@ -163,7 +163,13 @@ export async function finishOnChain(opts: {
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ ...req, device: dev.address }),
   });
-  if (!res.ok || !res.body) throw new Error(`provisioning failed: ${res.status}`);
+  if (!res.ok || !res.body) {
+    // The route answers with a plain-text reason. Throwing only the status
+    // turned "bad label" into "provisioning failed: 400", which tells the
+    // person nothing they can act on.
+    const why = await res.text().catch(() => "");
+    throw new Error(why.trim() ? `the platform refused: ${why.trim()}` : `provisioning failed: ${res.status}`);
+  }
 
   let executor: Address | null = null;
   let ready: {

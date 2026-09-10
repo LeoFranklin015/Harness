@@ -33,23 +33,19 @@ const PART_AT = { tracks: 1, body: 2, shoulders: 3, arms: 4, neck: 5, eyes: 6 } 
 export const STAGES = 6;
 
 /**
- * Where the bolts are. Placed on the seams they would actually hold, so the
- * pattern reads as fastenings rather than as decoration scattered on a
- * drawing.
+ * Where the bolts are. Five, at the joints that actually take a fastener —
+ * a track to the hull, the two arm pivots, the collar. Twelve scattered
+ * across the panels read as texture; five on the seams read as assembly.
  */
 const SCREWS: { x: number; y: number; on: keyof typeof PART_AT }[] = [
-  { x: 52, y: 150, on: "tracks" },
-  { x: 52, y: 206, on: "tracks" },
-  { x: 248, y: 150, on: "tracks" },
-  { x: 248, y: 206, on: "tracks" },
-  { x: 70, y: 202, on: "body" },
-  { x: 230, y: 202, on: "body" },
-  { x: 150, y: 205, on: "body" },
-  { x: 92, y: 128, on: "shoulders" },
-  { x: 208, y: 128, on: "shoulders" },
-  { x: 64, y: 150, on: "arms" },
-  { x: 236, y: 150, on: "arms" },
-  { x: 150, y: 96, on: "neck" },
+  // Where a track is bolted to the hull.
+  { x: 74, y: 170, on: "body" },
+  { x: 226, y: 170, on: "body" },
+  // The arm pivots.
+  { x: 62, y: 150, on: "arms" },
+  { x: 238, y: 150, on: "arms" },
+  // The collar, holding the neck to the shoulder block.
+  { x: 150, y: 106, on: "neck" },
 ];
 
 export type AssemblyStage = 0 | 1 | 2 | 3 | 4 | 5 | 6;

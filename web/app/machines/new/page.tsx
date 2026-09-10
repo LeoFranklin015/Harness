@@ -80,15 +80,19 @@ export default function NewMachine() {
 
   const set = (changes: Partial<ProvisionRequest>) => setForm((f) => ({ ...f, ...changes }));
 
+  // These have to agree with /api/provision exactly. When they did not, a
+  // two-letter name passed here and came back as a bare 400 after the ring
+  // had already been made — the worst possible moment to find out.
   const labelError = useMemo(() => {
     if (!form.label) return null;
     if (!LABEL_OK.test(form.label)) return "Lower case letters, numbers and hyphens.";
+    if (form.label.length < 3) return "At least three characters.";
     if (taken.includes(form.label)) return "You already have a machine with that name.";
     return null;
   }, [form.label, taken]);
 
   const canLeave: Record<StepIndex, boolean> = {
-    0: !!form.label && !labelError && LABEL_OK.test(form.agent),
+    0: !!form.label && !labelError && form.agent.length >= 2 && LABEL_OK.test(form.agent),
     1: Number(form.capUsd) > 0 && Number(form.days) > 0,
     2: form.brain === "none" || form.brainSecret.trim().length > 0,
     3: true,
