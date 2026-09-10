@@ -1,14 +1,20 @@
 "use client";
 
-import { Bento } from "@/components/hero/Bento";
-import { Blob } from "@/components/hero/Blob";
+import { Hero } from "@/components/hero/Hero";
 
-/** The bento on its own, cards already arrived, so it can be reviewed. */
+/**
+ * The landing, with the device wired to nothing.
+ *
+ * Exists so the page can be screenshotted and judged without a Ledger in the
+ * loop — see DESIGN.md for the headless rig.
+ */
 export default function Preview() {
   return (
-    <div className="relative mx-auto max-w-[1320px] px-6 py-16">
-      <Blob />
-      <Bento visible />
-    </div>
+    <Hero
+      onConnect={() => {}}
+      connecting={false}
+      supported
+      status={<p className="text-sm text-neutral-600">Unlock your Ledger and open the Ethereum app.</p>}
+    />
   );
 }

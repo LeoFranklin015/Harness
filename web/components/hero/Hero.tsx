@@ -1,17 +1,15 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import { Bento } from "./Bento";
-import { Blob } from "./Blob";
-import { Wordmark } from "./Wordmark";
+import { Cascade } from "./Cascade";
+import { Cubes } from "./Cubes";
+import { Panels } from "./Panels";
 
 /**
- * The page, as a sequence.
+ * The claim, and the three screens that are the product.
  *
- * The name fills the screen. When it has finished arriving, the page scrolls
- * itself down to three cards and a single way in. Someone who came here to plug
- * in a Ledger can scroll past the name at any moment — the scroll is offered,
- * never enforced, and once they have touched the wheel the page stops steering.
+ * A device asking to be held, a sandbox running, and a shell showing what came
+ * of it — including the moment all of it is taken back. The words only have to
+ * make the claim; the band does the explaining.
  */
 export function Hero({
   onConnect,
@@ -24,84 +22,62 @@ export function Hero({
   status: React.ReactNode;
   supported: boolean;
 }) {
-  const bento = useRef<HTMLElement | null>(null);
-  const [arrived, setArrived] = useState(false);
-  const touched = useRef(false);
-
-  // The moment a person scrolls on their own, the page stops doing it for them.
-  useEffect(() => {
-    const mark = () => {
-      touched.current = true;
-    };
-    window.addEventListener("wheel", mark, { passive: true, once: true });
-    window.addEventListener("touchstart", mark, { passive: true, once: true });
-    window.addEventListener("keydown", mark, { once: true });
-    return () => {
-      window.removeEventListener("wheel", mark);
-      window.removeEventListener("touchstart", mark);
-      window.removeEventListener("keydown", mark);
-    };
-  }, []);
-
-  const onWordmarkDone = useCallback(() => {
-    if (!touched.current) {
-      bento.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-    }
-  }, []);
-
-  // Cards animate in when their section is actually on screen, whichever way
-  // the reader got there.
-  useEffect(() => {
-    const el = bento.current;
-    if (!el) return;
-    const io = new IntersectionObserver(
-      ([e]) => e?.isIntersecting && setArrived(true),
-      { threshold: 0.25 },
-    );
-    io.observe(el);
-    return () => io.disconnect();
-  }, []);
-
   return (
-    <div className="relative">
-      <Blob />
+    <main className="relative min-h-dvh overflow-hidden bg-black">
+      {/* Scenery in the empty corner, at the edge of visible. */}
+      <Cubes className="pointer-events-none absolute -bottom-28 -right-20 hidden w-[440px] lg:block xl:w-[520px]" />
+      <header className="relative z-10 mx-auto flex w-full max-w-[1500px] items-center px-7 py-7 lg:px-10">
+        <div className="flex items-center gap-2.5">
+          <Mark />
+          <span className="text-[14px] font-medium tracking-tight text-neutral-100">Harness</span>
+        </div>
+      </header>
 
-      <Wordmark onDone={onWordmarkDone} />
+      <section className="relative mx-auto w-full max-w-[1500px] px-7 pb-16 lg:min-h-[calc(100dvh-7rem)] lg:px-10 lg:pb-20">
+        <div className="max-w-[34rem] lg:pt-6">
+          <h1 className="text-[clamp(2.6rem,5vw,4.1rem)] font-medium leading-[0.98] tracking-[-0.042em] text-neutral-50">
+            Scope an agent
+            <br />
+            to a container.
+          </h1>
 
-      <section
-        ref={bento}
-        className="relative mx-auto flex min-h-dvh max-w-[1320px] flex-col justify-center gap-10 px-6 py-20 lg:px-10"
-      >
-        <header className="flex flex-wrap items-end justify-between gap-6">
-          <div className="max-w-xl">
-            <p className="text-[10px] uppercase tracking-[0.3em] text-neutral-500">Harness</p>
-            <h2 className="mt-3 text-balance text-3xl font-medium leading-[1.1] tracking-tight text-neutral-50 sm:text-4xl">
-              One tap sets the ceiling.
-            </h2>
-            <p className="mt-4 text-pretty text-[15px] leading-relaxed text-neutral-400">
-              Your agents run unattended inside a limit only your device can raise.
-              Cross it and everything stops — spending, name resolution and shell
-              access — until the same device says otherwise.
-            </p>
+          <p className="mt-7 max-w-[30rem] text-[16px] leading-[1.65] text-neutral-400">
+            One tap on a Ledger gives an agent its own machine, its own name and a
+            spending ceiling. It runs on its own inside them. Revoke the name and
+            the spending, the access and the address stop together.
+          </p>
+
+          <div className="mt-9">
+            <button
+              onClick={onConnect}
+              disabled={connecting || !supported}
+              className="group relative overflow-hidden rounded-full bg-neutral-50 px-6 py-2.5 text-sm font-medium text-neutral-950 transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              <span className="relative z-10">{connecting ? "Connecting…" : "Connect Ledger"}</span>
+              <span className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/60 to-transparent transition-transform duration-700 group-hover:translate-x-full" />
+            </button>
+            <div className="mt-4 min-h-5">{status}</div>
           </div>
-        </header>
+        </div>
 
-        <Bento visible={arrived} />
-
-        <footer className="flex flex-col items-center gap-3 pt-6">
-          <button
-            onClick={onConnect}
-            disabled={connecting || !supported}
-            className="group relative overflow-hidden rounded-full border border-white/15 bg-neutral-100 px-8 py-3.5 text-sm font-medium text-neutral-950 transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            <span className="relative z-10">
-              {connecting ? "Connecting…" : "Connect Ledger to continue"}
-            </span>
-            <span className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/70 to-transparent transition-transform duration-700 group-hover:translate-x-full" />
-          </button>
-          <div className="min-h-5 text-center">{status}</div>
-        </footer>
+        {/* Staggered down a diagonal at desktop; plainly stacked on a phone,
+            where a 1070-pixel frame would not fit. */}
+        {/* All three step up to the right; the device starts beside the button
+            rather than pinned to the page edge. */}
+        <Cascade className="pointer-events-none absolute left-0 top-0 hidden origin-top-left scale-[0.6] lg:block xl:scale-[0.74] 2xl:scale-[0.79]" />
+        <Panels className="mt-14 lg:hidden" />
       </section>
-    </div>
+    </main>
+  );
+}
+
+/** The mark: three tiers, which is the whole hierarchy at eighteen pixels. */
+function Mark() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden>
+      <path d="M9 2.4 L14.6 5.2 L9 8 L3.4 5.2 Z" fill="#f3f4f6" fillOpacity="0.95" />
+      <path d="M9 7.2 L14.6 10 L9 12.8 L3.4 10 Z" fill="#9ca3af" fillOpacity="0.7" />
+      <path d="M9 12 L14.6 14.8 L9 17.6 L3.4 14.8 Z" fill="#6b7280" fillOpacity="0.5" />
+    </svg>
   );
 }
