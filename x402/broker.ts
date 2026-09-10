@@ -404,6 +404,36 @@ async function escalateFor(ip: string, door: string, body: Record<string, unknow
     to.slice(2).toLowerCase().padStart(64, "0") +
     amount.toString(16).padStart(64, "0")) as Hex;
 
+  const what = `send ${usd(amount)} to ${to}${why ? ` — ${why}` : ""}`;
+
+  // The Runner can reach the mesh and this cannot: the broker lives on the
+  // host, and the host is deliberately not on the tailnet. So when somebody
+  // has sshed in from a machine that might be holding a device, the Runner
+  // does the asking and this only prepares what it should ask for.
+  if (body.prepare) {
+    return {
+      prepare: {
+        // Ask wallet-cli for the token transfer rather than handing it raw
+        // calldata. Raw data comes back FeeNotLoaded — nothing estimates gas
+        // for bytes it does not understand — and the device shows hex. Named
+        // this way it estimates properly and the screen says what it is.
+        //
+        // `tUSDC` is what Ledger's asset registry calls this contract on
+        // Sepolia (ethereum_sepolia/erc20/usdc); the ticker is theirs, not
+        // ours, and using it is what makes the lookup succeed.
+        recipient: to,
+        amount: `${dollars} tUSDC`,
+        // Kept so a signer that cannot resolve the token has something to
+        // fall back to, even though it will sign blind.
+        to: USDC,
+        data,
+        expect: owner,
+        what,
+      },
+      usd: dollars,
+    };
+  }
+
   console.log(`  ${name} -> asking the owner to send ${usd(amount)} to ${to}`);
 
   const res = await fetch(`${DASHBOARD}/api/sign`, {
@@ -414,7 +444,7 @@ async function escalateFor(ip: string, door: string, body: Record<string, unknow
       to: USDC,
       data,
       expect: owner,
-      what: `send ${usd(amount)} to ${to}${why ? ` — ${why}` : ""}`,
+      what,
     }),
   });
 
@@ -423,8 +453,98 @@ async function escalateFor(ip: string, door: string, body: Record<string, unknow
     throw Object.assign(new Error(answered.error ?? "the owner did not sign it"), { status: 402 });
   }
 
-  console.log(`  ${name} <- the owner signed ${usd(amount)} to ${to}`);
-  return { paid: usd(amount), to, by: owner, hash: answered.result?.hash ?? null };
+  // "I signed it" is a claim, and this is the one place it can be checked.
+  // Whatever is holding the device is not part of the trusted set — it is
+  // whoever happened to answer the queue — so a payment is a payment when
+  // the chain has it and not when something says so.
+  //
+  // This is not hypothetical. A test double left running answered a real
+  // request with {"ok":true,"hash":"0xstandin"} and the Agent reported the
+  // invoice paid. Nothing had moved. An Agent that cannot tell a signature
+  // from a sentence is worse than one that cannot pay at all.
+  const hash = answered.result?.hash;
+  if (!hash || !/^0x[0-9a-fA-F]{64}$/.test(hash)) {
+    throw Object.assign(
+      new Error("whatever holds the device did not return a transaction; nothing was paid"),
+      { status: 502 },
+    );
+  }
+
+  let receipt;
+  try {
+    receipt = await publicClient.waitForTransactionReceipt({
+      hash: hash as Hex,
+      timeout: 120_000,
+    });
+  } catch {
+    throw Object.assign(
+      new Error(`${hash} is not on chain; nothing was paid`),
+      { status: 502 },
+    );
+  }
+  if (receipt.status !== "success") {
+    throw Object.assign(new Error(`the payment reverted (${hash})`), { status: 502 });
+  }
+
+  console.log(`  ${name} <- the owner signed ${usd(amount)} to ${to} (${hash.slice(0, 10)}…)`);
+  return { paid: usd(amount), to, by: owner, hash };
+}
+
+/**
+ * Checking a signature the Runner obtained for itself.
+ *
+ * When the Runner asks a machine on the mesh directly, the answer comes back
+ * to the Runner and not here — so the claim arrives second-hand. It is still
+ * checked the same way, because "I signed it" is a sentence and a payment is
+ * a transaction. A test double once answered a real request with a hash it
+ * had invented, and the Agent reported an invoice paid that had never moved.
+ */
+async function confirmFor(ip: string, door: string, body: Record<string, unknown>) {
+  const { tenant, agent, network } = await whoIsAsking(ip);
+  const own = await gatewayOf(network);
+  if (own && door !== own) {
+    throw Object.assign(new Error(`${tenant} may only ask at ${own}`), { status: 403 });
+  }
+  const name = await stillLive(tenant, agent);
+
+  const hash = String(body.hash ?? "");
+  if (!/^0x[0-9a-fA-F]{64}$/.test(hash)) {
+    throw Object.assign(new Error("that is not a transaction hash; nothing was paid"), {
+      status: 502,
+    });
+  }
+
+  // Two questions, and only the first has to be answered now. "Was this
+  // broadcast" is knowable immediately and is what separates a signature from
+  // a sentence; "did it succeed" needs a block, which is twelve seconds of
+  // somebody watching a prompt do nothing.
+  try {
+    await publicClient.getTransaction({ hash: hash as Hex });
+  } catch {
+    throw Object.assign(new Error(`${hash} was never broadcast; nothing was paid`), {
+      status: 502,
+    });
+  }
+
+  // Give it a moment to land, but do not make a person wait on it. A payment
+  // that is in the mempool and signed by the owner is a payment; if it
+  // reverts, that is worth saying and not worth blocking for.
+  let mined: "confirmed" | "submitted" = "submitted";
+  try {
+    const receipt = await publicClient.waitForTransactionReceipt({
+      hash: hash as Hex,
+      timeout: 8_000,
+    });
+    if (receipt.status !== "success") {
+      throw Object.assign(new Error(`the payment reverted (${hash})`), { status: 502 });
+    }
+    mined = "confirmed";
+  } catch (err) {
+    if ((err as { status?: number }).status === 502) throw err;
+  }
+
+  console.log(`  ${name} <- ${mined} on chain: ${hash.slice(0, 12)}…`);
+  return { confirmed: true, mined, hash };
 }
 
 /** Refuses unless the chain still says yes, and only for as much as it says. */
@@ -528,7 +648,7 @@ const handler = async (
     res.end(JSON.stringify(body));
   };
   if (req.method !== "POST") return send(404, { error: "not found" });
-  const routes = ["/capability", "/secrets", "/ledger", "/limits", "/ask", "/send", "/escalate"];
+  const routes = ["/capability", "/secrets", "/ledger", "/limits", "/ask", "/send", "/escalate", "/confirm"];
   if (!routes.includes(req.url ?? "")) return send(404, { error: "not found" });
 
   // ::ffff:10.89.0.2 on a dual-stack socket. Taken from the socket, never from
@@ -537,13 +657,14 @@ const handler = async (
   const ip = strip(req.socket.remoteAddress);
   const door = strip(req.socket.localAddress);
 
-  if (req.url === "/ledger" || req.url === "/limits" || req.url === "/ask" || req.url === "/send" || req.url === "/escalate") {
+  if (req.url === "/ledger" || req.url === "/limits" || req.url === "/ask" || req.url === "/send" || req.url === "/escalate" || req.url === "/confirm") {
     try {
       const body =
         req.url === "/limits" ? {} : ((JSON.parse((await text(req)) || "{}")) as Record<string, string>);
       if (req.url === "/ask") return send(200, await askFor(ip, door, body));
       if (req.url === "/send") return send(200, await sendFor(ip, door, body));
       if (req.url === "/escalate") return send(200, await escalateFor(ip, door, body));
+      if (req.url === "/confirm") return send(200, await confirmFor(ip, door, body));
       return send(200, req.url === "/ledger" ? await ledgerFor(ip, door, body) : await limitsFor(ip, door));
     } catch (err) {
       const status = httpStatus(err);

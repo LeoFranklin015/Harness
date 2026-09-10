@@ -23,6 +23,7 @@ set -e
 
 tailscaled --state=/var/lib/tailscale/tailscaled.state \
            --socket=/run/tailscale/tailscaled.sock &
+TAILSCALED_PID=$!
 
 # Shields stay down: they would block *all* inbound, including the ssh this
 # Agent exists to serve. What restricts access is the tailnet ACL — shared users
@@ -104,6 +105,27 @@ chmod 644 /run/harness/place
 
 tailscale --socket=/run/tailscale/tailscaled.sock ip -4 | head -1 > /run/tailscale-ip
 echo "mesh address: $(cat /run/tailscale-ip)"
+
+# Bring tailscaled back if it dies.
+#
+# It has no reason to exit, and it did: an agent filled the cgroup and the
+# kernel chose tailscaled to kill, because sshd was PID 1 and the allocator
+# was the thing worth keeping. The result is the worst kind of broken — sshd
+# still listening, the container still "up", and the address it answers on no
+# longer existing. Anyone connecting just waits.
+while :; do
+    if ! kill -0 "$TAILSCALED_PID" 2>/dev/null; then
+        echo "tailscaled died; bringing the mesh back" >&2
+        tailscaled --state=/var/lib/tailscale/tailscaled.state \
+                   --socket=/run/tailscale/tailscaled.sock &
+        TAILSCALED_PID=$!
+        sleep 5
+        tailscale --socket=/run/tailscale/tailscaled.sock up \
+            --authkey="${TS_AUTHKEY}" --hostname="${TS_HOSTNAME}" \
+            --shields-up=false --accept-dns=false >/dev/null 2>&1 || true
+    fi
+    sleep 15
+done &
 
 # Keep a path open to every peer, so that arriving is enough to be let in.
 #

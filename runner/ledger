@@ -45,6 +45,27 @@ if not BROKER.startswith(("http://", "https://")):
     BROKER = f"http://{BROKER}"
 
 
+def post_json(url, payload, timeout):
+    """POST somewhere that is not the broker.
+
+    A failure carries its reason in the body, and throwing that away leaves
+    "HTTP Error 502" — which says something answered and nothing about why,
+    and sends a person looking in the wrong place.
+    """
+    req = urllib.request.Request(
+        url, data=json.dumps(payload).encode(),
+        headers={"content-type": "application/json"},
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            return json.loads(r.read())
+    except urllib.error.HTTPError as e:
+        try:
+            raise RuntimeError(json.loads(e.read()).get("error") or f"HTTP {e.code}")
+        except (ValueError, AttributeError):
+            raise RuntimeError(f"HTTP {e.code}")
+
+
 def ask(path, payload=None):
     data = json.dumps(payload or {}).encode()
     req = urllib.request.Request(
@@ -92,13 +113,38 @@ def send_to(address, usd, why=""):
         # shortfall. Put the payment itself to whoever holds the device and
         # wait: they see it, the device shows it, they press the button or
         # they do not. Nothing here can make them.
-        print("  putting it to the owner's device…", file=sys.stderr)
-        try:
-            got = ask("/escalate", {"to": address, "usd": usd, "why": why})
-        except SystemExit:
-            print("  not signed. Nothing moved. Do not retry — ask a person.",
-                  file=sys.stderr)
-            raise SystemExit(2)
+        # Whoever sshed in is on the mesh, and so are we — the broker is not,
+        # because the host is deliberately off the tailnet. So the Runner does
+        # the asking. The broker only says what to ask for, and checks the
+        # answer against the chain afterwards.
+        visitor = (os.environ.get("SSH_CLIENT") or "").split(" ")[0]
+        got = None
+
+        if visitor:
+            print(f"  asking {visitor} — the machine you sshed in from…", file=sys.stderr)
+            try:
+                plan = ask("/escalate", {"to": address, "usd": usd, "why": why,
+                                         "prepare": True})["prepare"]
+                signed = post_json(f"http://{visitor}:8799/sign", plan, 360)
+                hash_ = (signed.get("result") or {}).get("hash")
+                # Second-hand, so checked: a hash is a claim until the chain
+                # has it.
+                ask("/confirm", {"hash": hash_})
+                got = {"paid": f"${usd:g}", "to": address, "by": visitor, "hash": hash_}
+            except SystemExit:
+                raise
+            except Exception as e:
+                print(f"  ({visitor} did not sign it: {e})", file=sys.stderr)
+
+        if got is None:
+            print("  putting it to the owner's screen instead…", file=sys.stderr)
+            try:
+                got = ask("/escalate", {"to": address, "usd": usd, "why": why})
+            except SystemExit:
+                print("  not signed. Nothing moved. Do not retry — ask a person.",
+                      file=sys.stderr)
+                raise SystemExit(2)
+
         print(f"the owner signed it: {got['paid']} to {got['to']}")
         if got.get("hash"):
             print(f"  {got['hash']}")

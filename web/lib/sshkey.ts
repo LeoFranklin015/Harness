@@ -118,6 +118,8 @@ export function setupScript(
   host: string,
   machine: string,
   address: string | null,
+  /** Where the dashboard is, so ssh can fetch the device agent on connect. */
+  origin: string,
 ) {
   const file = keyFilename(machine);
   const blob = Buffer.from(`${key}\n`, "utf8").toString("base64");
@@ -160,13 +162,76 @@ chmod 600 ~/.ssh/${file}
 
 # Appended, never overwritten, and only once: an ~/.ssh/config is something
 # people spend years curating.
+# The agent, installed once. Fetching it on every connection would put a
+# network call in front of every ssh, and ssh waits for that.
+mkdir -p ~/.harness
+if curl -fsSL --max-time 20 ${origin}/api/device-agent -o ~/.harness/device-agent; then
+    chmod +x ~/.harness/device-agent
+else
+    echo "could not fetch the device agent; ssh will still work, it just will not hold your Ledger" >&2
+fi
+
+touch ~/.ssh/config && chmod 600 ~/.ssh/config
+
 if ! grep -q '^Host ${host}$' ~/.ssh/config 2>/dev/null; then
     printf '\\nHost ${host}\\n${address ? `  HostName ${address}\\n` : ""}  User ${user}\\n  IdentityFile ~/.ssh/${file}\\n  IdentitiesOnly yes\\n' >> ~/.ssh/config
 fi
 
+# Hold the Ledger for this agent whenever you connect to it.
+#
+# Something on the machine the device is plugged into has to speak USB to it,
+# and that machine is this one. Rather than making a person remember a second
+# command every time, ssh starts it: LocalCommand runs here, on connect, and a
+# second copy exits at once because the first still holds the port.
+#
+# Worth knowing this is here — it fetches and runs a script from the dashboard
+# each time you ssh to this host. Remove the two lines from ~/.ssh/config to
+# stop it; the agent can always be started by hand.
+#
+# Added to a block that may already exist, not only to a new one: an invite is
+# often somebody's second, and skipping the upgrade would leave this quietly
+# not working with nothing to notice.
+# Values through the environment, not through quoting. The two lines contain
+# quotes, a pipe and an ampersand, and threading those through a template, a
+# shell and awk produced something none of the three agreed about.
+HARNESS_HOST='${host}' HARNESS_AGENT_URL='${origin}/api/device-agent' python3 - <<'HARNESS_PY'
+import os
+
+path = os.path.expanduser("~/.ssh/config")
+host = os.environ["HARNESS_HOST"]
+url = os.environ["HARNESS_AGENT_URL"]
+
+with open(path) as f:
+    lines = f.read().split("\\n")
+
+if not any("harness-device" in l for l in lines):
+    out = []
+    for line in lines:
+        out.append(line)
+        if line.strip() == "Host " + host:
+            out.append("  PermitLocalCommand yes")
+            # Runs the copy installed at setup, and fetches nothing. ssh
+            # waits for LocalCommand, so anything in here that can block is a
+            # connection that hangs: a curl with no timeout against a
+            # dashboard that is momentarily unreachable will sit there, and
+            # the person is left staring at an ssh that never opens.
+            #
+            # Detached besides, because a backgrounded job still holding the
+            # session's stdout is enough on its own to make ssh wait.
+            out.append(
+                '  LocalCommand sh -c "nohup python3 ~/.harness/device-agent'
+                + ' --listen </dev/null >>~/.harness/device.log 2>&1 &"'
+            )
+    with open(path, "w") as f:
+        f.write("\\n".join(out))
+    os.chmod(path, 0o600)
+HARNESS_PY
+
 echo
 echo "done. from now on:"
 echo "  ssh ${host}"
+echo
+echo "Your Ledger is held automatically for as long as that session is open."
 `;
 }
 

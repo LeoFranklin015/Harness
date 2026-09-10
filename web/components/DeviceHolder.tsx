@@ -20,6 +20,12 @@ import type { Session } from "@/lib/session";
  * It polls rather than listens, so nothing about the page has to be reachable.
  * The device still shows every transaction and still needs the button pressed;
  * this only decides which screen the request appears on.
+ *
+ * Holding starts on a click, and has to. A page refresh remembers the address
+ * and not the open device, and WebHID will not reopen one from a timer — a
+ * browser only hands over a device in response to something a person did. The
+ * first version tried anyway, failed silently in the background, and answered
+ * a real request with a refusal nobody could see the reason for.
  */
 
 type Job = {
@@ -44,13 +50,15 @@ export function DeviceHolder({
 }) {
   const [busy, setBusy] = useState<Job | null>(null);
   const [last, setLast] = useState<string | null>(null);
+  const [holding, setHolding] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   // Ref rather than state: the polling loop closes over this once and must
   // see the current list, not the list as it was when the loop started.
   const watching = useRef(tenants);
   watching.current = tenants;
 
   useEffect(() => {
-    if (tenants.length === 0) return;
+    if (tenants.length === 0 || !holding) return;
     let stopped = false;
 
     async function answer(job: Job) {
@@ -68,8 +76,12 @@ export function DeviceHolder({
         body = { id: job.id, ok: true, result: { hash: receipt?.transactionHash } };
         setLast(`signed — ${job.what}`);
       } catch (err) {
-        body = { id: job.id, ok: false, error: (err as Error).message };
-        setLast(`refused — ${(err as Error).message}`);
+        // Say why, always. A refusal with no reason is what sent somebody
+        // looking at the chain for a payment that had never been attempted.
+        const why = (err as Error)?.message || String(err) || "the device did not sign it";
+        body = { id: job.id, ok: false, error: why };
+        setLast(`refused — ${why}`);
+        setError(why);
       } finally {
         setBusy(null);
       }
@@ -102,9 +114,39 @@ export function DeviceHolder({
     return () => {
       stopped = true;
     };
-  }, [tenants.join(","), authority]);
+  }, [tenants.join(","), authority, holding]);
 
   if (tenants.length === 0) return null;
+
+  async function startHolding() {
+    setError(null);
+    try {
+      // The click is the point: this is the gesture that lets the browser
+      // hand over the device, and everything afterwards reuses the handle.
+      await session.device(() => {});
+      setHolding(true);
+    } catch (err) {
+      setError((err as Error)?.message || "could not open the Ledger");
+    }
+  }
+
+  if (!holding) {
+    return (
+      <div className="mt-6">
+        <button
+          onClick={startHolding}
+          className="rounded-full border border-neutral-800 px-4 py-1.5 text-xs text-neutral-300 transition hover:border-neutral-700 hover:bg-neutral-900/60"
+        >
+          Hold my Ledger for {tenants.length === 1 ? tenants[0] : `${tenants.length} machines`}
+        </button>
+        <p className="mt-2 text-[11px] leading-relaxed text-neutral-600">
+          Lets an agent put a payment in front of this device when it runs out
+          of ceiling. Nothing signs without you.
+        </p>
+        {error && <p className="mt-2 text-[11px] text-amber-400/90">{error}</p>}
+      </div>
+    );
+  }
 
   return (
     <div className="mt-6 flex items-start gap-2.5 text-[11px] leading-relaxed text-neutral-600">
@@ -125,7 +167,9 @@ export function DeviceHolder({
             and on the device.
           </>
         )}
-        {last && !busy && <span className="block text-neutral-700">{last}</span>}
+        {last && !busy && (
+          <span className={`block ${error ? "text-amber-400/90" : "text-neutral-700"}`}>{last}</span>
+        )}
       </p>
     </div>
   );

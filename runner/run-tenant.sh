@@ -29,7 +29,12 @@ agent="${2:-runner}"
 if [ -z "${TS_AUTHKEY:-}" ] && [ -r /home/opc/hackathon/contracts/.env ]; then
     TS_AUTHKEY=$(sed -n 's/^\s*\(export \)\?TS_AUTHKEY=//p' /home/opc/hackathon/contracts/.env | tr -d "\"'" | head -1)
 fi
-mem="${MEM:-384m}"   # tailscaled wants ~50MB of its own
+# 384m was sized for a python agent and a tailscaled. A Runner now carries
+# Claude Code or Codex, which are Node processes that want several hundred MB
+# on their own — and when the cgroup filled, the kernel killed tailscaled
+# rather than the thing allocating. sshd survived, so the machine looked
+# healthy while its mesh address had quietly gone, and ssh simply hung.
+mem="${MEM:-1536m}"
 cpus="${CPUS:-0.5}"
 
 # sshd needs exactly four capabilities: bind port 22, chroot for privilege
