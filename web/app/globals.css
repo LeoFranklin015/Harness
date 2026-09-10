@@ -96,34 +96,23 @@ body {
     0 34px 70px -18px rgba(0, 0, 0, 0.9);
 }
 
-/* --- the machine in an occupied slot ------------------------------------ */
+/* --- the gear train in an occupied slot --------------------------------- */
 
 /*
- * Turning, and breathing.
- *
- * `rotate` alone rather than a transform shorthand: the group it runs on is
- * already carrying the projection's squash as a `transform` attribute, and a
- * CSS `transform` would replace that rather than compose with it — the ring
- * would stand up on its edge.
+ * `rotate` rather than a `transform`: each gear already carries a static
+ * `transform` for its meshing offset, and a CSS transform would replace that
+ * attribute rather than compose with it — the teeth would fall out of mesh.
  */
-@keyframes machine-spin {
+@keyframes gear-turn {
   from { rotate: 0deg; }
   to   { rotate: 360deg; }
 }
-.machine-spin {
-  animation: machine-spin linear infinite;
+.gear-turn {
+  animation: gear-turn linear infinite;
   transform-origin: center;
-}
-
-@keyframes machine-core {
-  0%, 100% { opacity: 0.35; }
-  50%      { opacity: 0.85; }
-}
-.machine-core {
-  animation: machine-core 3.4s ease-in-out infinite;
-  transform-origin: center;
+  transform-box: fill-box;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .machine-spin, .machine-core { animation: none; }
+  .gear-turn { animation: none; }
 }
