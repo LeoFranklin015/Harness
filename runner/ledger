@@ -80,7 +80,12 @@ def ask(path, payload=None):
         except Exception:
             why = f"HTTP {e.code}"
         print(f"ledger: {why}", file=sys.stderr)
-        raise SystemExit(2)
+        # The status travels with the exit: the caller has to tell "short of
+        # headroom", which is worth putting to a person, from every other
+        # refusal, which is not.
+        stop = SystemExit(2)
+        stop.status = e.code
+        raise stop
     except urllib.error.URLError as e:
         print(f"ledger: cannot reach the broker at {BROKER}: {e.reason}", file=sys.stderr)
         raise SystemExit(3)
@@ -108,6 +113,12 @@ def send_to(address, usd, why=""):
         d = ask("/send", {"to": address, "usd": usd})
     except SystemExit as stop:
         if stop.code != 2:
+            raise
+        # Only a shortfall goes to a person. A revoked Agent is not short of
+        # headroom, it has no authority at all — and an Agent the chain has
+        # cut off has no business putting anything on somebody's screen. The
+        # reason is already printed; stop on it.
+        if getattr(stop, "status", None) != 402:
             raise
         # ask() has already printed the broker's reason, which names the
         # shortfall. Put the payment itself to whoever holds the device and
