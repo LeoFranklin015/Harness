@@ -38,6 +38,17 @@ const RIM = "#0C0E11";
 /** Rung spacing on the tracks. The scroll distance must match it exactly. */
 const RUNG = 9;
 
+/**
+ * What it has just done, one word at a time.
+ *
+ * Only things this product actually does — an agent here buys resources over
+ * x402, pays out USDC, escalates past its ceiling and gets a signature back.
+ * "swapped" and "sold" would be nice words and neither is true yet.
+ */
+const DOING = ["purchased", "paid", "asked", "signed"];
+/** Seconds each word holds. The cycle is this times the number of words. */
+const WORD = 2;
+
 export function Agent({
   state,
   awaiting = false,
@@ -141,6 +152,46 @@ export function Agent({
         <g className="walle-origin" style={run("walle-crane", 3.6)}>
           <rect x={140} y={48} width={20} height={62} rx={2} fill={YELLOW} stroke={RIM} strokeWidth={3} />
           <rect x={133} y={86} width={34} height={18} rx={2} fill={TEAL} stroke={RIM} strokeWidth={3} />
+
+          {/* One word at a time, above the head. Not decoration: it is the
+              only thing on the card that says what the machine is doing
+              rather than that it is doing something. */}
+          {state === "live" && (
+            <g style={{ animation: "walle-bubble 3.5s ease-in-out infinite" }}>
+              {/* A visible outline: the fill is nearly the card's own colour,
+                  so without one the bubble is a floating word. Pulled left and
+                  down until the tail actually lands on the pod it comes
+                  from. */}
+              <path
+                d="M 200 12 H 268 A 7 7 0 0 1 275 19 V 37 A 7 7 0 0 1 268 44 H 218 L 205 56 L 208 44 H 200 A 7 7 0 0 1 193 37 V 19 A 7 7 0 0 1 200 12 Z"
+                fill="#171B21"
+                stroke="#5A626C"
+                strokeWidth={2.5}
+                strokeLinejoin="round"
+              />
+              {DOING.map((word, i) => (
+                <text
+                  key={word}
+                  x={234}
+                  y={28}
+                  textAnchor="middle"
+                  dominantBaseline="central"
+                  fontSize={11}
+                  fontFamily="var(--font-mono), monospace"
+                  letterSpacing={0.6}
+                  fill={YELLOW_LIT}
+                  // Negative delays put each word in its own slice of one
+                  // shared cycle, so they can never overlap or drift apart.
+                  style={{
+                    animation: `walle-word ${DOING.length * WORD}s ease-out ${-i * WORD}s infinite`,
+                    opacity: 0,
+                  }}
+                >
+                  {word}
+                </text>
+              ))}
+            </g>
+          )}
 
           <Eye uid={uid} side="l" cx={112} cy={54} base={-12} style={run("walle-tilt-l", 4.2)} />
           <Eye uid={uid} side="r" cx={188} cy={54} base={12} style={run("walle-tilt-r", 4.2, 0.6)} />
