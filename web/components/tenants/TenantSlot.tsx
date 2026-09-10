@@ -32,14 +32,24 @@ export function TenantSlot({
   onAdd,
   onContinue,
   onRevoke,
+  onAuthorise,
 }: {
   tenant: Tenant | null;
   onAdd: () => void;
   onContinue: (t: Tenant) => void;
   onRevoke: (t: Tenant) => void;
+  /** Puts a visitor's fingerprint on chain. One signature on the device. */
+  onAuthorise: (t: Tenant, operator: `0x${string}`) => Promise<void>;
 }) {
   if (!tenant) return <EmptySlot onAdd={onAdd} />;
-  return <FilledSlot tenant={tenant} onContinue={onContinue} onRevoke={onRevoke} />;
+  return (
+    <FilledSlot
+      tenant={tenant}
+      onContinue={onContinue}
+      onRevoke={onRevoke}
+      onAuthorise={onAuthorise}
+    />
+  );
 }
 
 function EmptySlot({ onAdd }: { onAdd: () => void }) {
@@ -62,10 +72,12 @@ function FilledSlot({
   tenant,
   onContinue,
   onRevoke,
+  onAuthorise,
 }: {
   tenant: Tenant;
   onContinue: (t: Tenant) => void;
   onRevoke: (t: Tenant) => void;
+  onAuthorise: (t: Tenant, operator: `0x${string}`) => Promise<void>;
 }) {
   const provisioning = tenant.status === "provisioning";
   const revoked = tenant.status === "revoked";
@@ -126,7 +138,11 @@ function FilledSlot({
           </button>
           {/* The machine has no public address, so reaching it is a separate,
               deliberate act — and one that expires on its own. */}
-          <MeshInvite machine={tenant.label} meshAddress={tenant.meshAddress} />
+          <MeshInvite
+            machine={tenant.label}
+            meshAddress={tenant.meshAddress}
+            onAuthorise={(operator) => onAuthorise(tenant, operator)}
+          />
         </>
       )}
 

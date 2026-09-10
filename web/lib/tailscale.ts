@@ -101,7 +101,10 @@ export async function mintInvite(forMachine: string): Promise<Invite> {
     },
     cache: "no-store",
     body: JSON.stringify({
-      description: `harness visitor · ${forMachine}`,
+      // ASCII only, and no punctuation beyond a dash: Tailscale rejects a
+      // description with "invalid characters" and a middle dot is enough to
+      // trigger it.
+      description: `harness visitor - ${forMachine}`.replace(/[^\x20-\x7E]/g, ""),
       expirySeconds: INVITE_TTL_SECONDS,
       capabilities: {
         devices: {
@@ -117,15 +120,20 @@ export async function mintInvite(forMachine: string): Promise<Invite> {
   });
 
   if (!res.ok) {
-    const detail = await res.text().catch(() => "");
-    // The one failure worth naming precisely, because it is the one people hit:
-    // an OAuth client can only mint keys for tags it is listed as owning.
-    if (/tag/i.test(detail)) {
+    // Tailscale's own message is specific and worth passing through — it is the
+    // difference between "would not mint a key (400)" and being told which
+    // field was wrong. Swallowing it cost an hour once.
+    const said = await res
+      .json()
+      .then((b: { message?: string }) => b?.message)
+      .catch(() => undefined);
+
+    if (said && /tag/i.test(said)) {
       throw new Error(
-        "Tailscale refused the tag. Add this OAuth client to tagOwners for tag:visitor in the ACL.",
+        `Tailscale refused the tag: ${said}. The OAuth client must be created with tag:visitor, and tag:visitor must exist in tagOwners.`,
       );
     }
-    throw new Error(`Tailscale would not mint a key (${res.status}).`);
+    throw new Error(said ? `Tailscale refused: ${said}` : `Tailscale would not mint a key (${res.status}).`);
   }
 
   const { key, expires } = (await res.json()) as { key?: string; expires?: string };
@@ -139,16 +147,44 @@ export async function mintInvite(forMachine: string): Promise<Invite> {
   };
 }
 
+export type Platform = "linux" | "macos" | "windows";
+
 /**
  * What to run, for somebody who has never used this before.
  *
- * Two commands rather than one clever pipeline: the installer needs to be read
- * before it is run, and a person pasting a `curl | sh` they have not looked at
- * is exactly the habit this whole product argues against.
+ * Per platform, because the differences are exactly the ones that stop a person
+ * cold: macOS installs from the App Store, has no `sudo` for this, and often
+ * does not put the CLI on `PATH` at all. Handing a Mac user a Linux command is
+ * how an invite becomes a support conversation.
+ *
+ * Two commands rather than one clever pipeline: an installer is worth reading
+ * before it is run, and pasting a `curl | sh` you have not looked at is the
+ * habit this whole product argues against.
  */
-export function joinCommands(key: string) {
+export function joinCommands(key: string, platform: Platform = "linux") {
+  // `--reset` is not optional in practice. Anyone who has used Tailscale before
+  // has a non-default flag set somewhere, and `up` refuses to change settings
+  // without being told every one of them — it errors out before it ever reads
+  // the key, and then the GUI opens a browser login that joins them as
+  // themselves, untagged, which is the opposite of a visitor. Resetting costs
+  // nothing here: joining this tailnet already replaces whatever they were on,
+  // and the node is ephemeral either way.
+  if (platform === "macos") {
+    return {
+      install: "brew install --cask tailscale",
+      // The App Store build keeps its CLI inside the bundle and the standalone
+      // build only symlinks it if asked, so the full path is the safe one.
+      join: `/Applications/Tailscale.app/Contents/MacOS/Tailscale up --reset --auth-key=${key}`,
+    };
+  }
+  if (platform === "windows") {
+    return {
+      install: "winget install --id tailscale.tailscale",
+      join: `tailscale up --reset --auth-key=${key}`,
+    };
+  }
   return {
     install: "curl -fsSL https://tailscale.com/install.sh | sh",
-    join: `sudo tailscale up --auth-key=${key}`,
+    join: `sudo tailscale up --reset --auth-key=${key}`,
   };
 }

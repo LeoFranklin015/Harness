@@ -28,7 +28,52 @@ tailscale --socket=/run/tailscale/tailscaled.sock up \
     --shields-up=false \
     --accept-dns=false
 
+# Userspace networking gets us an address on the mesh, but not an open port.
+# Without a TUN device the kernel has no route for 100.x, so tailscaled runs a
+# netstack instead — and a netstack will not hand an inbound connection to a
+# local process unless it is told which port to forward. sshd is listening on
+# 0.0.0.0:22 and would otherwise never see a packet: the connection just hangs,
+# which looks exactly like a firewall and is not one.
+#
+# The alternative is a real TUN, which costs NET_ADMIN. This costs one line.
+tailscale --socket=/run/tailscale/tailscaled.sock serve --bg --tcp 22 tcp://localhost:22
+
 tailscale --socket=/run/tailscale/tailscaled.sock ip -4 | head -1 > /run/tailscale-ip
 echo "mesh address: $(cat /run/tailscale-ip)"
+
+# Keep a path open to every peer, so that arriving is enough to be let in.
+#
+# This machine is behind NAT and never dials out, so nothing here ever
+# establishes a path on its own. When a visitor knocks, tailscaled has no
+# cached endpoint for them and no DERP home either — the netmap only carries
+# that once the two have talked — and a WireGuard handshake from a NAT'd source
+# cannot be answered from nothing:
+#
+#     wg: [peer] - Failed to send handshake response: no UDP or DERP addr
+#
+# The visitor sees a connection that hangs and then times out, which is
+# indistinguishable from a closed port and is the opposite of what happened:
+# the packets arrived, and there was no way to reply. Discovery would have
+# fixed it, but discovery is what had not run yet.
+#
+# So this side initiates, periodically, to everyone. A ping is enough to learn
+# a peer's endpoints and hold the NAT mapping open, which turns "reachable if
+# you retry for a while" into "reachable". It costs one UDP packet per peer per
+# interval and nothing else.
+# Plain `status` rather than `--json`: it puts this node on the first line and
+# one peer per line after it, so the peers are a column. The JSON spreads each
+# address over three lines, which needs a parser this image does not have.
+peers() {
+    tailscale --socket=/run/tailscale/tailscaled.sock status 2>/dev/null \
+        | awk 'NR > 1 && $1 ~ /^100\./ { print $1 }'
+}
+
+while :; do
+    for ip in $(peers); do
+        tailscale --socket=/run/tailscale/tailscaled.sock ping -c 1 --timeout 2s "$ip" >/dev/null 2>&1 &
+    done
+    wait
+    sleep 20
+done &
 
 exec /usr/sbin/sshd -D -e

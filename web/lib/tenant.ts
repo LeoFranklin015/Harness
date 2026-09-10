@@ -26,6 +26,20 @@ export const REGISTRY_ABI = [
   },
   {
     type: "function",
+    name: "selfEndpoint",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "bytes4" }],
+  },
+  {
+    type: "function",
+    name: "selfHostKey",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "bytes32" }],
+  },
+  {
+    type: "function",
     name: "setHost",
     stateMutability: "nonpayable",
     inputs: [
@@ -207,4 +221,23 @@ export const calldata = {
 export function agentIdFrom(logs: Log[]): Hex | null {
   const [ev] = parseEventLogs({ abi: REGISTRY_ABI, eventName: "Granted", logs });
   return (ev?.args.agentId as Hex) ?? null;
+}
+
+/**
+ * The host record as it stands, so opening a door does not move the machine.
+ *
+ * `setHost` writes the address, the host key and the operator together, on
+ * purpose — they are one fact about one machine. That means authorising a
+ * visitor has to resend the two that are not changing, read from the chain
+ * rather than remembered, so a stale page cannot quietly relocate a Tenant.
+ */
+export async function readHost(
+  client: { readContract: (a: never) => Promise<unknown> },
+  registry: Address,
+): Promise<{ ipv4: Hex; hostKey: Hex }> {
+  const call = (functionName: "selfEndpoint" | "selfHostKey") =>
+    client.readContract({ address: registry, abi: REGISTRY_ABI, functionName } as never);
+
+  const [ipv4, hostKey] = await Promise.all([call("selfEndpoint"), call("selfHostKey")]);
+  return { ipv4: ipv4 as Hex, hostKey: hostKey as Hex };
 }

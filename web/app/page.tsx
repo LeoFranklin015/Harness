@@ -20,7 +20,10 @@ import {
   type Authority,
 } from "@/lib/session";
 import { explain } from "@/lib/explain";
-import { agentIdFrom, allowanceFor, calldata, firstGrant, USDC } from "@/lib/tenant";
+import { agentIdFrom, allowanceFor, calldata, firstGrant, readHost, USDC } from "@/lib/tenant";
+import { sepoliaTransport } from "@/lib/rpc";
+import { createPublicClient } from "viem";
+import { sepolia } from "viem/chains";
 
 /**
  * Two pages, one gate.
@@ -391,6 +394,40 @@ function Machines({
   }
 
   /** One signature on the device. Everything that answers to it stops. */
+  /**
+   * Opens the door for one visitor.
+   *
+   * `setHost` writes where the machine is, how to recognise it, and who may log
+   * in — all three together, because they are one fact about one machine. Only
+   * the operator is changing here, so the other two are read back from the
+   * chain rather than remembered: a page left open since before the machine
+   * last moved must not be able to relocate it as a side effect of granting
+   * someone a shell.
+   *
+   * There is exactly one operator at a time. Authorising the next visitor
+   * retires the last one by overwriting them, which is why there is no list to
+   * prune and no key anyone has to remember to remove.
+   */
+  async function authorise(tenant: Tenant, operator: Hex) {
+    const i = tenants.findIndex((t) => t?.label === tenant.label);
+    setError(null);
+    try {
+      const pub = createPublicClient({ chain: sepolia, transport: sepoliaTransport() });
+      const { ipv4, hostKey } = await readHost(pub as never, tenant.registry);
+
+      const dev = await session.device((s) => narrate(i, s));
+      await dev.send(
+        { to: tenant.registry, data: calldata.setHost(ipv4, hostKey, operator) },
+        (s) => narrate(i, s),
+      );
+    } catch (err) {
+      // Thrown on, not swallowed: the invite must not present itself as usable
+      // when the door never opened.
+      fail(i, err, tenant);
+      throw err;
+    }
+  }
+
   async function revoke(tenant: Tenant) {
     const i = tenants.findIndex((t) => t?.label === tenant.label);
     if (!tenant.agentId) return;
@@ -458,6 +495,7 @@ function Machines({
             onAdd={() => setAdding(i)}
             onContinue={continueProvision}
             onRevoke={revoke}
+            onAuthorise={authorise}
           />
         ))}
       </div>

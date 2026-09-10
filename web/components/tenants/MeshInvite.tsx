@@ -1,34 +1,54 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import type { Hex } from "viem";
 
 /**
- * One button, and then two commands to paste.
+ * One button, one tap on the Ledger, and then commands to paste.
  *
  * An agent's machine has no public address, so letting somebody reach it has to
- * be a deliberate act. This is that act, reduced to a click: the host mints a
- * single-use, ephemeral, minutes-long key tagged `tag:visitor`, and the visitor
- * runs one command on whatever machine they are sitting at.
+ * be a deliberate act. This is that act, and it is deliberately two permissions
+ * rather than one:
  *
- * The key is shown once and held only in this component's state. It is never
- * logged and never written down, because it does not need to be — losing one
- * costs nothing and the one you lost expires by itself.
+ *   the mesh   this host mints a single-use, ephemeral, minutes-long key tagged
+ *              `tag:visitor`, and can do that on its own
+ *   the door   the visitor's fingerprint goes on chain under `setHost`, which
+ *              only the Tenant's own device can sign
  *
- * Being on the mesh is deliberately not access. The tag can address port 22 on
- * an agent and nothing else, and then sshd asks the chain whether the key being
- * offered may log in at all.
+ * So the server can put a person on the network and still not let them in. The
+ * door needs the hardware, every time, and the same key that opened it closes
+ * it again on revoke.
+ *
+ * The visitor never supplies a key of their own. Asking someone to paste their
+ * public key is where a person stops — and their everyday key is more than a
+ * ten-minute visit is worth. The visit gets a keypair that exists for the
+ * visit, handed over once and kept nowhere.
  */
 
 type Invite = {
   key: string;
   expiresIn: number;
   commands: { install: string; join: string };
+  operator: Hex;
+  fingerprint: string;
+  privateKey: string;
+  keyFilename: string;
+  login: string | null;
 };
 
-export function MeshInvite({ machine, meshAddress }: { machine: string; meshAddress: string | null }) {
+export function MeshInvite({
+  machine,
+  meshAddress,
+  onAuthorise,
+}: {
+  machine: string;
+  meshAddress: string | null;
+  /** Puts the fingerprint on chain. Resolves once the device has signed. */
+  onAuthorise: (operator: Hex) => Promise<void>;
+}) {
   const [available, setAvailable] = useState<boolean | null>(null);
   const [invite, setInvite] = useState<Invite | null>(null);
-  const [busy, setBusy] = useState(false);
+  const [phase, setPhase] = useState<"idle" | "minting" | "signing" | "open">("idle");
   const [error, setError] = useState<string | null>(null);
   const [left, setLeft] = useState(0);
 
@@ -55,35 +75,47 @@ export function MeshInvite({ machine, meshAddress }: { machine: string; meshAddr
   }, [invite]);
 
   async function request() {
-    setBusy(true);
+    setPhase("minting");
     setError(null);
+    setInvite(null);
     try {
       const res = await fetch("/api/mesh", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ machine }),
+        // The visitor's own browser is the only thing that knows what they are
+        // sitting at, so it says so rather than the page guessing.
+        body: JSON.stringify({ machine, platform: thisPlatform(), meshAddress, user: "runner" }),
       });
       const body = await res.json();
       if (!res.ok) throw new Error(body.error ?? `could not mint an invite (${res.status})`);
-      setInvite(body as Invite);
+
+      const minted = body as Invite;
+      setInvite(minted);
+
+      // Nothing is granted until this lands. Keeping the key on screen only
+      // after the signature means a half-finished invite cannot be mistaken
+      // for a working one.
+      setPhase("signing");
+      await onAuthorise(minted.operator);
+      setPhase("open");
     } catch (err) {
       setError((err as Error).message);
-    } finally {
-      setBusy(false);
+      setPhase("idle");
+      setInvite(null);
     }
   }
 
   if (available === false) return null;
 
-  if (!invite) {
+  if (phase === "idle" || !invite) {
     return (
       <div className="mt-3">
         <button
           onClick={request}
-          disabled={busy || available === null}
+          disabled={phase === "minting" || available === null}
           className="rounded-full border border-neutral-800 px-4 py-1.5 text-xs text-neutral-300 transition hover:border-neutral-700 hover:bg-neutral-900/60 disabled:opacity-40"
         >
-          {busy ? "Minting…" : "Invite to the mesh"}
+          {phase === "minting" ? "Minting…" : "Invite to the mesh"}
         </button>
         {error && (
           <p className="mt-2 text-xs leading-relaxed text-amber-400/90" role="alert">
@@ -107,7 +139,12 @@ export function MeshInvite({ machine, meshAddress }: { machine: string; meshAddr
         </p>
       </div>
 
-      {spent ? (
+      {phase === "signing" ? (
+        <p className="mt-3 text-xs leading-relaxed text-neutral-400">
+          Confirm on the Ledger — this is the door opening. The tailnet key is
+          minted, but nobody can log in until the fingerprint is on chain.
+        </p>
+      ) : spent ? (
         <button
           onClick={request}
           className="mt-3 rounded-full border border-neutral-800 px-4 py-1.5 text-xs text-neutral-300 transition hover:border-neutral-700"
@@ -117,17 +154,80 @@ export function MeshInvite({ machine, meshAddress }: { machine: string; meshAddr
       ) : (
         <>
           <Command label="1 · install, if you have not" text={invite.commands.install} />
-          <Command label="2 · join, single use" text={invite.commands.join} secret />
-          {meshAddress && (
-            <Command label="3 · then reach the agent" text={`ssh runner@${meshAddress}`} />
+          <Command label="2 · join the mesh, single use" text={invite.commands.join} secret />
+          {invite.login ? (
+            <>
+              <DownloadKey invite={invite} />
+              <Command label="4 · log in" text={invite.login} />
+            </>
+          ) : (
+            <p className="mt-3 text-[11px] text-neutral-600">
+              This machine has no mesh address yet, so there is nothing to log
+              into.
+            </p>
           )}
           <p className="mt-3 text-[11px] leading-relaxed text-neutral-600">
-            Single use, removed when you disconnect, and scoped to port 22 on
-            agents. Whether your key may log in is still the chain&apos;s answer,
-            not the tailnet&apos;s.
+            Single use, removed when they disconnect, and scoped to port 22 on
+            agents. The key above is the only one the chain now admits, and
+            revoking this machine stops it in the same transaction that stops
+            spending.
+          </p>
+          <p className="mt-2 text-[11px] leading-relaxed text-neutral-700">
+            If a browser window opens asking them to log in, the mesh key did
+            not take — close it and run step 2 again.
           </p>
         </>
       )}
+    </div>
+  );
+}
+
+/**
+ * The key, as a file to save rather than a wall of base64 to paste.
+ *
+ * A private key pasted through a terminal works, but it teaches the habit this
+ * product argues against — trusting eleven lines of base64 on sight because a
+ * page told you to. Saving a file and pointing `ssh -i` at it is the way people
+ * already handle keys, and it makes the command afterwards one short line.
+ *
+ * The blob is built in the page and revoked immediately: the key never becomes
+ * a URL anybody could fetch twice.
+ */
+function DownloadKey({ invite }: { invite: Invite }) {
+  const [saved, setSaved] = useState(false);
+
+  function save() {
+    const url = URL.createObjectURL(
+      new Blob([`${invite.privateKey}\n`], { type: "application/x-pem-file" }),
+    );
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = invite.keyFilename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    setSaved(true);
+  }
+
+  return (
+    <div className="mt-3">
+      <p className="font-mono text-[10px] uppercase tracking-[0.12em] text-neutral-600">
+        3 · save the key
+      </p>
+      <button
+        onClick={save}
+        className="group mt-1 flex w-full items-center gap-2 rounded border border-neutral-900 bg-neutral-950 px-2.5 py-2 text-left transition hover:border-neutral-800"
+      >
+        <code className="min-w-0 flex-1 truncate font-mono text-[11px] text-[#e0a769]">
+          {invite.keyFilename}
+        </code>
+        <span
+          className={`shrink-0 font-mono text-[9px] uppercase tracking-wider ${saved ? "text-emerald-400" : "text-neutral-600 group-hover:text-neutral-400"}`}
+        >
+          {saved ? "saved" : "download"}
+        </span>
+      </button>
     </div>
   );
 }
@@ -149,7 +249,9 @@ function Command({ label, text, secret = false }: { label: string; text: string;
         title="Copy"
         className="group mt-1 flex w-full items-center gap-2 rounded border border-neutral-900 bg-neutral-950 px-2.5 py-2 text-left transition hover:border-neutral-800"
       >
-        <code className={`min-w-0 flex-1 truncate font-mono text-[11px] ${secret ? "text-[#e0a769]" : "text-neutral-300"}`}>
+        <code
+          className={`min-w-0 flex-1 truncate font-mono text-[11px] ${secret ? "text-[#e0a769]" : "text-neutral-300"}`}
+        >
           {text}
         </code>
         <span
@@ -160,6 +262,14 @@ function Command({ label, text, secret = false }: { label: string; text: string;
       </button>
     </div>
   );
+}
+
+/** Which commands to show. A wrong guess here is a stuck visitor, not a typo. */
+function thisPlatform(): "linux" | "macos" | "windows" {
+  const ua = navigator.userAgent;
+  if (/Mac OS X|Macintosh/i.test(ua)) return "macos";
+  if (/Windows/i.test(ua)) return "windows";
+  return "linux";
 }
 
 /** The clipboard API only exists on secure origins, so plain HTTP needs a fallback. */
