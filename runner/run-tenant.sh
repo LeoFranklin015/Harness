@@ -58,7 +58,7 @@ sudo podman run -d \
     -e TS_AUTHKEY="${TS_AUTHKEY:?set TS_AUTHKEY}" \
     -e TS_HOSTNAME="${tenant}-runner" \
     -e HARNESS_BROKER="http://${gateway}:8402" \
-    -e HARNESS_SELLER="${HARNESS_SELLER:-http://${gateway}:4022}" \
+    -e HARNESS_SELLER="${HARNESS_SELLER:-http://${gateway}:4023}" \
     --label "harness.tenant=${tenant}" \
     --label "harness.agent=${agent}" \
     -v "harness-${tenant}-ts:/var/lib/tailscale" \

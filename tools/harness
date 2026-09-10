@@ -1,0 +1,167 @@
+#!/usr/bin/env bash
+# Bring the whole demo up, or take all of it down.
+#
+# This box is somebody's working machine, so nothing here installs a service or
+# starts on boot. Everything the demo needs runs while you ask for it and stops
+# when you say so, leaving no listeners, no containers and no memory behind.
+#
+#   harness up [tenant:agent ...]   start the services, and those Runners
+#   harness down                    stop everything, including the containers
+#   harness status                  what is running, and what it costs
+#
+# `up` with no tenants starts whatever Runners already exist rather than
+# building new ones, which is the usual case after a reboot.
+set -uo pipefail
+
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+repo="$(cd "$here/.." && pwd)"
+run="${HARNESS_RUN:-/tmp/harness-run}"
+mkdir -p "$run"
+
+log() { printf '  %s\n' "$*"; }
+
+# --- the services -----------------------------------------------------------
+#
+# Each one is a name, a port, and a command. Ports are here so `status` can say
+# whether the thing actually came up rather than whether we asked it to.
+
+start() { # name port command...
+    local name=$1 port=$2
+    shift 2
+    if listening "$port"; then
+        log "$name already up on :$port"
+        return
+    fi
+    nohup "$@" >"$run/$name.log" 2>&1 &
+    echo $! >"$run/$name.pid"
+    for _ in $(seq 40); do
+        listening "$port" && { log "$name on :$port"; return; }
+        sleep 0.5
+    done
+    log "$name did NOT come up — see $run/$name.log"
+}
+
+stop() { # name
+    local name=$1 pid
+    pid=$(cat "$run/$name.pid" 2>/dev/null) || return 0
+    if kill "$pid" 2>/dev/null; then
+        log "stopped $name"
+    fi
+    # The launcher is a shell; its children are what hold the port.
+    pkill -P "$pid" 2>/dev/null
+    rm -f "$run/$name.pid"
+}
+
+listening() { ss -ltn 2>/dev/null | grep -q ":$1 "; }
+
+# Kills processes whose command line matches, but only if they are actually one
+# of our runtimes.
+#
+# `pkill -f` is the obvious tool and the wrong one: the pattern also matches any
+# shell whose command line happens to mention the file — including the shell
+# running this script, which it then kills. Checking the executable first means
+# only a node, a next-server or the nameserver binary can be a target.
+kill_matching() { # pattern
+    local pid comm
+    for pid in $(pgrep -f "$1" 2>/dev/null); do
+        [ "$pid" = "$$" ] && continue
+        comm=$(cat "/proc/$pid/comm" 2>/dev/null) || continue
+        case "$comm" in
+            node | next-server | harness-dns) kill "$pid" 2>/dev/null ;;
+        esac
+    done
+}
+
+secret() { # NAME file
+    sed -n "s/^\s*\(export \)\?$1=//p" "$2" 2>/dev/null | tr -d "\"'" | head -1
+}
+
+# --- commands ---------------------------------------------------------------
+
+cmd_up() {
+    log "building the nameserver"
+    (cd "$repo/dns" && go build -o "$run/harness-dns" .) || { log "dns build failed"; return 1; }
+
+    start dns 5354 "$run/harness-dns" -addr 0.0.0.0:5354
+
+    # The seller stands in for a third party. It needs a key to be paid to, and
+    # reads it the same way everything else does.
+    PRIVATE_KEY="$(secret PRIVATE_KEY "$repo/contracts/.env")" \
+        start seller 4023 node --experimental-strip-types "$repo/x402/seller-express.ts"
+
+    # Runners before the broker, and not as a preference: a Tenant network's
+    # bridge — and so its gateway address — exists only while a container is
+    # running on it. Start the broker first and it has nothing to bind to. It
+    # rescans and recovers, but there is no reason to make it.
+    if [ $# -gt 0 ]; then
+        for pair in "$@"; do
+            local tenant=${pair%%:*} agent=${pair#*:}
+            [ "$agent" = "$pair" ] && agent=runner
+            log "building $agent.$tenant.harness.eth"
+            (cd "$repo/runner" && sudo -n ./build-tenant.sh "$tenant" "$agent" >/dev/null) \
+                && (cd "$repo/runner" && sudo -n ./run-tenant.sh "$tenant" "$agent")
+        done
+    else
+        for c in $(sudo -n podman ps -a --filter name=^harness- --format '{{.Names}}' 2>/dev/null); do
+            sudo -n podman start "$c" >/dev/null 2>&1 && log "started $c"
+        done
+    fi
+
+    RELAYER_PK="$(cat "$repo/x402/.relayer" 2>/dev/null)" \
+        start broker 8402 node --experimental-strip-types "$repo/x402/broker.ts"
+
+    start web 3000 bash -c "cd '$repo/web' && exec npx next start -H 0.0.0.0 -p 3000"
+    echo
+    cmd_status
+}
+
+cmd_down() {
+    for name in web broker seller dns; do stop "$name"; done
+    # Anything that outlived its pidfile — a restart during development leaves
+    # these behind, and a half-running stack is worse than either state.
+    # Matched loosely on purpose: started by hand during development these carry
+    # a relative path, and a pattern anchored to the repo would miss them.
+    kill_matching "next start .*-p 3000"
+    kill_matching "broker\.ts"
+    kill_matching "seller-express\.ts"
+    kill_matching "harness-dns"
+
+    for c in $(sudo -n podman ps --filter name=^harness- --format '{{.Names}}' 2>/dev/null); do
+        sudo -n podman stop -t 3 "$c" >/dev/null 2>&1 && log "stopped $c"
+    done
+    echo
+    log "down. Nothing of this is running."
+}
+
+cmd_status() {
+    printf '  %-8s %-6s %s\n' SERVICE PORT STATE
+    for pair in "web 3000" "broker 8402" "seller 4023" "dns 5354"; do
+        set -- $pair
+        # The broker listens per Tenant, so its port lives on a gateway address.
+        if [ "$1" = broker ]; then
+            local n
+            n=$(ss -ltn 2>/dev/null | grep -c ":8402 ")
+            printf '  %-8s %-6s %s\n' "$1" "$2" "$([ "$n" -gt 0 ] && echo "up on $n tenant network(s)" || echo down)"
+        else
+            printf '  %-8s %-6s %s\n' "$1" "$2" "$(listening "$2" && echo up || echo down)"
+        fi
+    done
+
+    echo
+    local containers
+    containers=$(sudo -n podman ps --filter name=^harness- --format '  {{.Names}}  {{.Status}}' 2>/dev/null)
+    printf '  %s\n' "${containers:-  no Runners running}"
+
+    echo
+    local mb
+    mb=$(ps -eo rss,args 2>/dev/null | grep -E "next-server|x402/broker|seller-express|harness-dns" \
+        | grep -v grep | awk '{s+=$1} END {printf "%.0f", s/1024}')
+    log "using ${mb:-0} MB of host memory"
+}
+
+case "${1:-status}" in
+    up) shift; cmd_up "$@" ;;
+    down) cmd_down ;;
+    status) cmd_status ;;
+    *) sed -n '2,12p' "${BASH_SOURCE[0]}" | sed 's/^# \?//'; exit 1 ;;
+esac

@@ -4,6 +4,7 @@
 import {
   createPublicClient,
   createWalletClient,
+  fallback,
   http,
   type Address,
   type Hex,
@@ -11,24 +12,42 @@ import {
 import { privateKeyToAccount } from "viem/accounts";
 import { sepolia } from "viem/chains";
 
-export const RPC =
-  process.env.HARNESS_RPC ?? "https://ethereum-sepolia-rpc.publicnode.com";
+/**
+ * Several endpoints behind one transport.
+ *
+ * The broker makes four or five calls per payment and a dropped request used to
+ * become a refused capability. `fallback` moves on when one endpoint fails and
+ * ranks them by how they have been behaving; a revert is never retried, because
+ * a revert is an answer.
+ */
+const ENDPOINTS = [
+  "https://ethereum-sepolia-rpc.publicnode.com",
+  "https://sepolia.drpc.org",
+  "https://rpc.sepolia.org",
+  "https://1rpc.io/sepolia",
+];
+
+export const RPC = process.env.HARNESS_RPC ?? ENDPOINTS[0]!;
+
+const transport = fallback(
+  (process.env.HARNESS_RPC ? [process.env.HARNESS_RPC, ...ENDPOINTS] : ENDPOINTS).map((url) =>
+    http(url, { retryCount: 2, retryDelay: 400, timeout: 20_000 }),
+  ),
+  { rank: { interval: 30_000, sampleCount: 3 } },
+);
 
 /** ETHOnline 2026 hackathon ENSv2 deployment — see ADDRESSES.md. */
 export const UNIVERSAL_RESOLVER =
   "0xd26f2040d083af1cd2962ba303f4bea0c4faf142" as Address;
 export const USDC = "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238" as Address;
 
-export const publicClient = createPublicClient({
-  chain: sepolia,
-  transport: http(RPC),
-});
+export const publicClient = createPublicClient({ chain: sepolia, transport });
 
 export function wallet(pk: Hex) {
   return createWalletClient({
     account: privateKeyToAccount(pk),
     chain: sepolia,
-    transport: http(RPC),
+    transport,
   });
 }
 

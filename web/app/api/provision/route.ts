@@ -4,13 +4,14 @@ import { promisify } from "node:util";
 import {
   createPublicClient,
   createWalletClient,
-  http,
   parseEventLogs,
   type Address,
   type Hex,
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { sepolia } from "viem/chains";
+import { explain } from "@/lib/explain";
+import { sepoliaTransport } from "@/lib/rpc";
 import { agentKeyFor } from "@/lib/agent-root";
 
 /**
@@ -28,7 +29,6 @@ import { agentKeyFor } from "@/lib/agent-root";
 
 const exec = promisify(execFile);
 
-const RPC = process.env.HARNESS_RPC ?? "https://ethereum-sepolia-rpc.publicnode.com";
 const PLATFORM = (process.env.PLATFORM_REGISTRY ??
   "0xbDF56e17F8956268Fc018B77Dac2ebEa7b3928F7") as Address;
 const RESOLVER = (process.env.AGENT_RESOLVER ??
@@ -111,8 +111,9 @@ export async function POST(req: Request) {
 
       try {
         const deployer = privateKeyToAccount(secret("PRIVATE_KEY") as Hex);
-        const pub = createPublicClient({ chain: sepolia, transport: http(RPC) });
-        const wallet = createWalletClient({ account: deployer, chain: sepolia, transport: http(RPC) });
+        const transport = sepoliaTransport();
+        const pub = createPublicClient({ chain: sepolia, transport });
+        const wallet = createWalletClient({ account: deployer, chain: sepolia, transport });
 
         // 1. The machine, so its host key exists before the name does.
         emit({ step: "Generating the machine's host key" });
@@ -220,7 +221,7 @@ export async function POST(req: Request) {
           },
         });
       } catch (err) {
-        emit({ error: (err as Error).message });
+        emit({ error: explain(err) });
       } finally {
         controller.close();
       }

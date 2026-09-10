@@ -23,8 +23,8 @@ import time
 import urllib.error
 import urllib.request
 
-BROKER = os.environ.get("HARNESS_BROKER", "http://10.88.0.1:8402")
-SELLER = os.environ.get("HARNESS_SELLER", "http://10.88.0.1:4022")
+BROKER = os.environ.get("HARNESS_BROKER", "http://10.89.0.1:8402")
+SELLER = os.environ.get("HARNESS_SELLER", "http://10.89.0.1:4023")
 NAME = open("/etc/harness/name").read().strip()
 
 
@@ -47,12 +47,24 @@ def ask_broker(challenge):
         with urllib.request.urlopen(req, timeout=180) as r:
             return json.loads(r.read())
     except urllib.error.HTTPError as e:
-        raise SystemExit(f"  refused by the broker: {json.loads(e.read())['error']}")
+        # A refusal is the system working: the chain said no, or the ceiling did.
+        try:
+            why = json.loads(e.read())["error"]
+        except Exception:
+            why = f"HTTP {e.code}"
+        raise SystemExit(f"  refused by the broker: {why}")
+    except urllib.error.URLError as e:
+        # Not a refusal — the broker is not there. Worth saying plainly rather
+        # than unwinding a stack the reader cannot act on.
+        raise SystemExit(f"  cannot reach the broker at {BROKER} ({e.reason}) — is it running?")
 
 
 def buy(round_no):
     url = f"{SELLER}/research?q=round-{round_no}"
-    status, headers, _ = get(url)
+    try:
+        status, headers, _ = get(url)
+    except urllib.error.URLError as e:
+        raise SystemExit(f"  cannot reach the seller at {SELLER} ({e.reason})")
     if status != 402:
         raise SystemExit(f"  expected 402 from the seller, got {status}")
 

@@ -323,6 +323,25 @@ leak.
 
 ---
 
+## Running it
+
+Nothing installs a service or starts on boot — this box is somebody's working
+machine, so the demo runs while you ask for it and leaves nothing behind.
+
+```
+tools/harness up                    services, plus whatever Runners exist
+tools/harness up leo:research2      and build that one
+tools/harness status                what is up, and what it costs
+tools/harness down                  all of it, containers included
+```
+
+Runners start before the broker, and not as a preference: a Tenant network's
+bridge, and therefore its gateway address, exists only while a container runs on
+it. Start the broker first and it has nothing to bind to.
+
+Idle cost when down is zero. Up, the whole stack is around 480 MB, of which the
+Runners are about 30 MB each — the 384 MB limit is a ceiling, not a reservation.
+
 ## Appendix — where things live
 
 | Thing | Where |

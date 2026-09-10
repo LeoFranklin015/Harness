@@ -59,6 +59,27 @@ if (!RELAYER_PK) throw new Error("set RELAYER_PK — a burner with gas, never th
 const usd = (v: bigint) => `$${formatUnits(v, 6)}`;
 
 /**
+ * A sentence, not a stack trace.
+ *
+ * Whatever this returns is printed by the Agent in its own logs, so a bad
+ * minute on a public RPC should read as "try again" rather than as a hundred
+ * lines of ABI. A revert keeps its reason, which is the only part that matters.
+ */
+function explain(err: unknown): string {
+  const raw = err instanceof Error ? `${err.name} ${err.message}` : String(err);
+  const reason = raw.match(/execution reverted:?\s*([^\n"]{3,120})/i)?.[1]?.trim();
+  if (/exceeds allowance/i.test(raw)) return "the tenant has not allowed the executor to draw that much";
+  if (/transfer amount exceeds balance/i.test(raw)) return "the tenant is out of USDC";
+  if (/insufficient funds/i.test(raw)) return "the relayer is out of gas";
+  if (/timeout|timed out|ETIMEDOUT|ECONNRESET|socket hang up|fetch failed/i.test(raw)) {
+    return "the Sepolia RPC did not answer; nothing was spent, try again";
+  }
+  if (/rate.?limit|429/i.test(raw)) return "the Sepolia RPC is rate-limiting; try again shortly";
+  if (reason) return `the chain refused it: ${reason}`;
+  return raw.split("\n")[0]!.replace(/^\w*Error:?\s*/, "").trim() || "unknown failure";
+}
+
+/**
  * Which Agent is asking.
  *
  * Not from the request body: a caller does not get to say who it is. The
@@ -199,8 +220,10 @@ const handler = async (
     send(200, await authorize(ip, door, challenge));
   } catch (err) {
     const status = (err as { status?: number }).status ?? 500;
-    console.log(`  refused ${ip}: ${(err as Error).message}`);
-    send(status, { error: (err as Error).message });
+    // Refusals carry their own words already; anything else gets translated.
+    const why = status === 500 ? explain(err) : (err as Error).message;
+    console.log(`  refused ${ip}: ${why}`);
+    send(status, { error: why });
   }
 };
 

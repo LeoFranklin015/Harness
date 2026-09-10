@@ -19,6 +19,7 @@ import {
   upgradeDeclined,
   type Authority,
 } from "@/lib/session";
+import { explain } from "@/lib/explain";
 import { agentIdFrom, allowanceFor, calldata, firstGrant, USDC } from "@/lib/tenant";
 
 /**
@@ -98,7 +99,7 @@ export default function Home() {
       setError(
         err instanceof RejectedOnDevice
           ? "Declined on the device. Nothing changed."
-          : (err as Error).message,
+          : explain(err),
       );
     } finally {
       setBusy(false);
@@ -207,7 +208,7 @@ function Machines({
     setError(
       err instanceof RejectedOnDevice
         ? "Declined on the device. Nothing was created."
-        : (err as Error).message,
+        : explain(err),
     );
   }
 

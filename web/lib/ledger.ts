@@ -5,7 +5,6 @@ import { SignerEthBuilder } from "@ledgerhq/device-signer-kit-ethereum";
 import {
   createPublicClient,
   hexToBytes,
-  http,
   padHex,
   serializeTransaction,
   type Address,
@@ -14,6 +13,7 @@ import {
 } from "viem";
 import { sepolia } from "viem/chains";
 import { batchCalldata, DELEGATE, type BatchCall } from "./delegation";
+import { sepoliaTransport } from "./rpc";
 import { openApp, runDeviceAction, type Step } from "./device-app";
 
 export { isSupported, RejectedOnDevice, type Step } from "./device-app";
@@ -25,8 +25,6 @@ export { isSupported, RejectedOnDevice, type Step } from "./device-app";
  * way to reach the Ledger in this app, and this is a layer over it, not a
  * second one.
  */
-
-const RPC = "https://ethereum-sepolia-rpc.publicnode.com";
 
 /** Where the Tenant's authority lives. Fixed, not user input. */
 export const DEVICE_PATH = "44'/60'/0'/0/0";
@@ -83,7 +81,7 @@ export async function connect(onStep: Step): Promise<Device> {
     const { observable } = signer.getAddress(DEVICE_PATH, { checkOnDevice: false });
     const out = (await runDeviceAction({ observable }, onStep, "Ethereum")) as { address: string };
     const address = out.address as Address;
-    const pub = createPublicClient({ chain: sepolia, transport: http(RPC) });
+    const pub = createPublicClient({ chain: sepolia, transport: sepoliaTransport() });
 
     // The whitelist that decides whether a delegation can be signed at all
     // lives in the app, so its version is the thing to ask about. Not knowing

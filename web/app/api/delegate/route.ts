@@ -1,9 +1,11 @@
 import { existsSync, readFileSync } from "node:fs";
 import { NextResponse } from "next/server";
-import { createPublicClient, createWalletClient, http, type Address, type Hex } from "viem";
+import { createPublicClient, createWalletClient, type Address, type Hex } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { sepolia } from "viem/chains";
 import { DELEGATE, delegateFrom } from "@/lib/delegation";
+import { explain } from "@/lib/explain";
+import { sepoliaTransport } from "@/lib/rpc";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -22,8 +24,6 @@ export const dynamic = "force-dynamic";
  * only power is to publish it or not.
  */
 
-const RPC = process.env.HARNESS_RPC ?? "https://ethereum-sepolia-rpc.publicnode.com";
-
 function secret(name: string): string {
   const fromEnv = process.env[name];
   if (fromEnv) return fromEnv;
@@ -36,7 +36,7 @@ function secret(name: string): string {
   throw new Error(`${name} not found`);
 }
 
-const pub = () => createPublicClient({ chain: sepolia, transport: http(RPC) });
+const pub = () => createPublicClient({ chain: sepolia, transport: sepoliaTransport() });
 
 /** What the account runs today, and the nonce an authorisation must carry. */
 export async function GET(request: Request) {
@@ -78,7 +78,7 @@ export async function POST(request: Request) {
   try {
     const relayer = privateKeyToAccount(secret("PRIVATE_KEY") as Hex);
     const client = pub();
-    const wallet = createWalletClient({ account: relayer, chain: sepolia, transport: http(RPC) });
+    const wallet = createWalletClient({ account: relayer, chain: sepolia, transport: sepoliaTransport() });
 
     const hash = await wallet.sendTransaction({
       authorizationList: [
@@ -116,6 +116,6 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ hash, delegate });
   } catch (err) {
-    return NextResponse.json({ error: (err as Error).message }, { status: 500 });
+    return NextResponse.json({ error: explain(err) }, { status: 500 });
   }
 }
