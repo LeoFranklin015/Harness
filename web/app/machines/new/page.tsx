@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import type { Address } from "viem";
 
 import { Assembly, STAGES, type AssemblyStage } from "@/components/provision/Assembly";
 import type { ProvisionRequest } from "@/components/tenants/ProvisionDialog";
@@ -91,8 +90,18 @@ export default function NewMachine() {
     return null;
   }, [form.label, taken]);
 
+  // The agent name has the same rule as the machine name and reaches the
+  // same places — a shell argv, a path, an ENS label. Keeping the two checks
+  // in one place is the only way they stay in step with the route.
+  const agentError = useMemo(() => {
+    if (!form.agent) return "Give the first agent a name.";
+    if (!LABEL_OK.test(form.agent)) return "Lower case letters, numbers and hyphens.";
+    if (form.agent.length < 3) return "At least three characters.";
+    return null;
+  }, [form.agent]);
+
   const canLeave: Record<StepIndex, boolean> = {
-    0: !!form.label && !labelError && form.agent.length >= 2 && LABEL_OK.test(form.agent),
+    0: !!form.label && !labelError && !agentError,
     1: Number(form.capUsd) > 0 && Number(form.days) > 0,
     2: form.brain === "none" || form.brainSecret.trim().length > 0,
     3: true,
@@ -136,7 +145,7 @@ export default function NewMachine() {
       {/* A reading column, centred while it is alone on the page. The build
           step brings the machine and takes the full width for itself. */}
       <div className={`mt-12 ${step === 3 ? "" : "mx-auto max-w-2xl"}`}>
-          {step === 0 && <Identity form={form} set={set} error={labelError} />}
+          {step === 0 && <Identity form={form} set={set} error={labelError ?? agentError} />}
           {step === 1 && <Capabilities form={form} set={set} />}
           {step === 2 && <Secrets form={form} set={set} />}
           {step === 3 && session && (

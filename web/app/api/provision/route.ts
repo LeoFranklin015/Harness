@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { promisify } from "node:util";
 import {
   createPublicClient,
@@ -94,7 +94,13 @@ export async function POST(req: Request) {
     extraSecrets?: string;
   };
 
-  if (!/^[a-z0-9][a-z0-9-]{2,}$/.test(body.label)) return new Response("bad label", { status: 400 });
+  // Both names reach a shell script's argv, a filesystem path and an ENS
+  // label. Nothing here is interpolated into a shell string, so this is not
+  // injection — but an agent name was going unchecked entirely, and it is
+  // the same class of input as the one beside it.
+  const NAME = /^[a-z0-9][a-z0-9-]{2,}$/;
+  if (!NAME.test(body.label)) return new Response("bad label", { status: 400 });
+  if (!NAME.test(body.agent ?? "")) return new Response("bad agent", { status: 400 });
   if (body.sshFingerprint && !/^SHA256:[A-Za-z0-9+/]{43}$/.test(body.sshFingerprint)) {
     return new Response("bad fingerprint", { status: 400 });
   }

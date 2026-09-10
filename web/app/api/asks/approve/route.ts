@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-import { createPublicClient, type Address, type Hex } from "viem";
-import { sepolia } from "viem/chains";
+import type { Address, Hex } from "viem";
 import { agentKeyFor } from "@/lib/agent-root";
 import { batchCalldata, DELEGATE, delegateFrom } from "@/lib/delegation";
 import { asksFor } from "@/lib/pending";

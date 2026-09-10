@@ -1,6 +1,5 @@
-import { existsSync, readFileSync } from "node:fs";
 import { NextResponse } from "next/server";
-import { createPublicClient, createWalletClient, type Address, type Hex } from "viem";
+import { createWalletClient, type Address, type Hex } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { sepolia } from "viem/chains";
 import { DELEGATE, delegateFrom } from "@/lib/delegation";
