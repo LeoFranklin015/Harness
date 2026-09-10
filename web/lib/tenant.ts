@@ -18,6 +18,39 @@ const DAY = 2;
 
 export const REGISTRY_ABI = [
   {
+    // What an Agent has drawn against one limit in the window it is in. The
+    // dashboard asks the chain directly rather than the broker: spend is
+    // settled on chain, and a machine whose container is stopped still has a
+    // true answer.
+    type: "function",
+    name: "spentOf",
+    stateMutability: "view",
+    inputs: [
+      { name: "agentId", type: "bytes32" },
+      {
+        name: "limit",
+        type: "tuple",
+        components: [
+          { name: "token", type: "address" },
+          { name: "allowance", type: "uint160" },
+          { name: "unit", type: "uint8" },
+          { name: "multiplier", type: "uint16" },
+        ],
+      },
+    ],
+    outputs: [
+      {
+        name: "",
+        type: "tuple",
+        components: [
+          { name: "start", type: "uint48" },
+          { name: "end", type: "uint48" },
+          { name: "spend", type: "uint160" },
+        ],
+      },
+    ],
+  },
+  {
     type: "function",
     name: "setExecutor",
     stateMutability: "nonpayable",
@@ -189,7 +222,7 @@ export function firstGrant(opts: {
       { target: USDC, selector: TRANSFER, maxValue: BigInt(0), checker: ZERO_ADDR, checkerCodeHash: ZERO32 },
     ],
     spends: [
-      { token: USDC, allowance: BigInt(Math.round(opts.capUsd * 1_000_000)), unit: DAY, multiplier: 1 },
+      dailyLimit(BigInt(Math.round(opts.capUsd * 1_000_000))),
     ],
   };
 }
@@ -229,6 +262,17 @@ const ERC20_ABI = [
     outputs: [{ type: "bool" }],
   },
 ] as const;
+
+/**
+ * The daily limit for a ceiling, exactly as `firstGrant` writes it.
+ *
+ * `spentOf` keys on a hash of this struct, so a field that differs from what
+ * the device signed asks about a limit that does not exist and answers zero.
+ * Shared rather than rebuilt at the call site for that reason alone.
+ */
+export function dailyLimit(allowance: bigint) {
+  return { token: USDC, allowance, unit: DAY, multiplier: 1 } as const;
+}
 
 /** What the Grant could spend over its whole life, in USDC's six decimals. */
 export function allowanceFor(capUsd: number, days: number): bigint {

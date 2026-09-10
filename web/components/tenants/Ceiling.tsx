@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { motion, useMotionValue, useReducedMotion, useSpring, useTransform } from "framer-motion";
 
 /**
@@ -16,10 +16,23 @@ import { motion, useMotionValue, useReducedMotion, useSpring, useTransform } fro
  * is not known the track fills to full to show the allowance that was set,
  * rather than inventing a consumed portion.
  */
-export function Ceiling({ capUsd, spentUsd }: { capUsd: number; spentUsd?: number }) {
+export function Ceiling({
+  capUsd,
+  spentUsd,
+  tenant,
+  agent,
+}: {
+  capUsd: number;
+  spentUsd?: number;
+  /** Given both, the meter asks the chain itself and keeps asking. */
+  tenant?: string;
+  agent?: string | null;
+}) {
   const still = useReducedMotion();
-  const known = typeof spentUsd === "number" && capUsd > 0;
-  const fraction = known ? Math.min(1, spentUsd! / capUsd) : 1;
+  const polled = useSpend(tenant, agent);
+  const spent = spentUsd ?? polled;
+  const known = typeof spent === "number" && capUsd > 0;
+  const fraction = known ? Math.min(1, spent! / capUsd) : 1;
 
   // Springs rather than tweens: a limit filling up should settle, not arrive.
   const progress = useSpring(0, { stiffness: 90, damping: 20, mass: 0.6 });
@@ -30,15 +43,15 @@ export function Ceiling({ capUsd, spentUsd }: { capUsd: number; spentUsd?: numbe
   useEffect(() => {
     if (still) {
       progress.jump(fraction);
-      counter.jump(known ? spentUsd! : capUsd);
+      counter.jump(known ? spent! : capUsd);
       return;
     }
     progress.set(fraction);
-    const to = known ? spentUsd! : capUsd;
+    const to = known ? spent! : capUsd;
     // Counting is tied to the same spring so the number and the bar cannot
     // disagree, which is what makes it read as one quantity.
     return progress.on("change", (v) => counter.set(fraction === 0 ? to : (v / fraction) * to));
-  }, [fraction, capUsd, spentUsd, known, still, progress, counter]);
+  }, [fraction, capUsd, spent, known, still, progress, counter]);
 
   return (
     <div className="mt-6">
@@ -60,4 +73,42 @@ export function Ceiling({ capUsd, spentUsd }: { capUsd: number; spentUsd?: numbe
       </div>
     </div>
   );
+}
+
+/**
+ * What the chain says has been spent, refreshed.
+ *
+ * Polled rather than pushed: a spend is a transaction somebody else's Agent
+ * made, there is no socket between here and it, and the interesting case —
+ * watching a payment land while looking at the page — is worth a request
+ * every few seconds. Undefined until the first answer, so the bar shows the
+ * allowance rather than briefly claiming nothing has been spent.
+ */
+function useSpend(tenant?: string, agent?: string | null): number | undefined {
+  const [spent, setSpent] = useState<number | undefined>(undefined);
+
+  useEffect(() => {
+    if (!tenant || !agent) return;
+    let stop = false;
+
+    const ask = async () => {
+      try {
+        const r = await fetch(`/api/spend?tenant=${tenant}&label=${agent}`, { cache: "no-store" });
+        if (!r.ok) return;
+        const { spentUsd } = (await r.json()) as { spentUsd?: number };
+        if (!stop && typeof spentUsd === "number") setSpent(spentUsd);
+      } catch {
+        // An RPC having a bad minute is not news. Keep the last good answer.
+      }
+    };
+
+    ask();
+    const every = setInterval(ask, 8_000);
+    return () => {
+      stop = true;
+      clearInterval(every);
+    };
+  }, [tenant, agent]);
+
+  return spent;
 }

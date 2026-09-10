@@ -27,6 +27,9 @@ const STATES: { name: string; tenant: Tenant | null }[] = [
   { name: "awaiting", tenant: { ...base, status: "provisioning", step: "Open Ethereum on your device", awaiting: true } },
   { name: "live", tenant: base },
   { name: "revoked", tenant: { ...base, status: "revoked" } },
+  // A real machine, so the meter shows spend read from the chain rather than
+  // the allowance it falls back to when there is nothing to ask about.
+  { name: "live · real spend", tenant: { ...base, label: "bjbvjw" } },
 ];
 
 export default function SlotPreview() {

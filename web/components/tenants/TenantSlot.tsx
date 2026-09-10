@@ -161,7 +161,9 @@ function FilledSlot({
           {/* Not on a revoked machine: a full green bar beside "spending
               stopped" reads as a contradiction, and the cascade is already
               saying what the ceiling is now worth. */}
-          {!revoked && <Ceiling capUsd={capUsd(tenant)} />}
+          {!revoked && (
+            <Ceiling capUsd={capUsd(tenant)} tenant={tenant.label} agent={tenant.agent} />
+          )}
         </>
       )}
 
