@@ -56,7 +56,7 @@ export function ProvisionDialog({
         <h2 className="text-lg font-medium text-neutral-100">Add a machine</h2>
         <p className="mt-1 text-sm text-neutral-500">
           A machine, and an agent on it with a ceiling. It will answer to the
-          Ledger you just connected — one confirmation to seal its keys, three
+          Ledger you just connected — one confirmation to seal its keys, four
           to make it real.
         </p>
 

@@ -101,6 +101,7 @@ The security of the whole thing is this table.
 | Where | Holds | If it is compromised |
 |---|---|---|
 | **Ledger** | the root authority | game over, but it is in your pocket |
+| **The account itself** | optionally `Simple7702Account`, so four calls become one | it is callable only by the account, and Ledger vets which contract |
 | **Browser** | nothing. It forwards bytes | nothing to take |
 | **Host: enrolment store** | ring member key, sealed roots | roots open — this is the trusted core |
 | **Host: broker** | a key for the length of one request | can sign, but only what the chain allows |
@@ -163,13 +164,43 @@ sequenceDiagram
     H->>C: onboardTenant("leo", device)
     C-->>H: AgentRegistry, rootDevice = your Ledger
     H->>C: deploy AllowanceExecutor
-    L->>C: ① setExecutor      (signature 1)
-    L->>C: ② setHost          (signature 2 — IP, host key, who may SSH)
-    L->>C: ③ grant            (signature 3 — mints research.leo.harness.eth)
+    alt account upgraded (EIP-7702)
+        L->>C: ①②③④ in one transaction (one approval)
+    else plain account
+        L->>C: ① setExecutor   (which contract may spend for me)
+        L->>C: ② setHost       (IP, SSH host key, who may log in)
+        L->>C: ③ approve       (the executor may draw this much USDC, ever)
+        L->>C: ④ grant         (mints research.leo.harness.eth)
+    end
 ```
 
 After this the host cannot change anything inside `leo.harness.eth`. Only the
 device can.
+
+**One tap or four.** An ordinary account can do one thing per transaction, so
+onboarding is four approvals. On connect, Harness offers to give the account
+code — EIP-7702, delegating to `Simple7702Account` at
+`0x4Cd241E8d1510e30b2076397afc7508Ae59C66c9` — and then all four go in one
+transaction, which is one approval.
+
+The address is not ours to pick. The Ledger's Ethereum app signs a delegation
+only for contracts on its own whitelist, and that list has exactly one
+production entry: the reference account from the ERC-4337 team, listed for every
+chain (`chain_id = 0`), present since app version 1.22.1. So the code your
+account runs is one Ledger vetted, not one we wrote.
+
+The device signs only the authorisation, which is a standalone object rather
+than a transaction, and our relayer publishes it — so the upgrade costs one tap
+and no gas. Altering the delegate, chain or nonce in transit makes it recover to
+a different account and do nothing. Declining is fine; it costs three extra taps
+per machine, and the offer stays available in the header.
+
+**Two ceilings, set by two different signatures.** ③ is the token's own
+allowance: the most the executor can *ever* pull out of your account. ④ is the
+Grant's daily cap, which the registry enforces per window. Revoking closes ④
+immediately; the allowance in ③ outlives it and should be set to zero if you are
+done with a tenant, which is why it is bounded by what the Grant could spend
+rather than left open.
 
 ---
 
@@ -202,7 +233,7 @@ sequenceDiagram
     W-->>K: the root (in memory, one request)
     K->>K: derive research's key
     K->>C: fund $0.25 under the Grant
-    Note over C: registry checks the SAME ceiling.<br/>A refusal here is the ceiling refusing.
+    Note over C: transferFrom out of the Tenant's own account,<br/>inside the allowance (③) and the daily cap (④).<br/>A refusal here is the ceiling refusing.
     K->>K: sign the EIP-3009 authorization
     K-->>A: PAYMENT-SIGNATURE header (this payment only)
 

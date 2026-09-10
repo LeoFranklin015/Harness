@@ -1,0 +1,121 @@
+import { existsSync, readFileSync } from "node:fs";
+import { NextResponse } from "next/server";
+import { createPublicClient, createWalletClient, http, type Address, type Hex } from "viem";
+import { privateKeyToAccount } from "viem/accounts";
+import { sepolia } from "viem/chains";
+import { DELEGATE, delegateFrom } from "@/lib/delegation";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
+/**
+ * Carrying someone's account upgrade on chain for them.
+ *
+ * An EIP-7702 authorisation is a standalone signed object, not a transaction —
+ * the account says "I permit myself to run this code" and anyone may put that
+ * on chain. So the device signs the authorisation and this relays it, which
+ * means the upgrade costs the person one tap and no gas at all.
+ *
+ * Nothing here can forge one. The authorisation is signed by the Ledger over
+ * the chain id, the delegate address and the account's own nonce; change any of
+ * them and it recovers to a different account and does nothing. The relayer's
+ * only power is to publish it or not.
+ */
+
+const RPC = process.env.HARNESS_RPC ?? "https://ethereum-sepolia-rpc.publicnode.com";
+
+function secret(name: string): string {
+  const fromEnv = process.env[name];
+  if (fromEnv) return fromEnv;
+  const file = "/home/opc/hackathon/contracts/.env";
+  if (!existsSync(file)) throw new Error(`${name} not set and ${file} missing`);
+  for (const line of readFileSync(file, "utf8").split("\n")) {
+    const m = line.match(/^\s*(?:export\s+)?([A-Z_]+)=(.*)$/);
+    if (m && m[1] === name) return m[2]!.trim().replace(/^["']|["']$/g, "");
+  }
+  throw new Error(`${name} not found`);
+}
+
+const pub = () => createPublicClient({ chain: sepolia, transport: http(RPC) });
+
+/** What the account runs today, and the nonce an authorisation must carry. */
+export async function GET(request: Request) {
+  const address = new URL(request.url).searchParams.get("address") as Address | null;
+  if (!address || !/^0x[0-9a-fA-F]{40}$/.test(address)) {
+    return NextResponse.json({ error: "bad address" }, { status: 400 });
+  }
+
+  const client = pub();
+  const [code, nonce] = await Promise.all([
+    client.getCode({ address }),
+    // The authorisation's nonce is the account's own, unchanged — the relayer
+    // sends the transaction, so this account's nonce is not consumed first.
+    client.getTransactionCount({ address, blockTag: "pending" }),
+  ]);
+
+  const delegate = delegateFrom(code as Hex | undefined);
+  return NextResponse.json({
+    nonce,
+    delegate,
+    upgraded: delegate?.toLowerCase() === DELEGATE.toLowerCase(),
+    target: DELEGATE,
+  });
+}
+
+export async function POST(request: Request) {
+  const body = (await request.json()) as {
+    address: Address;
+    nonce: number;
+    r: Hex;
+    s: Hex;
+    yParity: number;
+  };
+
+  if (!/^0x[0-9a-fA-F]{40}$/.test(body.address ?? "")) {
+    return NextResponse.json({ error: "bad address" }, { status: 400 });
+  }
+
+  try {
+    const relayer = privateKeyToAccount(secret("PRIVATE_KEY") as Hex);
+    const client = pub();
+    const wallet = createWalletClient({ account: relayer, chain: sepolia, transport: http(RPC) });
+
+    const hash = await wallet.sendTransaction({
+      authorizationList: [
+        {
+          address: DELEGATE,
+          chainId: sepolia.id,
+          nonce: body.nonce,
+          r: body.r,
+          s: body.s,
+          yParity: body.yParity,
+        },
+      ],
+      // The transaction has to go somewhere; the account itself with no data is
+      // the quietest choice. The authorisation is applied before execution, so
+      // the upgrade lands whatever this call does.
+      to: body.address,
+      value: BigInt(0),
+    });
+
+    const receipt = await client.waitForTransactionReceipt({ hash });
+    if (receipt.status !== "success") {
+      return NextResponse.json({ error: `upgrade reverted: ${hash}` }, { status: 502 });
+    }
+
+    // Say what actually happened rather than what was intended: a malformed
+    // authorisation is simply ignored by the protocol, and the transaction
+    // still succeeds.
+    const delegate = delegateFrom((await client.getCode({ address: body.address })) as Hex | undefined);
+    if (delegate?.toLowerCase() !== DELEGATE.toLowerCase()) {
+      return NextResponse.json(
+        { error: "the authorisation was not accepted — it may have been signed for a different account or nonce" },
+        { status: 422 },
+      );
+    }
+
+    return NextResponse.json({ hash, delegate });
+  } catch (err) {
+    return NextResponse.json({ error: (err as Error).message }, { status: 500 });
+  }
+}

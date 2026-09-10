@@ -17,6 +17,7 @@ import type { Tenant } from "@/components/tenants/TenantSlot";
 export type Authority = { address: Address; path: string; model: string };
 
 const AUTHORITY = "harness:authority";
+const SKIPPED = "harness:upgrade-declined";
 const tenantsKey = (a: Address) => `harness:tenants:${a.toLowerCase()}`;
 
 export function remembered(): Authority | null {
@@ -32,6 +33,21 @@ export function remember(a: Authority | null) {
   try {
     if (a) localStorage.setItem(AUTHORITY, JSON.stringify(a));
     else localStorage.removeItem(AUTHORITY);
+  } catch {}
+}
+
+/** Someone who said "not now" is not asked again in this browser. */
+export function upgradeDeclined(a: Address): boolean {
+  try {
+    return localStorage.getItem(`${SKIPPED}:${a.toLowerCase()}`) === "1";
+  } catch {
+    return false;
+  }
+}
+
+export function declineUpgrade(a: Address) {
+  try {
+    localStorage.setItem(`${SKIPPED}:${a.toLowerCase()}`, "1");
   } catch {}
 }
 

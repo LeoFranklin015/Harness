@@ -159,7 +159,40 @@ export function firstGrant(opts: {
   };
 }
 
+/**
+ * The token's own approval. Not ours, and deliberately so.
+ *
+ * The Tenant's USDC never leaves the Tenant's account for a contract to hold —
+ * the executor pulls what a Grant permits, when it is permitted, with
+ * `transferFrom`. ERC-20 requires an allowance for that, so this is the
+ * signature that makes funding possible at all.
+ *
+ * It is a second, independent ceiling: the allowance is the most the executor
+ * can *ever* move, where the Grant's cap is the most it can move in a day. Set
+ * it to what the Grant could spend if it ran to the end at full rate, so it
+ * bounds the same thing the device already agreed to rather than being open.
+ */
+const ERC20_ABI = [
+  {
+    type: "function",
+    name: "approve",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "spender", type: "address" },
+      { name: "value", type: "uint256" },
+    ],
+    outputs: [{ type: "bool" }],
+  },
+] as const;
+
+/** What the Grant could spend over its whole life, in USDC's six decimals. */
+export function allowanceFor(capUsd: number, days: number): bigint {
+  return BigInt(Math.round(capUsd * 1_000_000)) * BigInt(Math.max(1, Math.ceil(days)));
+}
+
 export const calldata = {
+  approve: (executor: Address, value: bigint) =>
+    encodeFunctionData({ abi: ERC20_ABI, functionName: "approve", args: [executor, value] }),
   setExecutor: (executor: Address) =>
     encodeFunctionData({ abi: REGISTRY_ABI, functionName: "setExecutor", args: [executor] }),
   setHost: (ipv4: Hex, hostKey: Hex, operator: Hex) =>

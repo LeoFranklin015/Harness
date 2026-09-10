@@ -3,13 +3,23 @@
 import { useEffect, useRef, useState } from "react";
 import type { Address, Hex } from "viem";
 import { ConnectLedger } from "@/components/ledger/ConnectLedger";
+import { UpgradeAccount } from "@/components/ledger/UpgradeAccount";
 import { ProvisionDialog, type ProvisionRequest } from "@/components/tenants/ProvisionDialog";
 import { TenantSlot, type Tenant } from "@/components/tenants/TenantSlot";
 import { connectAndOpenApp } from "@/lib/device-app";
 import { RejectedOnDevice, type Device } from "@/lib/ledger";
 import { runRelay } from "@/lib/relay-client";
-import { loadTenants, remember, remembered, saveTenants, Session, type Authority } from "@/lib/session";
-import { agentIdFrom, calldata, firstGrant } from "@/lib/tenant";
+import {
+  declineUpgrade,
+  loadTenants,
+  remember,
+  remembered,
+  saveTenants,
+  Session,
+  upgradeDeclined,
+  type Authority,
+} from "@/lib/session";
+import { agentIdFrom, allowanceFor, calldata, firstGrant, USDC } from "@/lib/tenant";
 
 /**
  * Two pages, one gate.
@@ -24,13 +34,80 @@ export default function Home() {
   // `undefined` until the browser has had a chance to answer; localStorage is
   // not there during server render and guessing makes the two trees disagree.
   const [session, setSession] = useState<Session | null | undefined>(undefined);
+  /** null while unknown — the answer comes from the chain, not from us. */
+  const [upgraded, setUpgraded] = useState<boolean | null>(null);
+  const [offering, setOffering] = useState(false);
+  const [appVersion, setAppVersion] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [step, setStep] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const a = remembered();
     setSession(a ? new Session(a) : null);
   }, []);
 
+  // Whether this account can batch is a fact about the chain, so it is asked
+  // rather than remembered — someone may have upgraded it elsewhere.
+  useEffect(() => {
+    if (!session) return;
+    let live = true;
+    fetch(`/api/delegate?address=${session.authority.address}`)
+      .then((r) => r.json())
+      .then((d) => live && setUpgraded(!!d.upgraded))
+      .catch(() => live && setUpgraded(null));
+    return () => {
+      live = false;
+    };
+  }, [session]);
+
+  /**
+   * One tap, and no gas.
+   *
+   * The device signs only the authorisation — a standalone object saying this
+   * account may run that code — and the host puts it on chain. Nothing the host
+   * does can change what was signed: alter the delegate, the chain or the nonce
+   * and it recovers to a different account and does nothing at all.
+   */
+  async function runUpgrade() {
+    if (!session) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const dev = await session.device(setStep);
+      const info = await (await fetch(`/api/delegate?address=${dev.address}`)).json();
+      if (info.upgraded) {
+        setUpgraded(true);
+        setOffering(false);
+        return;
+      }
+      const sig = await dev.authorize(info.nonce, setStep);
+
+      setStep("Publishing the upgrade");
+      const res = await fetch("/api/delegate", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ address: dev.address, nonce: info.nonce, ...sig }),
+      });
+      const out = await res.json();
+      if (!res.ok) throw new Error(out.error ?? `upgrade failed (${res.status})`);
+
+      setUpgraded(true);
+      setOffering(false);
+    } catch (err) {
+      setError(
+        err instanceof RejectedOnDevice
+          ? "Declined on the device. Nothing changed."
+          : (err as Error).message,
+      );
+    } finally {
+      setBusy(false);
+      setStep(null);
+    }
+  }
+
   if (session === undefined) return null;
+
   if (!session) {
     return (
       <ConnectLedger
@@ -38,17 +115,49 @@ export default function Home() {
           const authority: Authority = { address: dev.address, path: dev.path, model: dev.model };
           remember(authority);
           setSession(new Session(authority, dev));
+          setAppVersion(dev.appVersion);
+          // Offer the upgrade while the device is still in hand, and only to
+          // someone who has not already said no on this browser.
+          fetch(`/api/delegate?address=${dev.address}`)
+            .then((r) => r.json())
+            .then((d) => {
+              setUpgraded(!!d.upgraded);
+              if (!d.upgraded && !upgradeDeclined(dev.address)) setOffering(true);
+            })
+            .catch(() => {});
         }}
       />
     );
   }
+
+  if (offering) {
+    return (
+      <UpgradeAccount
+        address={session.authority.address}
+        appVersion={appVersion}
+        busy={busy}
+        step={step}
+        error={error}
+        onUpgrade={runUpgrade}
+        onSkip={() => {
+          declineUpgrade(session.authority.address);
+          setOffering(false);
+        }}
+      />
+    );
+  }
+
   return (
     <Machines
       session={session}
+      upgraded={upgraded === true}
+      onUpgrade={runUpgrade}
+      upgrading={busy}
       onForget={async () => {
         await session.release();
         remember(null);
         setSession(null);
+        setUpgraded(null);
       }}
     />
   );
@@ -60,7 +169,19 @@ const SLOTS = 2;
 /** The device app LKRP speaks to. Not Ethereum. */
 const RING_APP = "Ledger Sync";
 
-function Machines({ session, onForget }: { session: Session; onForget: () => void }) {
+function Machines({
+  session,
+  upgraded,
+  upgrading,
+  onUpgrade,
+  onForget,
+}: {
+  session: Session;
+  upgraded: boolean;
+  upgrading: boolean;
+  onUpgrade: () => void;
+  onForget: () => void;
+}) {
   const { authority } = session;
   const [tenants, setTenants] = useState<(Tenant | null)[]>(() =>
     loadTenants(authority.address, SLOTS),
@@ -187,23 +308,47 @@ function Machines({ session, onForget }: { session: Session; onForget: () => voi
       }
       if (!ready || !executor) throw new Error("the platform stopped before handing over");
 
-      say("Ledger 1 of 3 — point the tenant at its executor");
-      await dev.send({ to: ready.registry, data: calldata.setExecutor(executor) }, say);
-
-      say("Ledger 2 of 3 — publish where the machine is");
-      await dev.send(
-        { to: ready.registry, data: calldata.setHost(ready.ipv4, ready.hostKey, ready.operator) },
-        say,
-      );
-
-      say("Ledger 3 of 3 — set the ceiling");
       const grant = firstGrant({
         label: req.agent,
         agentKey: ready.agentKey,
         capUsd: Number(req.capUsd),
         days: Number(req.days),
       });
-      const receipt = await dev.send({ to: ready.registry, data: calldata.grant(grant) }, say);
+
+      // The four things that make a machine real. Point it at its executor;
+      // publish where it is and who may reach it; allow the executor to draw on
+      // the Tenant's USDC (funding is a pull, so the token has to be told, and
+      // it is bounded by what the Grant could spend over its whole life); then
+      // set the ceiling, which is what mints the Agent's name.
+      const steps = [
+        { say: "point the tenant at its executor", to: ready.registry, data: calldata.setExecutor(executor) },
+        {
+          say: "publish where the machine is",
+          to: ready.registry,
+          data: calldata.setHost(ready.ipv4, ready.hostKey, ready.operator),
+        },
+        {
+          say: "let the executor draw on your USDC",
+          to: USDC,
+          data: calldata.approve(executor, allowanceFor(Number(req.capUsd), Number(req.days))),
+        },
+        { say: "set the ceiling", to: ready.registry, data: calldata.grant(grant) },
+      ];
+
+      // An upgraded account does all four in one transaction, so it is one
+      // approval. Every call inside it is still made by the Tenant, so the
+      // contracts see exactly what they would have seen one at a time.
+      let receipt;
+      if (upgraded) {
+        say("Ledger — one signature for all four steps");
+        receipt = await dev.sendBatch(steps.map(({ to, data }) => ({ to, data })), say);
+      } else {
+        for (const [i, s] of steps.entries()) {
+          say(`Ledger ${i + 1} of ${steps.length} — ${s.say}`);
+          receipt = await dev.send({ to: s.to, data: s.data }, say);
+        }
+      }
+      if (!receipt) throw new Error("nothing was signed");
       const agentId = agentIdFrom(receipt.logs);
       if (!agentId) throw new Error("granted, but the receipt named no agent");
 
@@ -278,6 +423,22 @@ function Machines({ session, onForget }: { session: Session; onForget: () => voi
             <button onClick={onForget} className="underline decoration-neutral-800 underline-offset-2 hover:text-neutral-400">
               switch device
             </button>
+          </p>
+          <p className="mt-1 text-xs text-neutral-600">
+            {upgraded ? (
+              <span className="text-emerald-500/80">one signature per machine</span>
+            ) : (
+              <>
+                four signatures per machine ·{" "}
+                <button
+                  onClick={onUpgrade}
+                  disabled={upgrading}
+                  className="underline decoration-neutral-800 underline-offset-2 hover:text-neutral-400 disabled:opacity-50"
+                >
+                  {upgrading ? "upgrading…" : "make it one"}
+                </button>
+              </>
+            )}
           </p>
         </div>
       </header>
