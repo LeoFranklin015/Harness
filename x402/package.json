@@ -1,0 +1,16 @@
+{
+  "name": "harness-x402",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "seller": "node --experimental-strip-types seller.ts",
+    "agent": "node --experimental-strip-types agent.ts"
+  },
+  "dependencies": {
+    "@x402/core": "^2.25.0",
+    "@x402/evm": "^2.25.0",
+    "@x402/express": "^2.25.0",
+    "express": "^5.2.1",
+    "viem": "^2.56.3"
+  }
+}

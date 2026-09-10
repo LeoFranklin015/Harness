@@ -5,6 +5,8 @@ libs = ["lib"]
 solc_version = "0.8.30"
 evm_version = "prague"
 via_ir = true
+# Issuing a Grant writes it out: the chain keeps only the hash.
+fs_permissions = [{ access = "write", path = "../x402/grants" }]
 optimizer = true
 optimizer_runs = 1
 remappings = [
