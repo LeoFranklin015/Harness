@@ -1,0 +1,30 @@
+# The nameserver, on the mesh.
+#
+# It answers `<agent>.<tenant>.harness.eth` with the Agent's address by asking
+# ENS, so a name resolves to a machine for exactly as long as the chain says it
+# should. Revoking an Agent stops the name resolving in the same transaction
+# that stops it spending — there is no record to retract and no cache to wait
+# out beyond one short TTL.
+#
+# Unlike a Runner this needs a real TUN, and the reason is narrow: DNS is UDP,
+# and tailscaled's userspace netstack forwards TCP only. `tailscale serve --tcp`
+# is what gets an Agent's port 22 reachable without any privilege at all, and
+# there is no UDP equivalent. So this one container gets `--device /dev/net/tun`
+# and CAP_NET_ADMIN, which reach its own network namespace and not the host's.
+FROM docker.io/library/alpine:3.21
+
+RUN apk add --no-cache tailscale iptables
+
+# Built outside, statically, so nothing here needs a Go toolchain.
+COPY harness-dns /usr/local/bin/harness-dns
+RUN chmod 755 /usr/local/bin/harness-dns
+
+# tailscaled chmods its state directory on startup; owning it up front avoids
+# needing CAP_FOWNER for that.
+RUN mkdir -p /var/lib/tailscale && chown root:root /var/lib/tailscale && chmod 700 /var/lib/tailscale
+
+COPY entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod 755 /usr/local/bin/entrypoint.sh
+
+EXPOSE 53/udp 53/tcp
+CMD ["/usr/local/bin/entrypoint.sh"]

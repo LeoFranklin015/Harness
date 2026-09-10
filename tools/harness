@@ -79,10 +79,12 @@ secret() { # NAME file
 # --- commands ---------------------------------------------------------------
 
 cmd_up() {
-    log "building the nameserver"
-    (cd "$repo/dns" && go build -o "$run/harness-dns" .) || { log "dns build failed"; return 1; }
-
-    start dns 5354 "$run/harness-dns" -addr 0.0.0.0:5354
+    # The nameserver runs on the mesh rather than on this host, so that a
+    # visitor's `.eth` lookups have somewhere to go that the host is not part
+    # of. It is also the one container with a real TUN: DNS is UDP and
+    # tailscaled's userspace netstack forwards only TCP.
+    log "starting the nameserver on the mesh"
+    "$repo/dns/run-dns.sh" || { log "dns failed"; return 1; }
 
     # The seller stands in for a third party. It needs a key to be paid to, and
     # reads it the same way everything else does.
@@ -116,7 +118,7 @@ cmd_up() {
 }
 
 cmd_down() {
-    for name in web broker seller dns; do stop "$name"; done
+    for name in web broker seller; do stop "$name"; done
     # Anything that outlived its pidfile — a restart during development leaves
     # these behind, and a half-running stack is worse than either state.
     # Matched loosely on purpose: started by hand during development these carry
@@ -124,7 +126,6 @@ cmd_down() {
     kill_matching "next start .*-p 3000"
     kill_matching "broker\.ts"
     kill_matching "seller-express\.ts"
-    kill_matching "harness-dns"
 
     for c in $(sudo -n podman ps --filter name=^harness- --format '{{.Names}}' 2>/dev/null); do
         sudo -n podman stop -t 3 "$c" >/dev/null 2>&1 && log "stopped $c"
@@ -135,7 +136,7 @@ cmd_down() {
 
 cmd_status() {
     printf '  %-8s %-6s %s\n' SERVICE PORT STATE
-    for pair in "web 3000" "broker 8402" "seller 4023" "dns 5354"; do
+    for pair in "web 3000" "broker 8402" "seller 4023"; do
         set -- $pair
         # The broker listens per Tenant, so its port lives on a gateway address.
         if [ "$1" = broker ]; then

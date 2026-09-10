@@ -90,7 +90,7 @@ export function keyFilename(machine: string) {
 }
 
 /**
- * The login, as one short line.
+ * The login, as one short line, on whatever the visitor is sitting at.
  *
  * The key arrives as a downloaded file rather than as a heredoc in the
  * clipboard. Pasting a private key through a terminal works, but it is eleven
@@ -99,10 +99,30 @@ export function keyFilename(machine: string) {
  * is a bad habit to teach in a product whose whole argument is that you should
  * know what you are approving.
  *
+ * Per platform, because the differences are the ones that stop a person cold.
+ * Windows has no `chmod` and spells home differently; its OpenSSH reads the
+ * file regardless. Unix `ssh` refuses a key the group can read, so the `chmod`
+ * is not decoration — without it the login fails with a permissions error that
+ * says nothing about permissions being the visitor's to fix.
+ *
+ * `host` is the Agent's ENS name once the tailnet resolves `.eth`, and its mesh
+ * address otherwise. The name is the better one to show: it is the same string
+ * the chain answers for, so it stops resolving when the Agent is revoked.
+ *
  * `IdentitiesOnly` because an ssh-agent holding a dozen keys will offer them
  * all, and sshd counts attempts before the right one arrives.
  */
-export function loginCommand(user: string, address: string, machine: string, dir = "~/Downloads") {
-  const file = `${dir}/${keyFilename(machine)}`;
-  return `chmod 600 ${file} && ssh -i ${file} -o IdentitiesOnly=yes ${user}@${address}`;
+export function loginCommand(
+  user: string,
+  host: string,
+  machine: string,
+  platform: "linux" | "macos" | "windows" = "linux",
+) {
+  const name = keyFilename(machine);
+  if (platform === "windows") {
+    const file = `$env:USERPROFILE\\Downloads\\${name}`;
+    return `ssh -i ${file} -o IdentitiesOnly=yes ${user}@${host}`;
+  }
+  const file = `~/Downloads/${name}`;
+  return `chmod 600 ${file} && ssh -i ${file} -o IdentitiesOnly=yes ${user}@${host}`;
 }

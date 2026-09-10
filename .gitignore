@@ -76,3 +76,6 @@ x402/.agent-root
 # Runner host keys: generated per container, never committed.
 runner/ssh_host_ed25519_key
 runner/ssh_host_ed25519_key.pub
+
+# Built by dns/run-dns.sh, copied into the image. Not source.
+dns/harness-dns

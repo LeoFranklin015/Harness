@@ -34,6 +34,7 @@ export async function POST(request: Request) {
   let machine = "a machine";
   let platform: Platform = "linux";
   let meshAddress: string | null = null;
+  let ensName: string | null = null;
   let user = "runner";
 
   try {
@@ -41,6 +42,7 @@ export async function POST(request: Request) {
       machine?: string;
       platform?: Platform;
       meshAddress?: string;
+      ensName?: string;
       user?: string;
     };
     if (body.platform === "macos" || body.platform === "windows") platform = body.platform;
@@ -56,6 +58,10 @@ export async function POST(request: Request) {
     // Only ever an IPv4 literal; it is pasted straight into an ssh command.
     if (typeof body.meshAddress === "string" && /^\d{1,3}(\.\d{1,3}){3}$/.test(body.meshAddress)) {
       meshAddress = body.meshAddress;
+    }
+    // Also pasted into a shell, so it is held to the shape of a name.
+    if (typeof body.ensName === "string" && /^[a-z0-9.-]{1,128}$/.test(body.ensName)) {
+      ensName = body.ensName;
     }
   } catch {
     // No body is fine; the description just stays generic.
@@ -85,7 +91,12 @@ export async function POST(request: Request) {
         fingerprint: key.fingerprint,
         privateKey: key.privateKey,
         keyFilename: keyFilename(machine),
-        login: meshAddress ? loginCommand(user, meshAddress, machine) : null,
+        // The name first, because it is the same string the chain answers for
+        // and it stops resolving when the Agent is revoked. The address is
+        // kept alongside it for a tailnet that has not been pointed at the
+        // nameserver yet, where the name would simply not resolve.
+        login: ensName ? loginCommand(user, ensName, machine, platform) : null,
+        loginByAddress: meshAddress ? loginCommand(user, meshAddress, machine, platform) : null,
       },
       // Belt and braces: none of this may sit in a shared cache.
       { headers: { "cache-control": "no-store, private" } },

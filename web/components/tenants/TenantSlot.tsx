@@ -141,6 +141,7 @@ function FilledSlot({
           <MeshInvite
             machine={tenant.label}
             meshAddress={tenant.meshAddress}
+            ensName={tenant.agent ? `${tenant.agent}.${tenant.label}.harness.eth` : null}
             onAuthorise={(operator) => onAuthorise(tenant, operator)}
           />
         </>

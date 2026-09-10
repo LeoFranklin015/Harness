@@ -34,15 +34,19 @@ type Invite = {
   privateKey: string;
   keyFilename: string;
   login: string | null;
+  loginByAddress: string | null;
 };
 
 export function MeshInvite({
   machine,
   meshAddress,
+  ensName,
   onAuthorise,
 }: {
   machine: string;
   meshAddress: string | null;
+  /** The Agent's full name, which is what a visitor should be typing. */
+  ensName: string | null;
   /** Puts the fingerprint on chain. Resolves once the device has signed. */
   onAuthorise: (operator: Hex) => Promise<void>;
 }) {
@@ -84,7 +88,13 @@ export function MeshInvite({
         headers: { "content-type": "application/json" },
         // The visitor's own browser is the only thing that knows what they are
         // sitting at, so it says so rather than the page guessing.
-        body: JSON.stringify({ machine, platform: thisPlatform(), meshAddress, user: "runner" }),
+        body: JSON.stringify({
+          machine,
+          platform: thisPlatform(),
+          meshAddress,
+          ensName,
+          user: "runner",
+        }),
       });
       const body = await res.json();
       if (!res.ok) throw new Error(body.error ?? `could not mint an invite (${res.status})`);
@@ -155,10 +165,18 @@ export function MeshInvite({
         <>
           <Command label="1 · install, if you have not" text={invite.commands.install} />
           <Command label="2 · join the mesh, single use" text={invite.commands.join} secret />
-          {invite.login ? (
+          {invite.login || invite.loginByAddress ? (
             <>
               <DownloadKey invite={invite} />
-              <Command label="4 · log in" text={invite.login} />
+              <Command label="4 · log in" text={(invite.login ?? invite.loginByAddress)!} />
+              {invite.login && invite.loginByAddress && (
+                <p className="mt-2 text-[11px] leading-relaxed text-neutral-700">
+                  If the name does not resolve, the tailnet has not been pointed
+                  at the nameserver yet — use{" "}
+                  <code className="font-mono text-neutral-600">{meshAddress}</code>{" "}
+                  in place of it.
+                </p>
+              )}
             </>
           ) : (
             <p className="mt-3 text-[11px] text-neutral-600">
