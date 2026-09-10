@@ -5,7 +5,7 @@
 # chain is asked on every connection.
 FROM docker.io/library/alpine:3.21
 
-RUN apk add --no-cache openssh-server python3 \
+RUN apk add --no-cache openssh-server python3 tailscale \
  && adduser -D -s /bin/sh runner \
  # `adduser -D` leaves the account locked ("!" in shadow), and sshd refuses a
  # locked account even for public-key auth. The Agent has no password at all —
@@ -33,5 +33,14 @@ COPY name /etc/harness/name
 
 COPY sshd_config /etc/ssh/sshd_config
 
+# tailscaled chmods its state directory on startup, and chmod on a directory you
+# do not own needs CAP_FOWNER — which this container deliberately lacks. The
+# alpine package ships the directory owned by uid 100, and a named volume copies
+# that ownership up on first start, so it is fixed here rather than after.
+RUN mkdir -p /var/lib/tailscale && chown root:root /var/lib/tailscale && chmod 700 /var/lib/tailscale
+
+COPY entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod 755 /usr/local/bin/entrypoint.sh
+
 EXPOSE 22
-CMD ["/usr/sbin/sshd", "-D", "-e"]
+CMD ["/usr/local/bin/entrypoint.sh"]

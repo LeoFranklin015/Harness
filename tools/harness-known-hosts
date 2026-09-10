@@ -1,58 +1,211 @@
-#!/usr/bin/env bash
-# Prints the known_hosts line for an Agent, read from ENS.
-#
-# Wired into ssh as KnownHostsCommand, this replaces trust-on-first-use with
-# trust-on-authority: the key ssh checks against is the one the Agent's Grant
-# says it should have, fetched fresh on every connection rather than remembered
-# from the first. Revoke the Agent and the record goes with it, so the next
-# connection fails instead of succeeding against a key someone once accepted.
-#
-#   Host *.harness.eth
-#       KnownHostsCommand /path/to/harness-known-hosts %H
-#       StrictHostKeyChecking yes
-#
-# ssh terminates the connection when this exits non-zero, which is what we
-# want: no record, no connection. Exiting 0 in silence would fall through to
-# ~/.ssh/known_hosts and quietly restore the trust we are replacing.
-set -euo pipefail
+#!/usr/bin/env python3
+"""Print the known_hosts line for an Agent, read from ENS.
 
-# %H is what ssh will match the line against — the host as it dialled it,
-# which may be an address and port. The ENS name is what we look up. They are
-# usually the same and need not be: an Agent reached through a tunnel or a
-# forwarded port is still that Agent.
-host="${1:?usage: harness-known-hosts <host-as-dialled> [ens-name]}"
-lookup="${2:-}"
-rpc="${HARNESS_RPC:-https://ethereum-sepolia-rpc.publicnode.com}"
-universal="${HARNESS_UNIVERSAL_RESOLVER:-0xd26f2040d083af1cd2962ba303f4bea0c4faf142}"
+Wired into ssh as KnownHostsCommand this replaces trust-on-first-use with
+trust-on-authority: the key ssh checks against is the one the Agent's Grant says
+it should have, fetched fresh on every connection rather than remembered from
+the first. Revoke the Agent and the record goes with it, so the next connection
+fails instead of succeeding against a key someone once accepted.
 
-# ssh passes %H as [host]:port whenever the port is not 22.
-if [ -z "$lookup" ]; then
-    # ssh passes %H as [host]:port whenever the port is not 22.
-    lookup="${host#[}"; lookup="${lookup%%]*}"; lookup="${lookup%%:*}"; lookup="${lookup%.}"
-fi
+    Host *.harness.eth
+        KnownHostsCommand /usr/local/bin/harness-known-hosts %H
+        StrictHostKeyChecking yes
 
-# DNS wire format: each label prefixed by its length, then a zero byte. This is
-# how ENSIP-10 passes a name to a wildcard resolver.
-wire=$(python3 -c '
+    # or, when reaching an Agent by mesh address rather than by name:
+    #   harness-known-hosts %H research.leo.harness.eth
+
+ssh terminates the connection when this exits non-zero, which is what we want:
+no record, no connection. Exiting 0 in silence would fall through to
+~/.ssh/known_hosts and quietly restore the trust we are replacing.
+
+Standard library only — no dependencies to install on whatever machine needs to
+connect.
+"""
+
+import json
+import os
 import sys
-name = sys.argv[1]
-print("0x" + "".join("%02x" % len(l) + l.encode().hex() for l in name.split(".")) + "00")
-' "$lookup")
+import urllib.error
+import urllib.request
 
-answer=$(cast call "$universal" 'resolve(bytes,bytes)(bytes,address)' \
-    "$wire" \
-    "$(cast calldata 'text(bytes32,string)' "$(cast namehash "$lookup")" 'ssh-hostkey')" \
-    --rpc-url "$rpc" 2>/dev/null | head -1) || {
-    echo "harness: could not reach ENS for $lookup" >&2
-    exit 1
-}
+RPC = os.environ.get("HARNESS_RPC", "https://ethereum-sepolia-rpc.publicnode.com")
+UNIVERSAL = os.environ.get(
+    "HARNESS_UNIVERSAL_RESOLVER", "0xd26f2040d083af1cd2962ba303f4bea0c4faf142"
+)
+TIMEOUT = float(os.environ.get("HARNESS_TIMEOUT", "5"))
 
-line=$(cast --abi-decode 'f()(string)' "$answer" 2>/dev/null | tr -d '"' || true)
+# resolve(bytes,bytes) — ENSIP-10, and text(bytes32,string) — ENSIP-5.
+RESOLVE = "9061b923"
+TEXT = "59d1d43c"
+RECORD = "ssh-hostkey"
 
-if [ -z "${line// }" ]; then
-    echo "harness: $lookup publishes no host key — revoked, expired, or no runner" >&2
-    exit 1
-fi
 
-# Keyed by the host as ssh dialled it, so ssh can match the line.
-echo "$host $line"
+def keccak(data: bytes) -> bytes:
+    """Keccak-256. Not SHA3-256: the padding byte differs, and hashlib has only
+    the latter, so the permutation is spelled out here rather than pulling in a
+    dependency for one hash inside sshd's login path."""
+    rate, out, state = 136, 32, [0] * 25
+    rc = [
+        0x0000000000000001, 0x0000000000008082, 0x800000000000808A,
+        0x8000000080008000, 0x000000000000808B, 0x0000000080000001,
+        0x8000000080008081, 0x8000000000008009, 0x000000000000008A,
+        0x0000000000000088, 0x0000000080008009, 0x000000008000000A,
+        0x000000008000808B, 0x800000000000008B, 0x8000000000008089,
+        0x8000000000008003, 0x8000000000008002, 0x8000000000000080,
+        0x000000000000800A, 0x800000008000000A, 0x8000000080008081,
+        0x8000000000008080, 0x0000000080000001, 0x8000000080008008,
+    ]
+    rot = [
+        [0, 36, 3, 41, 18], [1, 44, 10, 45, 2], [62, 6, 43, 15, 61],
+        [28, 55, 25, 21, 56], [27, 20, 39, 8, 14],
+    ]
+    mask = (1 << 64) - 1
+
+    def rol(x, n):
+        return ((x << n) | (x >> (64 - n))) & mask
+
+    def keccak_f(a):
+        for r in range(24):
+            c = [a[x] ^ a[x + 5] ^ a[x + 10] ^ a[x + 15] ^ a[x + 20] for x in range(5)]
+            d = [c[(x - 1) % 5] ^ rol(c[(x + 1) % 5], 1) for x in range(5)]
+            for x in range(5):
+                for y in range(5):
+                    a[x + 5 * y] ^= d[x]
+            b = [0] * 25
+            for x in range(5):
+                for y in range(5):
+                    b[y + 5 * ((2 * x + 3 * y) % 5)] = rol(a[x + 5 * y], rot[x][y])
+            for x in range(5):
+                for y in range(5):
+                    a[x + 5 * y] = b[x + 5 * y] ^ (
+                        (~b[(x + 1) % 5 + 5 * y] & mask) & b[(x + 2) % 5 + 5 * y]
+                    )
+            a[0] ^= rc[r]
+        return a
+
+    padded = bytearray(data)
+    padded.append(0x01)
+    while len(padded) % rate != 0:
+        padded.append(0x00)
+    padded[-1] |= 0x80
+
+    for off in range(0, len(padded), rate):
+        block = padded[off : off + rate]
+        for i in range(rate // 8):
+            state[i] ^= int.from_bytes(block[i * 8 : i * 8 + 8], "little")
+        state = keccak_f(state)
+
+    return b"".join(x.to_bytes(8, "little") for x in state)[:out]
+
+
+def namehash(name: str) -> bytes:
+    node = b"\x00" * 32
+    for label in reversed(name.rstrip(".").split(".")):
+        if label:
+            node = keccak(node + keccak(label.encode()))
+    return node
+
+
+def wire(name: str) -> bytes:
+    out = b""
+    for label in name.rstrip(".").split("."):
+        if label:
+            out += bytes([len(label)]) + label.encode()
+    return out + b"\x00"
+
+
+def word(n: int) -> str:
+    return f"{n:064x}"
+
+
+def pad(b: bytes) -> str:
+    return b.hex() + "00" * ((32 - len(b) % 32) % 32)
+
+
+def dyn(b: bytes) -> str:
+    return word(len(b)) + pad(b)
+
+
+def call_data(name: str) -> str:
+    inner = bytes.fromhex(
+        TEXT + namehash(name).hex() + word(0x40) + word(len(RECORD)) + pad(RECORD.encode())
+    )
+    n = wire(name)
+    return (
+        "0x" + RESOLVE + word(0x40) + word(0x40 + 32 + len(pad(n)) // 2) + dyn(n) + dyn(inner)
+    )
+
+
+def read_string(out: bytes, slot: int = 0) -> str:
+    """Unwrap `resolve`'s (bytes,address), then the inner `text` return."""
+    def at(b, s):
+        off = int.from_bytes(b[s * 32 : s * 32 + 32], "big")
+        if off + 32 > len(b):
+            return b""
+        n = int.from_bytes(b[off : off + 32], "big")
+        return b[off + 32 : off + 32 + n] if off + 32 + n <= len(b) else b""
+
+    return at(at(out, slot), 0).decode("utf-8", "replace")
+
+
+
+
+def known_hosts_line(name: str) -> str:
+    """The `ssh-ed25519 AAAA…` half of a known_hosts line, or empty."""
+    body = json.dumps(
+        {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "eth_call",
+            "params": [{"to": UNIVERSAL, "data": call_data(name)}, "latest"],
+        }
+    ).encode()
+    req = urllib.request.Request(
+        RPC,
+        data=body,
+        headers={
+            "content-type": "application/json",
+            "user-agent": "harness-known-hosts",
+        },
+    )
+    with urllib.request.urlopen(req, timeout=TIMEOUT) as resp:
+        answer = json.load(resp)
+    if "error" in answer:
+        if "revert" in str(answer["error"].get("message", "")):
+            return ""
+        raise RuntimeError(answer["error"].get("message", "eth_call failed"))
+    return read_string(bytes.fromhex(answer["result"][2:])).strip()
+
+
+def main() -> int:
+    if len(sys.argv) < 2:
+        print("usage: harness-known-hosts <host-as-dialled> [ens-name]", file=sys.stderr)
+        return 1
+
+    # %H is what ssh matches the line against — the host as it dialled it, which
+    # may be an address and a port. The ENS name is what we look up. They are
+    # usually the same and need not be: an Agent reached by mesh address, or
+    # through a forwarded port, is still that Agent.
+    host = sys.argv[1]
+    name = sys.argv[2] if len(sys.argv) > 2 else host.lstrip("[").split("]")[0].split(":")[0].rstrip(".")
+
+    try:
+        line = known_hosts_line(name)
+    except (urllib.error.URLError, OSError, RuntimeError, ValueError) as err:
+        # Fail closed. An unreachable chain must not become an open door.
+        print(f"harness: could not reach ENS for {name}: {err}", file=sys.stderr)
+        return 1
+
+    if not line:
+        print(
+            f"harness: {name} publishes no host key — revoked, expired, or no runner",
+            file=sys.stderr,
+        )
+        return 1
+
+    print(f"{host} {line}")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
