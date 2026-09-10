@@ -119,47 +119,75 @@ body {
 
 /* --- the agent ---------------------------------------------------------- */
 
-/* Signal leaving the antenna: brightens and grows a little, then gone. */
-@keyframes agent-wave {
-  0%, 100% { opacity: 0.15; }
-  45%      { opacity: 1; }
+/*
+ * Rotation and translation via the independent `rotate`/`translate`
+ * properties, not `transform`: several of these groups already carry a
+ * `transform` attribute placing them, and a CSS transform would replace it.
+ */
+.walle-origin {
+  transform-box: fill-box;
+  transform-origin: center;
 }
 
-/* Barely there. Enough that the drawing is not furniture. */
-@keyframes agent-bob {
+/* Tracks. Exactly one rung of travel, so the loop is seamless. */
+@keyframes walle-track {
+  from { translate: 0 0; }
+  to   { translate: 0 9px; }
+}
+
+/* Tracks do not run true. A degree either side is the whole of it. */
+@keyframes walle-rock {
+  0%, 100% { rotate: -0.9deg; }
+  50%      { rotate: 0.9deg; }
+}
+
+/* The neck lifts, holds, and settles. */
+@keyframes walle-crane {
   0%, 100% { translate: 0 0; }
-  50%      { translate: 0 -3px; }
+  40%      { translate: 0 -5px; }
+  70%      { translate: 0 -3px; }
 }
 
-/* A blink is one frame long and mostly absent, so the eyes are open almost
-   all the time and the shut moment is a surprise rather than a rhythm. */
-@keyframes agent-blink {
-  0%, 92%, 100% { scale: 1 1; }
-  95%           { scale: 1 0.1; }
+/*
+ * The head-cock. Out of phase between the pods and mostly spent holding a
+ * position — a servo arrives and then waits, it does not drift.
+ */
+@keyframes walle-tilt-l {
+  0%, 34%   { rotate: -13deg; }
+  44%, 70%  { rotate: -3deg; }
+  80%, 100% { rotate: -13deg; }
+}
+@keyframes walle-tilt-r {
+  0%, 30%   { rotate: 13deg; }
+  40%, 62%  { rotate: 17deg; }
+  74%, 100% { rotate: 13deg; }
 }
 
-@keyframes agent-think {
-  0%, 100% { opacity: 0.45; }
-  50%      { opacity: 1; }
+/* Look somewhere, hold, look back. Stepped, so there is no drift between. */
+@keyframes walle-dart {
+  0%, 30%   { translate: 0 0; }
+  32%, 52%  { translate: 7px -2px; }
+  54%, 74%  { translate: -7px 1px; }
+  76%, 100% { translate: 0 0; }
+}
+
+/* A blink is two frames and a long wait. */
+@keyframes walle-blink {
+  0%, 92%   { translate: 0 0; }
+  94%       { translate: 0 58px; }
+  96%       { translate: 0 74px; }
+  98%       { translate: 0 58px; }
+  100%      { translate: 0 0; }
 }
 
 /* Out and away. Linear, because a payment does not ease. */
-/* Held invisible until it is clear of the arm, so a coin never draws on top
-   of the hand it came from. */
-@keyframes agent-spend {
-  0%, 14%  { translate: 0 0; opacity: 0; }
-  30%      { opacity: 1; }
-  76%      { opacity: 1; }
-  100%     { translate: 58px -34px; opacity: 0; }
+@keyframes walle-spend {
+  0%, 12%  { translate: 0 0; opacity: 0; }
+  26%      { opacity: 1; }
+  74%      { opacity: 1; }
+  100%     { translate: 34px -48px; opacity: 0; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .agent-still *, [style*="agent-"] { animation: none !important; }
-}
-
-/* Stalled on a person. Faster and wider than anything else the agent does,
-   so it reads as being asked for something rather than as working. */
-@keyframes agent-waiting {
-  0%, 100% { opacity: 1;   scale: 1; }
-  50%      { opacity: 0.3; scale: 1.35; }
+  [class*="walle-"], [style*="walle-"] { animation: none !important; }
 }

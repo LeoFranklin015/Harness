@@ -3,41 +3,34 @@
 import { useId } from "react";
 
 /**
- * The agent, as a drawing.
+ * The agent, as a machine that has clearly been left running for a while.
  *
- * Line art rather than the rendered metal of the gear train, and deliberately
- * so: this is the thing the card is *about*, and it has to read at a glance
- * from across a room. Uniform stroke, round caps, no fill — the same grammar
- * as an icon set, which is what makes a shape legible when it is the only
- * thing on a dark card.
+ * The shape is the obvious reference and the reason it works here: a small
+ * robot given a job, doing it alone, for a long time. That is exactly what a
+ * Harness agent is, and the silhouette says it faster than any label on the
+ * card could.
  *
- * What it is doing matters more than what it looks like. It signals, it
- * thinks about money, and it sends payments out — those three, because they
- * are the three things an Agent in Harness actually does. The coins leave
- * rather than arrive: an Agent spends from a ceiling somebody set, and none
- * of it comes back.
+ * All the life is in the eyes and the tracks, which is true of the film too.
+ * The pods tilt independently and out of phase — the head-cock is the whole
+ * performance, and two eyes tilting together read as a mechanism while two
+ * tilting apart read as something looking. The tracks roll underneath, the
+ * body rocks a degree either side because tracks do, and the pupils dart and
+ * hold rather than sweeping.
  *
- * Everything stops on revoke. Not dimmed and still ticking — stopped, which
- * is the honest picture of what a revocation does.
+ * Nothing here eases through a long cycle. Servos snap and then wait, so the
+ * eye timings are stepped and the holds are most of the duration.
  */
 
 type State = "provisioning" | "live" | "revoked";
 
-/** An arc between two bearings, in degrees, y-down like the rest of SVG. */
-function arc(cx: number, cy: number, r: number, from: number, to: number): string {
-  const at = (deg: number) => {
-    const a = (deg * Math.PI) / 180;
-    return [cx + r * Math.cos(a), cy + r * Math.sin(a)] as const;
-  };
-  const [x0, y0] = at(from);
-  const [x1, y1] = at(to);
-  const large = Math.abs(to - from) > 180 ? 1 : 0;
-  const sweep = to > from ? 1 : 0;
-  return `M ${x0.toFixed(1)} ${y0.toFixed(1)} A ${r} ${r} 0 ${large} ${sweep} ${x1.toFixed(1)} ${y1.toFixed(1)}`;
-}
+const YELLOW = "#E9B62C";
+const YELLOW_LIT = "#F5CE5B";
+const TEAL = "#1E5761";
+const DARK = "#15181C";
+const RIM = "#0C0E11";
 
-/** Three coins on the same path, staggered, so it reads as a stream. */
-const COINS = [0, 0.8, 1.6];
+/** Rung spacing on the tracks. The scroll distance must match it exactly. */
+const RUNG = 9;
 
 export function Agent({
   state,
@@ -51,128 +44,165 @@ export function Agent({
 }) {
   const uid = useId().replace(/:/g, "");
   const stopped = state === "revoked";
-  const busy = state === "provisioning" && !awaiting;
+  const hurry = state === "provisioning" && !awaiting ? 0.55 : 1;
 
-  // One ink. The green was decoration standing in for nothing — status is
-  // already carried by whether the thing is moving.
-  const ink = "#e8edf5";
-  const accent = ink;
-  const anim = (name: string, secs: number, delay = 0) =>
-    stopped ? undefined : { animation: `${name} ${secs}s ease-in-out ${delay}s infinite` };
+  const run = (name: string, secs: number, delay = 0, ease = "ease-in-out") =>
+    stopped
+      ? undefined
+      : { animation: `${name} ${(secs * hurry).toFixed(2)}s ${ease} ${delay}s infinite` };
 
   return (
-    <svg
-      className={className}
-      // Wide enough for a coin to leave, and tall enough for the outer
-      // signal arc, which reaches above the antenna and was being cut off.
-      viewBox="34 -20 194 236"
-      aria-hidden
-      style={{ opacity: stopped ? 0.32 : 1 }}
-    >
-      <g
-        stroke={ink}
-        strokeWidth={5}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        fill="none"
-        strokeOpacity={0.9}
-      >
-        {/* Signalling. Two arcs, the outer one a beat behind, so it reads as
-            something leaving rather than two rings blinking together. */}
-        <path d={arc(100, 26, 24, 190, 262)} style={anim("agent-wave", busy ? 0.8 : 1.3)} />
-        <path
-          d={arc(100, 26, 39, 196, 256)}
-          style={anim("agent-wave", busy ? 0.8 : 1.3, busy ? 0.16 : 0.26)}
-        />
+    <svg className={className} viewBox="8 12 284 236" aria-hidden style={{ opacity: stopped ? 0.3 : 1 }}>
+      <defs>
+        {/* One clip per eye, so the lid drops inside the shell rather than
+            across the top of it. */}
+        {(["l", "r"] as const).map((side) => (
+          <clipPath key={side} id={`${uid}-eye-${side}`}>
+            <path d={eyeShell(32)} />
+          </clipPath>
+        ))}
+        {(["l", "r"] as const).map((side) => (
+          <clipPath key={side} id={`${uid}-track-${side}`}>
+            <rect x={-20} y={-52} width={40} height={104} rx={19} />
+          </clipPath>
+        ))}
+      </defs>
 
-        <g style={anim("agent-bob", 2.8)}>
-          {/* Antenna. It pulses hard while the flow is stalled on somebody
-              pressing a button, because that is the one state the card
-              cannot spell out. */}
-          <circle
-            cx={100}
-            cy={26}
-            r={8}
-            stroke={accent}
-            style={awaiting && !stopped ? { animation: "agent-waiting 1s ease-in-out infinite" } : undefined}
-          />
-          <path d="M 100 34 V 56" />
-
-          {/* Head, with the dome the reference has */}
-          <path d="M 62 128 V 90 Q 62 56 100 56 Q 138 56 138 90 V 128 Q 138 134 132 134 H 68 Q 62 134 62 128 Z" />
-
-          {/* Side brackets */}
-          <path d="M 58 98 H 52 A 6 6 0 0 0 46 104 V 116 A 6 6 0 0 0 52 122 H 58" />
-          <path d="M 142 98 H 148 A 6 6 0 0 1 154 104 V 116 A 6 6 0 0 1 148 122 H 142" />
-
-          {/* Visor and eyes. The blink is the cheapest signal of life there
-              is, and the only reason the face is not a diagram. */}
-          <rect x={74} y={84} width={52} height={28} rx={8} />
-          <g style={anim("agent-blink", 3.6)} fill={accent} stroke="none">
-            <circle cx={90} cy={98} r={3.8} />
-            <circle cx={110} cy={98} r={3.8} />
+      {/* Tracks rock the whole machine a degree either side. */}
+      <g className="walle-origin" style={run("walle-rock", 2.4)}>
+        {([
+          ["l", 52, 178, 13],
+          ["r", 248, 178, -13],
+        ] as const).map(([side, x, y, tilt]) => (
+          <g key={side} transform={`translate(${x} ${y}) rotate(${tilt})`}>
+            <rect x={-20} y={-52} width={40} height={104} rx={19} fill={DARK} />
+            <g clipPath={`url(#${uid}-track-${side})`}>
+              <g
+                style={
+                  stopped
+                    ? undefined
+                    : { animation: `walle-track ${(0.5 * hurry).toFixed(2)}s linear infinite` }
+                }
+              >
+                {/* Drawn past both ends: the group slides exactly one rung and
+                    restarts, so there has to be a rung waiting to arrive. */}
+                {Array.from({ length: 26 }, (_, i) => (
+                  <rect key={i} x={-20} y={-72 + i * RUNG} width={40} height={RUNG * 0.5} fill="#3A4048" />
+                ))}
+              </g>
+            </g>
+            <rect x={-20} y={-52} width={40} height={104} rx={19} fill="none" stroke={RIM} strokeWidth={3} />
           </g>
-          <path d="M 88 124 H 112" />
+        ))}
 
-          {/* Body */}
-          <path d="M 74 148 Q 74 142 80 142 H 120 Q 126 142 126 148 V 176 Q 126 198 100 198 Q 74 198 74 176 Z" />
-          <path d="M 88 172 Q 100 184 112 172" />
+        {/* Body */}
+        <rect x={59} y={132} width={182} height={80} rx={4} fill={YELLOW} stroke={RIM} strokeWidth={3} />
+        {[112, 146, 180].map((x) => (
+          <rect key={x} x={x} y={144} width={4} height={56} rx={2} fill={YELLOW_LIT} opacity={0.6} />
+        ))}
+        <circle cx={80} cy={150} r={6} fill="none" stroke={RIM} strokeWidth={2.5} opacity={0.7} />
+        <circle cx={220} cy={150} r={6} fill="none" stroke={RIM} strokeWidth={2.5} opacity={0.7} />
 
-          {/* Arms */}
-          <rect x={44} y={148} width={10} height={44} rx={5} />
-          <rect x={146} y={148} width={10} height={44} rx={5} />
-        </g>
+        {/* Shoulders */}
+        <rect x={68} y={104} width={48} height={30} rx={2} fill={YELLOW} stroke={RIM} strokeWidth={3} />
+        <rect x={184} y={104} width={48} height={30} rx={2} fill={YELLOW} stroke={RIM} strokeWidth={3} />
+        <rect x={112} y={100} width={76} height={34} rx={2} fill={TEAL} stroke={RIM} strokeWidth={3} />
 
-        {/* What it is thinking about: a coin, pulsing. */}
-        <g style={anim("agent-think", 1.8)}>
-          <path d="M 158 16 H 208 A 8 8 0 0 1 216 24 V 52 A 8 8 0 0 1 208 60 H 178 L 168 72 L 170 60 H 158 A 8 8 0 0 1 150 52 V 24 A 8 8 0 0 1 158 16 Z" />
-          <circle cx={183} cy={38} r={11} stroke={accent} />
-          <text
-            x={183}
-            y={38}
-            textAnchor="middle"
-            dominantBaseline="central"
-            fontSize={15}
-            fontWeight={600}
-            fill={accent}
-            stroke="none"
-          >
-            $
-          </text>
+        {/* Neck and head. The neck lifts and settles; in the film the body
+            barely acts at all and this plus the eyes is the whole of it. */}
+        <g className="walle-origin" style={run("walle-crane", 3.6)}>
+          <rect x={140} y={48} width={20} height={62} rx={2} fill={YELLOW} stroke={RIM} strokeWidth={3} />
+          <rect x={133} y={86} width={34} height={18} rx={2} fill={TEAL} stroke={RIM} strokeWidth={3} />
+
+          <Eye uid={uid} side="l" cx={112} cy={54} base={-12} style={run("walle-tilt-l", 4.2)} />
+          <Eye uid={uid} side="r" cx={188} cy={54} base={12} style={run("walle-tilt-r", 4.2, 0.6)} />
         </g>
       </g>
 
-      {/* Payments leaving. Not on a machine that is still being built, and
-          certainly not on one that has been revoked. */}
+      {/* Payments leaving. It spends from a ceiling somebody set, and none of
+          it comes back, so nothing ever arrives. */}
       {state === "live" &&
-        COINS.map((delay) => (
-          <g
-            key={delay}
-            style={{ animation: `agent-spend 2.4s linear ${delay}s infinite` }}
-            stroke={accent}
-            strokeWidth={4}
-            strokeLinecap="round"
-            fill="none"
-          >
-            <circle cx={150} cy={181} r={8} />
+        [0, 0.7, 1.4].map((delay) => (
+          <g key={delay} style={{ animation: `walle-spend 2.1s linear ${delay}s infinite` }}>
+            <circle cx={248} cy={120} r={10} fill={YELLOW_LIT} stroke={RIM} strokeWidth={2.5} />
             <text
-              x={150}
-              y={181}
+              x={248}
+              y={120}
               textAnchor="middle"
               dominantBaseline="central"
-              fontSize={12}
-              fontWeight={600}
-              fill={accent}
-              stroke="none"
+              fontSize={13}
+              fontWeight={700}
+              fill={RIM}
             >
               $
             </text>
           </g>
         ))}
-
-      <defs>
-        <filter id={`${uid}-none`} />
-      </defs>
     </svg>
   );
+}
+
+/**
+ * One eye pod: a disc with the top taken off by a chord.
+ *
+ * The flat edge is what makes the silhouette read, and tilting it is what
+ * makes the machine read as alive.
+ */
+function Eye({
+  uid,
+  side,
+  cx,
+  cy,
+  base,
+  style,
+}: {
+  uid: string;
+  side: "l" | "r";
+  cx: number;
+  cy: number;
+  base: number;
+  style?: React.CSSProperties;
+}) {
+  return (
+    <g transform={`translate(${cx} ${cy})`}>
+      {/* The resting tilt is the animation's own start and end, because a
+          `rotate` here would otherwise replace it rather than add to it. */}
+      <g className="walle-origin" style={{ rotate: `${base}deg`, ...style }}>
+        <path d={eyeShell(32)} fill={YELLOW} stroke={RIM} strokeWidth={3.5} />
+
+        <g clipPath={`url(#${uid}-eye-${side})`}>
+          <circle cx={0} cy={5} r={21} fill={RIM} />
+          <g style={{ animation: `walle-dart 5.4s steps(1, end) ${side === "l" ? 0 : 0.08}s infinite` }}>
+            <circle cx={0} cy={5} r={12.5} fill="#23272C" />
+            <circle cx={-4.5} cy={0} r={5.5} fill="#F4F7FA" />
+            <circle cx={4.5} cy={9} r={2.4} fill="#F4F7FA" opacity={0.8} />
+          </g>
+          <rect
+            x={-36}
+            y={-76}
+            width={72}
+            height={72}
+            fill={YELLOW}
+            style={{ animation: `walle-blink 4.4s steps(1, end) ${side === "l" ? 0 : 0.05}s infinite` }}
+          />
+        </g>
+
+        <path d={eyeShell(32)} fill="none" stroke={RIM} strokeWidth={3.5} />
+      </g>
+    </g>
+  );
+}
+
+/**
+ * A disc with a chord across the top, centred on the origin.
+ *
+ * The arc runs the long way — from the left end of the chord, down under and
+ * back up to the right end — so `Z` closes it along the flat.
+ */
+function eyeShell(r: number): string {
+  const at = (deg: number) => {
+    const a = (deg * Math.PI) / 180;
+    return `${(r * Math.cos(a)).toFixed(2)} ${(r * Math.sin(a)).toFixed(2)}`;
+  };
+  return `M ${at(200)} A ${r} ${r} 0 1 0 ${at(340)} Z`;
 }
