@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Address } from "viem";
 
-import { Assembly, type AssemblyStage } from "@/components/provision/Assembly";
+import { Assembly, STAGES, type AssemblyStage } from "@/components/provision/Assembly";
 import type { ProvisionRequest } from "@/components/tenants/ProvisionDialog";
 import {
   CATALOGUE,
@@ -45,6 +45,8 @@ export default function NewMachine() {
   const [session, setSession] = useState<Session | null>(null);
   const [taken, setTaken] = useState<string[]>([]);
   const [step, setStep] = useState<StepIndex>(0);
+  const [stage, setStage] = useState<AssemblyStage>(0);
+  const [working, setWorking] = useState(false);
 
   const [form, setForm] = useState<ProvisionRequest>({
     label: "",
@@ -75,6 +77,20 @@ export default function NewMachine() {
   }, [authority]);
 
   const set = (changes: Partial<ProvisionRequest>) => setForm((f) => ({ ...f, ...changes }));
+
+  // Filling the form fits the first three parts. The driver bites for a
+  // moment at each one rather than the part simply being there, so progress
+  // through the form looks like progress on the machine.
+  useEffect(() => {
+    const target = Math.min(step, 3) as AssemblyStage;
+    if (target <= stage) return;
+    setWorking(true);
+    const bite = setTimeout(() => {
+      setStage(target);
+      setWorking(false);
+    }, 850);
+    return () => clearTimeout(bite);
+  }, [step, stage]);
 
   const labelError = useMemo(() => {
     if (!form.label) return null;
@@ -123,14 +139,23 @@ export default function NewMachine() {
 
       <Rail step={step} onJump={(i) => i < step && setStep(i)} />
 
-      <div className="mt-10">
-        {step === 0 && <Identity form={form} set={set} error={labelError} />}
-        {step === 1 && <Capabilities form={form} set={set} />}
-        {step === 2 && <Secrets form={form} set={set} />}
-        {step === 3 && session && (
-          <Build session={session} req={form} authority={authority} onDone={() => router.push("/")} />
-        )}
-      </div>
+      <div className="mt-12 grid gap-12 lg:grid-cols-[minmax(0,1fr)_400px] lg:gap-20">
+        {/* One column of reading width. A form that spans a 27-inch monitor
+            is not "using the space", it is unreadable. */}
+        <div className="max-w-xl">
+          {step === 0 && <Identity form={form} set={set} error={labelError} />}
+          {step === 1 && <Capabilities form={form} set={set} />}
+          {step === 2 && <Secrets form={form} set={set} />}
+          {step === 3 && session && (
+            <Build
+              session={session}
+              req={form}
+              authority={authority}
+              onStage={setStage}
+              onWorking={setWorking}
+              onDone={() => router.push("/")}
+            />
+          )}
 
       {step < 3 && (
         <div className="mt-10 flex items-center gap-3">
@@ -151,12 +176,24 @@ export default function NewMachine() {
           </button>
         </div>
       )}
+        </div>
+
+        {/* Present from the first keystroke, not saved for the end. Watching
+            it come together as you decide what it is makes the form the
+            build rather than a gate in front of one. */}
+        <aside className="lg:sticky lg:top-12 lg:self-start">
+          <Assembly stage={stage} working={working} className="w-full" />
+          <p className="mt-3 text-center font-mono text-[10px] uppercase tracking-wider text-neutral-700">
+            {stage >= STAGES ? `${form.label}.harness.eth` : `${stage} of ${STAGES} assembled`}
+          </p>
+        </aside>
+      </div>
     </Shell>
   );
 }
 
 function Shell({ children }: { children: React.ReactNode }) {
-  return <div className="mx-auto min-h-dvh max-w-3xl px-8 py-14">{children}</div>;
+  return <div className="min-h-dvh px-8 py-12 lg:px-16">{children}</div>;
 }
 
 /** Where you are, and how much is left. */
@@ -491,18 +528,26 @@ function Build({
   session,
   req,
   authority,
+  onStage,
+  onWorking,
   onDone,
 }: {
   session: Session;
   req: ProvisionRequest;
   authority: Authority;
+  /** The drawing lives on the page, so progress is reported rather than held. */
+  onStage: (s: AssemblyStage) => void;
+  onWorking: (w: boolean) => void;
   onDone: () => void;
 }) {
   const [phase, setPhase] = useState<Phase>("idle");
-  const [stage, setStage] = useState<AssemblyStage>(0);
+  const [stage, setStage] = useState<AssemblyStage>(3);
   const [note, setNote] = useState("Two taps: one to make the ring, one to sign the chain.");
   const [error, setError] = useState<string | null>(null);
   const [upgraded, setUpgraded] = useState<boolean | null>(null);
+
+  useEffect(() => onStage(stage), [stage, onStage]);
+  useEffect(() => onWorking(phase === "ring" || phase === "chain"), [phase, onWorking]);
 
   useEffect(() => {
     fetch(`/api/delegate?address=${authority.address}`)
@@ -514,10 +559,9 @@ function Build({
   async function ring() {
     setError(null);
     setPhase("ring");
-    setStage(1);
     try {
       const out = await startRing(session, req, setNote);
-      setStage(2);
+      setStage(4);
       setPhase("awaiting");
       setNote(
         (out.outcome === "created" ? "Ring created. " : "Ring recognised. ") +
@@ -532,7 +576,6 @@ function Build({
   async function chain() {
     setError(null);
     setPhase("chain");
-    setStage(3);
     try {
       const out = await finishOnChain({
         session,
@@ -542,11 +585,11 @@ function Build({
           setNote(s);
           // The signing steps are the last stretch; move the build on when
           // the device is actually being asked for something.
-          if (/Ledger/i.test(s)) setStage((v) => (v < 4 ? 4 : v));
+          if (/Ledger/i.test(s)) setStage((v) => (v < 5 ? 5 : v));
         },
-        onPartial: () => setStage((v) => (v < 3 ? 3 : v)),
+        onPartial: () => setStage((v) => (v < 5 ? 5 : v)),
       });
-      setStage(5);
+      setStage(6);
       setPhase("done");
       setNote(`${req.agent}.${req.label}.harness.eth is live.`);
       await saveTenant(authority.address, 0, {
@@ -564,13 +607,11 @@ function Build({
     }
   }
 
-  const ringState = phase === "ring" ? "live" : stage >= 2 ? "done" : "waiting";
-  const chainState = phase === "chain" ? "live" : stage >= 5 ? "done" : "waiting";
+  const ringState = phase === "ring" ? "live" : stage >= 4 && phase !== "idle" ? "done" : "waiting";
+  const chainState = phase === "chain" ? "live" : stage >= STAGES ? "done" : "waiting";
 
   return (
-    <div className="grid gap-8 sm:grid-cols-[1fr_260px]">
-      <div>
-        <Section
+    <Section
           title="Build it"
           blurb="The ring is made once and cannot be unmade. The chain half can be retried as often as you like."
         >
@@ -601,12 +642,12 @@ function Build({
           )}
 
           <div className="flex gap-3">
-            {(phase === "idle" || (phase === "failed" && stage < 2)) && (
+            {(phase === "idle" || (phase === "failed" && stage < 4)) && (
               <button onClick={ring} className={primary}>
                 Start — make the ring
               </button>
             )}
-            {(phase === "awaiting" || (phase === "failed" && stage >= 2)) && (
+            {(phase === "awaiting" || (phase === "failed" && stage >= 4)) && (
               <button onClick={chain} className={primary}>
                 Continue in Ethereum →
               </button>
@@ -617,16 +658,7 @@ function Build({
               </button>
             )}
           </div>
-        </Section>
-      </div>
-
-      <div className="sm:sticky sm:top-14 sm:self-start">
-        <Assembly stage={stage} className="w-full" />
-        <p className="mt-2 text-center font-mono text-[10px] uppercase tracking-wider text-neutral-700">
-          {stage === 5 ? `${req.label}.harness.eth` : `${stage} of 5 assembled`}
-        </p>
-      </div>
-    </div>
+    </Section>
   );
 }
 

@@ -222,14 +222,81 @@ body {
   75%  { translate: 0 -2px; }
   100% { opacity: 1; translate: 0 0; }
 }
-
-.part {
-  transform-box: fill-box;
-  transform-origin: center;
-}
+.part { transform-box: fill-box; transform-origin: center; }
 .part-waiting { opacity: 0; }
 .part-set { opacity: 1; }
 .part-landing { animation: part-land 620ms cubic-bezier(0.2, 0.9, 0.3, 1.2) both; }
+
+/* --- the driver ---------------------------------------------------------- */
+
+/* Down into the work while it bites, up and clear when it is between jobs. */
+@keyframes rig-plunge {
+  0%, 100% { translate: 0 0; }
+  50%      { translate: 0 2px; }
+}
+.rig-plunge { animation: rig-plunge 0.34s ease-in-out infinite; }
+.rig-lift { translate: 0 -14px; transition: translate 400ms ease-out; }
+
+/* A screw only shows rotation through its slot, so the slot is what turns. */
+@keyframes rig-turn { to { rotate: 360deg; } }
+.rig-turn { animation: rig-turn 0.55s linear infinite; }
+
+@keyframes rig-heat {
+  0%, 100% { opacity: 0.12; scale: 0.7; }
+  50%      { opacity: 0.4;  scale: 1.1; }
+}
+.rig-heat { transform-box: fill-box; transform-origin: center; animation: rig-heat 0.4s ease-in-out infinite; }
+
+/* Filings coming off the thread: out fast, gone faster. */
+@keyframes rig-spark {
+  0%   { opacity: 0; scale: 0.2; }
+  25%  { opacity: 1; }
+  100% { opacity: 0; scale: 1; }
+}
+.rig-spark { transform-box: fill-box; transform-origin: 0 0; animation: rig-spark 0.5s linear infinite; }
+
+/* --- parts that have just been fitted, testing themselves --------------- */
+
+/* Bolted down, so it shuffles. */
+@keyframes rig-shuffle {
+  0%, 78%, 100% { translate: 0 0; rotate: 0deg; }
+  84%           { rotate: -1.4deg; }
+  92%           { rotate: 1.4deg; }
+}
+.rig-shuffle { transform-box: fill-box; transform-origin: center bottom; animation: rig-shuffle 4.2s ease-in-out infinite; }
+
+/* A new limb gets tried out. Three quick swings, then a long pause — which
+   is how anybody waves, and nothing like a metronome. */
+@keyframes rig-wave {
+  0%, 62%, 100% { rotate: 0deg; }
+  68%           { rotate: -26deg; }
+  74%           { rotate: 14deg; }
+  80%           { rotate: -22deg; }
+  86%           { rotate: 8deg; }
+  92%           { rotate: -4deg; }
+}
+.rig-wave-inner {
+  transform-box: fill-box;
+  transform-origin: center bottom;
+  animation: rig-wave 5s ease-in-out infinite;
+}
+
+/* The neck tests its travel. */
+@keyframes rig-crane {
+  0%, 70%, 100% { translate: 0 0; }
+  80%           { translate: 0 -6px; }
+  90%           { translate: 0 -2px; }
+}
+.rig-crane { transform-box: fill-box; transform-origin: center bottom; animation: rig-crane 4.6s ease-in-out infinite; }
+
+/* First sight: look about, then blink. */
+@keyframes rig-look {
+  0%, 22%   { translate: 0 0; }
+  28%, 46%  { translate: 6px -2px; }
+  52%, 70%  { translate: -6px 1px; }
+  76%, 100% { translate: 0 0; }
+}
+.rig-look { animation: rig-look 4.4s steps(1, end) infinite; }
 
 /* The step that is currently running. A pulse, not a spinner: a spinner
    claims motion where there is only waiting. */
@@ -240,6 +307,7 @@ body {
 .step-live { animation: step-live 1.4s ease-in-out infinite; }
 
 @media (prefers-reduced-motion: reduce) {
-  .part-landing, .step-live { animation: none; }
+  .part-landing, .step-live, .rig-plunge, .rig-turn, .rig-heat, .rig-spark,
+  .rig-shuffle, .rig-wave-inner, .rig-crane, .rig-look { animation: none; }
   .part-landing { opacity: 1; }
 }
