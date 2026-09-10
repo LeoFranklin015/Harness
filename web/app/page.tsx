@@ -395,29 +395,34 @@ function Machines({
 
   /** One signature on the device. Everything that answers to it stops. */
   /**
-   * Opens the door for one visitor.
+   * Opens the door, if it is not already open.
    *
-   * `setHost` writes where the machine is, how to recognise it, and who may log
-   * in — all three together, because they are one fact about one machine. Only
-   * the operator is changing here, so the other two are read back from the
+   * The visitor key derives from the Tenant's sealed root, so the fingerprint
+   * the chain was told at provisioning is the same one every later invite
+   * hands out. Which means this almost always has nothing to do: it reads what
+   * the chain says, finds it already correct, and returns without a signature
+   * or a transaction. Inviting someone should not cost a tap.
+   *
+   * When it does differ — an older machine set up before this, or a Tenant who
+   * registered a key of their own — it costs exactly one. `setHost` writes the
+   * address, the host key and the operator together, because they are one fact
+   * about one machine, so the two that are not changing are read back from the
    * chain rather than remembered: a page left open since before the machine
-   * last moved must not be able to relocate it as a side effect of granting
-   * someone a shell.
-   *
-   * There is exactly one operator at a time. Authorising the next visitor
-   * retires the last one by overwriting them, which is why there is no list to
-   * prune and no key anyone has to remember to remove.
+   * moved must not relocate it as a side effect of granting a shell.
    */
   async function authorise(tenant: Tenant, operator: Hex) {
     const i = tenants.findIndex((t) => t?.label === tenant.label);
     setError(null);
     try {
       const pub = createPublicClient({ chain: sepolia, transport: sepoliaTransport() });
-      const { ipv4, hostKey } = await readHost(pub as never, tenant.registry);
+      const host = await readHost(pub as never, tenant.registry);
+
+      // Already the key the chain admits. Nothing to sign.
+      if (host.operator.toLowerCase() === operator.toLowerCase()) return;
 
       const dev = await session.device((s) => narrate(i, s));
       await dev.send(
-        { to: tenant.registry, data: calldata.setHost(ipv4, hostKey, operator) },
+        { to: tenant.registry, data: calldata.setHost(host.ipv4, host.hostKey, operator) },
         (s) => narrate(i, s),
       );
     } catch (err) {

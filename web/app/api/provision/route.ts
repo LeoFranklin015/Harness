@@ -13,6 +13,7 @@ import { sepolia } from "viem/chains";
 import { explain } from "@/lib/explain";
 import { sepoliaTransport } from "@/lib/rpc";
 import { secret } from "@/lib/secrets";
+import { visitorKeyFor } from "@/lib/sshkey";
 import { agentKeyFor } from "@/lib/agent-root";
 
 /**
@@ -191,12 +192,18 @@ export async function POST(req: Request) {
         //    root sealed under this Tenant's ring — the ring step earlier is
         //    what makes that possible — and only its address leaves this process.
         const agent = agentKeyFor(body.label, body.agent);
-        // Who may SSH in. Zero admits nobody: the machine starts with that door
-        // shut, and opening it is a later `setHost` — a separate decision, and a
-        // separate signature, about a machine that already exists.
+        // Who may SSH in. The visitor key derives from the same sealed root as
+        // the Agent's own key, so its fingerprint is knowable here — which is
+        // what makes every later invite free: the chain is told once, in a
+        // signature the Tenant is giving anyway, and handing somebody a shell
+        // afterwards costs no transaction at all.
+        //
+        // A caller may still name a fingerprint of their own, which wins. That
+        // is the door for somebody who would rather use a key this host never
+        // saw.
         const operator = body.sshFingerprint
           ? (`0x${Buffer.from(body.sshFingerprint.slice(7) + "=", "base64").toString("hex")}` as Hex)
-          : (`0x${"0".repeat(64)}` as Hex);
+          : visitorKeyFor(body.label, body.agent).operator;
 
         emit({
           step: "Waiting for the device",

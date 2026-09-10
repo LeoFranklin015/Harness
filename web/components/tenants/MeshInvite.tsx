@@ -26,24 +26,27 @@ import type { Hex } from "viem";
  */
 
 type Invite = {
-  key: string;
   expiresIn: number;
-  commands: { install: string; join: string };
+  install: string;
+  /** One paste: join the mesh, write the key, teach ssh about the host. */
+  setup: string | null;
+  /** What it is afterwards, which is the point. */
+  ssh: string | null;
+  host: string | null;
   operator: Hex;
   fingerprint: string;
-  privateKey: string;
-  keyFilename: string;
-  login: string | null;
-  loginByAddress: string | null;
 };
 
 export function MeshInvite({
   machine,
+  agent,
   meshAddress,
   ensName,
   onAuthorise,
 }: {
   machine: string;
+  /** Which Agent on this machine, which is half of the key's derivation. */
+  agent: string | null;
   meshAddress: string | null;
   /** The Agent's full name, which is what a visitor should be typing. */
   ensName: string | null;
@@ -90,6 +93,7 @@ export function MeshInvite({
         // sitting at, so it says so rather than the page guessing.
         body: JSON.stringify({
           machine,
+          agent,
           platform: thisPlatform(),
           meshAddress,
           ensName,
@@ -151,8 +155,9 @@ export function MeshInvite({
 
       {phase === "signing" ? (
         <p className="mt-3 text-xs leading-relaxed text-neutral-400">
-          Confirm on the Ledger — this is the door opening. The tailnet key is
-          minted, but nobody can log in until the fingerprint is on chain.
+          Checking what the chain admits. If this agent already names the right
+          key there is nothing to sign — otherwise the Ledger will ask, because
+          opening the door is the one part a server cannot do for you.
         </p>
       ) : spent ? (
         <button
@@ -163,32 +168,29 @@ export function MeshInvite({
         </button>
       ) : (
         <>
-          <Command label="1 · install, if you have not" text={invite.commands.install} />
-          <Command label="2 · join the mesh, single use" text={invite.commands.join} secret />
-          {invite.login || invite.loginByAddress ? (
+          <Command label="1 · install tailscale, if you have not" text={invite.install} />
+          {invite.setup && invite.ssh ? (
             <>
-              <DownloadKey invite={invite} />
-              <Command label="4 · log in" text={(invite.login ?? invite.loginByAddress)!} />
-              {invite.login && invite.loginByAddress && (
-                <p className="mt-2 text-[11px] leading-relaxed text-neutral-700">
-                  If the name does not resolve, the tailnet has not been pointed
-                  at the nameserver yet — use{" "}
-                  <code className="font-mono text-neutral-600">{meshAddress}</code>{" "}
-                  in place of it.
-                </p>
-              )}
+              <Command label="2 · set up, once" text={invite.setup} secret />
+              <p className="mt-1.5 text-[11px] leading-relaxed text-neutral-700">
+                Open that link first if you like — it is thirty lines of plain
+                shell. It joins the mesh, writes a
+                key only this agent admits, and appends one block to{" "}
+                <code className="font-mono">~/.ssh/config</code>.
+              </p>
+              <Command label="3 · and from now on, just this" text={invite.ssh} />
             </>
           ) : (
             <p className="mt-3 text-[11px] text-neutral-600">
-              This machine has no mesh address yet, so there is nothing to log
-              into.
+              This machine has no address yet, so there is nothing to log into.
             </p>
           )}
           <p className="mt-3 text-[11px] leading-relaxed text-neutral-600">
             Single use, removed when they disconnect, and scoped to port 22 on
-            agents. The key above is the only one the chain now admits, and
-            revoking this machine stops it in the same transaction that stops
-            spending.
+            agents. That key is the only one the chain admits, and{" "}
+            <span className="text-neutral-500">{invite.host}</span> stops
+            resolving and stops answering in the same transaction that stops
+            this machine spending.
           </p>
           <p className="mt-2 text-[11px] leading-relaxed text-neutral-700">
             If a browser window opens asking them to log in, the mesh key did
@@ -196,56 +198,6 @@ export function MeshInvite({
           </p>
         </>
       )}
-    </div>
-  );
-}
-
-/**
- * The key, as a file to save rather than a wall of base64 to paste.
- *
- * A private key pasted through a terminal works, but it teaches the habit this
- * product argues against — trusting eleven lines of base64 on sight because a
- * page told you to. Saving a file and pointing `ssh -i` at it is the way people
- * already handle keys, and it makes the command afterwards one short line.
- *
- * The blob is built in the page and revoked immediately: the key never becomes
- * a URL anybody could fetch twice.
- */
-function DownloadKey({ invite }: { invite: Invite }) {
-  const [saved, setSaved] = useState(false);
-
-  function save() {
-    const url = URL.createObjectURL(
-      new Blob([`${invite.privateKey}\n`], { type: "application/x-pem-file" }),
-    );
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = invite.keyFilename;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
-    setSaved(true);
-  }
-
-  return (
-    <div className="mt-3">
-      <p className="font-mono text-[10px] uppercase tracking-[0.12em] text-neutral-600">
-        3 · save the key
-      </p>
-      <button
-        onClick={save}
-        className="group mt-1 flex w-full items-center gap-2 rounded border border-neutral-900 bg-neutral-950 px-2.5 py-2 text-left transition hover:border-neutral-800"
-      >
-        <code className="min-w-0 flex-1 truncate font-mono text-[11px] text-[#e0a769]">
-          {invite.keyFilename}
-        </code>
-        <span
-          className={`shrink-0 font-mono text-[9px] uppercase tracking-wider ${saved ? "text-emerald-400" : "text-neutral-600 group-hover:text-neutral-400"}`}
-        >
-          {saved ? "saved" : "download"}
-        </span>
-      </button>
     </div>
   );
 }

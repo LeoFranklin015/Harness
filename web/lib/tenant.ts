@@ -33,6 +33,13 @@ export const REGISTRY_ABI = [
   },
   {
     type: "function",
+    name: "selfOperator",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "bytes32" }],
+  },
+  {
+    type: "function",
     name: "selfHostKey",
     stateMutability: "view",
     inputs: [],
@@ -234,10 +241,14 @@ export function agentIdFrom(logs: Log[]): Hex | null {
 export async function readHost(
   client: { readContract: (a: never) => Promise<unknown> },
   registry: Address,
-): Promise<{ ipv4: Hex; hostKey: Hex }> {
-  const call = (functionName: "selfEndpoint" | "selfHostKey") =>
+): Promise<{ ipv4: Hex; hostKey: Hex; operator: Hex }> {
+  const call = (functionName: "selfEndpoint" | "selfHostKey" | "selfOperator") =>
     client.readContract({ address: registry, abi: REGISTRY_ABI, functionName } as never);
 
-  const [ipv4, hostKey] = await Promise.all([call("selfEndpoint"), call("selfHostKey")]);
-  return { ipv4: ipv4 as Hex, hostKey: hostKey as Hex };
+  const [ipv4, hostKey, operator] = await Promise.all([
+    call("selfEndpoint"),
+    call("selfHostKey"),
+    call("selfOperator"),
+  ]);
+  return { ipv4: ipv4 as Hex, hostKey: hostKey as Hex, operator: operator as Hex };
 }

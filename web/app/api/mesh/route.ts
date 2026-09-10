@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
-import { keyFilename, loginCommand, mintVisitorKey } from "@/lib/sshkey";
-import { canInvite, joinCommands, mintInvite, type Platform } from "@/lib/tailscale";
+import { setupCommand, setupScript, sshCommand, visitorKeyFor } from "@/lib/sshkey";
+import { stash } from "@/lib/handoff";
+import { canInvite, installCommand, mintInvite, type Platform } from "@/lib/tailscale";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -35,6 +36,7 @@ export async function POST(request: Request) {
   let platform: Platform = "linux";
   let meshAddress: string | null = null;
   let ensName: string | null = null;
+  let agent = "runner";
   let user = "runner";
 
   try {
@@ -43,6 +45,7 @@ export async function POST(request: Request) {
       platform?: Platform;
       meshAddress?: string;
       ensName?: string;
+      agent?: string;
       user?: string;
     };
     if (body.platform === "macos" || body.platform === "windows") platform = body.platform;
@@ -51,6 +54,10 @@ export async function POST(request: Request) {
     // not a name.
     if (typeof body.machine === "string") {
       machine = body.machine.replace(/[^a-zA-Z0-9._-]/g, "").slice(0, 64) || machine;
+    }
+    // Names a derivation path, so it is held to the same shape as a label.
+    if (typeof body.agent === "string") {
+      agent = body.agent.replace(/[^a-zA-Z0-9._-]/g, "").slice(0, 64) || agent;
     }
     if (typeof body.user === "string") {
       user = body.user.replace(/[^a-z0-9_-]/g, "").slice(0, 32) || user;
@@ -75,28 +82,45 @@ export async function POST(request: Request) {
   }
 
   try {
-    // Both halves, or neither. An invite that puts someone on the mesh with no
-    // way through the door is a worse outcome than a failed button.
-    const [invite, key] = await Promise.all([mintInvite(machine), mintVisitorKey(machine)]);
+    // The key is derived from the Tenant's sealed root, so it is the same key
+    // the chain was told about at provisioning — which is why an invite costs
+    // no transaction. The mesh key is the only thing minted here.
+    const key = visitorKeyFor(machine, agent);
+    const invite = await mintInvite(machine);
+
+    // What the visitor is reachable at. The name once the tailnet resolves
+    // `.eth`, the raw address otherwise — the name is better, because it is
+    // the same string the chain answers for and it stops resolving the moment
+    // the Agent is revoked.
+    const host = ensName ?? meshAddress;
+
+    // Where this page is being served from, as the browser reached it, so the
+    // command works from wherever the visitor is sitting rather than from a
+    // hostname this process guessed about itself.
+    const proto = request.headers.get("x-forwarded-proto") ?? "http";
+    const origin = `${proto}://${request.headers.get("host") ?? "localhost:3000"}`;
+
+    // The key lives behind a one-time link rather than inline. A thousand
+    // characters of base64 is pasted unread; a short command can be read, and
+    // the URL it names can be opened in a browser first.
+    const token = host
+      ? stash(setupScript(key.privateKey, invite.key, user, host, machine))
+      : null;
 
     return NextResponse.json(
       {
-        ...invite,
-        commands: joinCommands(invite.key, platform),
-        // The fingerprint is what the device is about to sign for. The private
-        // key travels with it because the browser is where it has to end up —
-        // as a file the visitor saves, not as a wall of base64 they are asked
-        // to trust and paste into a shell.
+        // Deliberately not the auth key itself. It is inside the script now,
+        // behind a link that works once; putting it in the page as well would
+        // be a second copy with a longer life and no reason to exist.
+        expires: invite.expires,
+        expiresIn: invite.expiresIn,
+        install: installCommand(platform),
+        setup: token ? setupCommand(origin, token) : null,
+        ssh: host ? sshCommand(host) : null,
+        host,
+        // The fingerprint is what the device is about to sign for.
         operator: key.operator,
         fingerprint: key.fingerprint,
-        privateKey: key.privateKey,
-        keyFilename: keyFilename(machine),
-        // The name first, because it is the same string the chain answers for
-        // and it stops resolving when the Agent is revoked. The address is
-        // kept alongside it for a tailnet that has not been pointed at the
-        // nameserver yet, where the name would simply not resolve.
-        login: ensName ? loginCommand(user, ensName, machine, platform) : null,
-        loginByAddress: meshAddress ? loginCommand(user, meshAddress, machine, platform) : null,
       },
       // Belt and braces: none of this may sit in a shared cache.
       { headers: { "cache-control": "no-store, private" } },

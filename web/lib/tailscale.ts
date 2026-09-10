@@ -161,30 +161,15 @@ export type Platform = "linux" | "macos" | "windows";
  * before it is run, and pasting a `curl | sh` you have not looked at is the
  * habit this whole product argues against.
  */
-export function joinCommands(key: string, platform: Platform = "linux") {
-  // `--reset` is not optional in practice. Anyone who has used Tailscale before
-  // has a non-default flag set somewhere, and `up` refuses to change settings
-  // without being told every one of them — it errors out before it ever reads
-  // the key, and then the GUI opens a browser login that joins them as
-  // themselves, untagged, which is the opposite of a visitor. Resetting costs
-  // nothing here: joining this tailnet already replaces whatever they were on,
-  // and the node is ephemeral either way.
-  if (platform === "macos") {
-    return {
-      install: "brew install --cask tailscale",
-      // The App Store build keeps its CLI inside the bundle and the standalone
-      // build only symlinks it if asked, so the full path is the safe one.
-      join: `/Applications/Tailscale.app/Contents/MacOS/Tailscale up --reset --auth-key=${key}`,
-    };
-  }
-  if (platform === "windows") {
-    return {
-      install: "winget install --id tailscale.tailscale",
-      join: `tailscale up --reset --auth-key=${key}`,
-    };
-  }
-  return {
-    install: "curl -fsSL https://tailscale.com/install.sh | sh",
-    join: `sudo tailscale up --reset --auth-key=${key}`,
-  };
+/**
+ * How to get Tailscale, for somebody who has never used it.
+ *
+ * Separate from the command that uses it, because an installer is worth reading
+ * before it is run and pasting a `curl | sh` you have not looked at is the
+ * habit this whole product argues against.
+ */
+export function installCommand(platform: Platform = "linux"): string {
+  if (platform === "macos") return "brew install --cask tailscale";
+  if (platform === "windows") return "winget install --id tailscale.tailscale";
+  return "curl -fsSL https://tailscale.com/install.sh | sh";
 }

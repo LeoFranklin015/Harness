@@ -140,6 +140,7 @@ function FilledSlot({
               deliberate act — and one that expires on its own. */}
           <MeshInvite
             machine={tenant.label}
+            agent={tenant.agent}
             meshAddress={tenant.meshAddress}
             ensName={tenant.agent ? `${tenant.agent}.${tenant.label}.harness.eth` : null}
             onAuthorise={(operator) => onAuthorise(tenant, operator)}
