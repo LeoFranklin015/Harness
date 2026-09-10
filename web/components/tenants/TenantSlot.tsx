@@ -103,6 +103,11 @@ function AgentCard({ tenant, onOpen }: { tenant: Tenant; onOpen: () => void }) {
     >
       {tenant.status === "provisioning" && <BorderBeam size={220} duration={7} />}
 
+      {/* One word, so a wordless card still has somewhere to start. It names
+          the state rather than the machine — which one it is belongs in the
+          modal, and putting it here would put the data back. */}
+      <Badge status={tenant.status} />
+
       {/* No gear train beside it. The tracks already say the machine is
           running, and they said it better — two mechanisms in one corner
           only competed. */}
@@ -112,6 +117,21 @@ function AgentCard({ tenant, onOpen }: { tenant: Tenant; onOpen: () => void }) {
         className="h-[74%] transition-transform duration-500 group-hover:scale-[1.03]"
       />
     </button>
+  );
+}
+
+function Badge({ status }: { status: Tenant["status"] }) {
+  const { word, dot } = {
+    provisioning: { word: "building", dot: "bg-sky-400 animate-pulse" },
+    live: { word: "occupied", dot: "bg-[#C89A34]" },
+    revoked: { word: "revoked", dot: "bg-neutral-700" },
+  }[status];
+
+  return (
+    <span className="absolute left-4 top-4 flex items-center gap-2 rounded-full border border-neutral-800 bg-neutral-950/80 px-2.5 py-1 text-[10px] uppercase tracking-wider text-neutral-500 backdrop-blur-sm">
+      <span className={`h-1.5 w-1.5 rounded-full ${dot}`} />
+      {word}
+    </span>
   );
 }
 

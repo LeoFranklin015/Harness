@@ -101,6 +101,28 @@ export function Agent({
           </g>
         ))}
 
+        {/* Payments leaving. Drawn before the shell and starting inside it,
+            so a coin comes out from behind the machine rather than appearing
+            in the air beside it. It spends from a ceiling somebody set, and
+            none of it comes back, so nothing ever arrives. */}
+        {state === "live" &&
+          [0, 0.7, 1.4].map((delay) => (
+            <g key={delay} style={{ animation: `walle-spend 2.1s linear ${delay}s infinite` }}>
+              <circle cx={226} cy={152} r={9.5} fill={YELLOW_LIT} stroke={RIM} strokeWidth={2.5} />
+              <text
+                x={226}
+                y={152}
+                textAnchor="middle"
+                dominantBaseline="central"
+                fontSize={12}
+                fontWeight={700}
+                fill={RIM}
+              >
+                $
+              </text>
+            </g>
+          ))}
+
         {/* Body */}
         <rect x={59} y={132} width={182} height={80} rx={4} fill={YELLOW} stroke={RIM} strokeWidth={3} />
         {[112, 146, 180].map((x) => (
@@ -125,25 +147,6 @@ export function Agent({
         </g>
       </g>
 
-      {/* Payments leaving. It spends from a ceiling somebody set, and none of
-          it comes back, so nothing ever arrives. */}
-      {state === "live" &&
-        [0, 0.7, 1.4].map((delay) => (
-          <g key={delay} style={{ animation: `walle-spend 2.1s linear ${delay}s infinite` }}>
-            <circle cx={248} cy={120} r={10} fill={YELLOW_LIT} stroke={RIM} strokeWidth={2.5} />
-            <text
-              x={248}
-              y={120}
-              textAnchor="middle"
-              dominantBaseline="central"
-              fontSize={13}
-              fontWeight={700}
-              fill={RIM}
-            >
-              $
-            </text>
-          </g>
-        ))}
     </svg>
   );
 }

@@ -181,11 +181,15 @@ body {
 }
 
 /* Out and away. Linear, because a payment does not ease. */
+/*
+ * Up and out past the right shoulder. Held invisible until it has cleared
+ * the shell it starts inside, so a coin is never seen sitting on the body.
+ */
 @keyframes walle-spend {
-  0%, 12%  { translate: 0 0; opacity: 0; }
-  26%      { opacity: 1; }
-  74%      { opacity: 1; }
-  100%     { translate: 34px -48px; opacity: 0; }
+  0%, 30%  { translate: 0 0; opacity: 0; }
+  46%      { translate: 22px -32px; opacity: 1; }
+  78%      { opacity: 1; }
+  100%     { translate: 52px -74px; opacity: 0; }
 }
 
 @media (prefers-reduced-motion: reduce) {
