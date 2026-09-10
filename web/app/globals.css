@@ -1,4 +1,8 @@
 @import "tailwindcss";
+/* `animate-in`, `zoom-in-95` and the rest that Radix components are written
+   against. Tailwind v4 dropped the plugin that used to supply them, so
+   without this the dialog's transition classes compile to nothing. */
+@import "tw-animate-css";
 
 /* Dark throughout: the device is the subject, and it reads against black. */
 :root {
