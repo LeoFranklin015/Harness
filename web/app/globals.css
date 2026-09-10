@@ -227,33 +227,24 @@ body {
 .part-set { opacity: 1; }
 .part-landing { animation: part-land 620ms cubic-bezier(0.2, 0.9, 0.3, 1.2) both; }
 
-/* --- the driver ---------------------------------------------------------- */
+/* --- fastenings --------------------------------------------------------- */
 
-/* Down into the work while it bites, up and clear when it is between jobs. */
-@keyframes rig-plunge {
-  0%, 100% { translate: 0 0; }
-  50%      { translate: 0 2px; }
+/*
+ * Screws turning, always. A slot is the only thing that can show rotation on
+ * a circle, so the slot is what turns — and they run at different speeds and
+ * out of phase, because a rank of bolts turning in unison reads as one
+ * object rotating rather than as many being driven.
+ */
+@keyframes screw-turn { to { rotate: 360deg; } }
+.screw {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation-name: screw-turn;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
 }
-.rig-plunge { animation: rig-plunge 0.34s ease-in-out infinite; }
-.rig-lift { translate: 0 -14px; transition: translate 400ms ease-out; }
-
-/* A screw only shows rotation through its slot, so the slot is what turns. */
-@keyframes rig-turn { to { rotate: 360deg; } }
-.rig-turn { animation: rig-turn 0.55s linear infinite; }
-
-@keyframes rig-heat {
-  0%, 100% { opacity: 0.12; scale: 0.7; }
-  50%      { opacity: 0.4;  scale: 1.1; }
-}
-.rig-heat { transform-box: fill-box; transform-origin: center; animation: rig-heat 0.4s ease-in-out infinite; }
-
-/* Filings coming off the thread: out fast, gone faster. */
-@keyframes rig-spark {
-  0%   { opacity: 0; scale: 0.2; }
-  25%  { opacity: 1; }
-  100% { opacity: 0; scale: 1; }
-}
-.rig-spark { transform-box: fill-box; transform-origin: 0 0; animation: rig-spark 0.5s linear infinite; }
+/* While a step is really running, they bite. */
+.screw-fast { animation-duration: 0.7s !important; }
 
 /* --- parts that have just been fitted, testing themselves --------------- */
 

@@ -45,8 +45,7 @@ export default function NewMachine() {
   const [session, setSession] = useState<Session | null>(null);
   const [taken, setTaken] = useState<string[]>([]);
   const [step, setStep] = useState<StepIndex>(0);
-  const [stage, setStage] = useState<AssemblyStage>(0);
-  const [working, setWorking] = useState(false);
+
 
   const [form, setForm] = useState<ProvisionRequest>({
     label: "",
@@ -77,20 +76,6 @@ export default function NewMachine() {
   }, [authority]);
 
   const set = (changes: Partial<ProvisionRequest>) => setForm((f) => ({ ...f, ...changes }));
-
-  // Filling the form fits the first three parts. The driver bites for a
-  // moment at each one rather than the part simply being there, so progress
-  // through the form looks like progress on the machine.
-  useEffect(() => {
-    const target = Math.min(step, 3) as AssemblyStage;
-    if (target <= stage) return;
-    setWorking(true);
-    const bite = setTimeout(() => {
-      setStage(target);
-      setWorking(false);
-    }, 850);
-    return () => clearTimeout(bite);
-  }, [step, stage]);
 
   const labelError = useMemo(() => {
     if (!form.label) return null;
@@ -123,7 +108,7 @@ export default function NewMachine() {
 
   return (
     <Shell>
-      <header className="mb-10">
+      <header className="mb-10 mx-auto max-w-2xl">
         <button
           onClick={() => router.push("/")}
           className="mb-6 text-xs text-neutral-600 transition hover:text-neutral-400"
@@ -137,24 +122,18 @@ export default function NewMachine() {
         </p>
       </header>
 
-      <Rail step={step} onJump={(i) => i < step && setStep(i)} />
+      <div className="mx-auto max-w-2xl">
+        <Rail step={step} onJump={(i) => i < step && setStep(i)} />
+      </div>
 
-      <div className="mt-12 grid gap-12 lg:grid-cols-[minmax(0,1fr)_400px] lg:gap-20">
-        {/* One column of reading width. A form that spans a 27-inch monitor
-            is not "using the space", it is unreadable. */}
-        <div className="max-w-xl">
+      {/* A reading column, centred while it is alone on the page. The build
+          step brings the machine and takes the full width for itself. */}
+      <div className={`mt-12 ${step === 3 ? "" : "mx-auto max-w-2xl"}`}>
           {step === 0 && <Identity form={form} set={set} error={labelError} />}
           {step === 1 && <Capabilities form={form} set={set} />}
           {step === 2 && <Secrets form={form} set={set} />}
           {step === 3 && session && (
-            <Build
-              session={session}
-              req={form}
-              authority={authority}
-              onStage={setStage}
-              onWorking={setWorking}
-              onDone={() => router.push("/")}
-            />
+            <Build session={session} req={form} authority={authority} onDone={() => router.push("/")} />
           )}
 
       {step < 3 && (
@@ -176,17 +155,6 @@ export default function NewMachine() {
           </button>
         </div>
       )}
-        </div>
-
-        {/* Present from the first keystroke, not saved for the end. Watching
-            it come together as you decide what it is makes the form the
-            build rather than a gate in front of one. */}
-        <aside className="lg:sticky lg:top-12 lg:self-start">
-          <Assembly stage={stage} working={working} className="w-full" />
-          <p className="mt-3 text-center font-mono text-[10px] uppercase tracking-wider text-neutral-700">
-            {stage >= STAGES ? `${form.label}.harness.eth` : `${stage} of ${STAGES} assembled`}
-          </p>
-        </aside>
       </div>
     </Shell>
   );
@@ -335,41 +303,48 @@ function Capabilities({
         </Field>
       </div>
 
+      {/* Rows, not a grid of cards. Six boxes two-up is a wall to scan; a
+          list has one place your eye goes for the name, one for what it
+          means, and one for the rule — and the columns line up down the
+          page, which is the whole reason a table exists. */}
       {groups.map((g) => (
         <div key={g.key}>
-          <p className="mb-1 text-xs font-medium text-neutral-300">{g.title}</p>
-          <p className="mb-3 text-xs text-neutral-600">{g.blurb}</p>
-          <div className="grid gap-2 sm:grid-cols-2">
+          <p className="mb-3 flex items-baseline gap-3">
+            <span className="text-xs font-medium text-neutral-300">{g.title}</span>
+            <span className="text-xs text-neutral-600">{g.blurb}</span>
+          </p>
+          <ul className="divide-y divide-neutral-900 border-y border-neutral-900">
             {CATALOGUE.filter((c) => c.group === g.key).map((c) => {
               const on = chosen.includes(c.id);
               return (
-                <button
-                  key={c.id}
-                  onClick={() => toggle(c.id)}
-                  className={`rounded-lg border p-3 text-left transition ${
-                    on
-                      ? "border-neutral-600 bg-neutral-900/70"
-                      : "border-neutral-900 bg-neutral-950/40 hover:border-neutral-800"
-                  }`}
-                >
-                  <span className="flex items-center justify-between gap-2">
-                    <span className="text-sm text-neutral-200">{c.name}</span>
+                <li key={c.id}>
+                  <button
+                    onClick={() => toggle(c.id)}
+                    className="group flex w-full items-center gap-4 py-3 text-left transition"
+                  >
                     <span
-                      className={`h-3.5 w-3.5 shrink-0 rounded-sm border ${
-                        on ? "border-neutral-400 bg-neutral-200" : "border-neutral-700"
+                      className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-sm border text-[9px] transition ${
+                        on
+                          ? "border-neutral-300 bg-neutral-200 text-neutral-950"
+                          : "border-neutral-700 group-hover:border-neutral-500"
                       }`}
-                    />
-                  </span>
-                  <span className="mt-1 block text-xs leading-relaxed text-neutral-600">
-                    {c.detail}
-                  </span>
-                  <span className="mt-2 block font-mono text-[10px] text-neutral-700">
-                    {c.selector} · {c.target.slice(0, 10)}…
-                  </span>
-                </button>
+                    >
+                      {on ? "✓" : ""}
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className={`block text-sm ${on ? "text-neutral-100" : "text-neutral-400"}`}>
+                        {c.name}
+                      </span>
+                      <span className="block truncate text-xs text-neutral-600">{c.detail}</span>
+                    </span>
+                    <span className="hidden shrink-0 font-mono text-[10px] text-neutral-700 sm:block">
+                      {c.selector}
+                    </span>
+                  </button>
+                </li>
               );
             })}
-          </div>
+          </ul>
         </div>
       ))}
 
@@ -528,26 +503,18 @@ function Build({
   session,
   req,
   authority,
-  onStage,
-  onWorking,
   onDone,
 }: {
   session: Session;
   req: ProvisionRequest;
   authority: Authority;
-  /** The drawing lives on the page, so progress is reported rather than held. */
-  onStage: (s: AssemblyStage) => void;
-  onWorking: (w: boolean) => void;
   onDone: () => void;
 }) {
   const [phase, setPhase] = useState<Phase>("idle");
-  const [stage, setStage] = useState<AssemblyStage>(3);
+  const [stage, setStage] = useState<AssemblyStage>(0);
   const [note, setNote] = useState("Two taps: one to make the ring, one to sign the chain.");
   const [error, setError] = useState<string | null>(null);
   const [upgraded, setUpgraded] = useState<boolean | null>(null);
-
-  useEffect(() => onStage(stage), [stage, onStage]);
-  useEffect(() => onWorking(phase === "ring" || phase === "chain"), [phase, onWorking]);
 
   useEffect(() => {
     fetch(`/api/delegate?address=${authority.address}`)
@@ -561,7 +528,7 @@ function Build({
     setPhase("ring");
     try {
       const out = await startRing(session, req, setNote);
-      setStage(4);
+      setStage(3);
       setPhase("awaiting");
       setNote(
         (out.outcome === "created" ? "Ring created. " : "Ring recognised. ") +
@@ -587,7 +554,7 @@ function Build({
           // the device is actually being asked for something.
           if (/Ledger/i.test(s)) setStage((v) => (v < 5 ? 5 : v));
         },
-        onPartial: () => setStage((v) => (v < 5 ? 5 : v)),
+        onPartial: () => setStage((v) => (v < 4 ? 4 : v)),
       });
       setStage(6);
       setPhase("done");
@@ -607,11 +574,12 @@ function Build({
     }
   }
 
-  const ringState = phase === "ring" ? "live" : stage >= 4 && phase !== "idle" ? "done" : "waiting";
+  const ringState = phase === "ring" ? "live" : stage >= 3 ? "done" : "waiting";
   const chainState = phase === "chain" ? "live" : stage >= STAGES ? "done" : "waiting";
 
   return (
-    <Section
+    <div className="grid gap-12 lg:grid-cols-[minmax(0,1fr)_360px] lg:gap-16">
+      <Section
           title="Build it"
           blurb="The ring is made once and cannot be unmade. The chain half can be retried as often as you like."
         >
@@ -642,12 +610,12 @@ function Build({
           )}
 
           <div className="flex gap-3">
-            {(phase === "idle" || (phase === "failed" && stage < 4)) && (
+            {(phase === "idle" || (phase === "failed" && stage < 3)) && (
               <button onClick={ring} className={primary}>
                 Start — make the ring
               </button>
             )}
-            {(phase === "awaiting" || (phase === "failed" && stage >= 4)) && (
+            {(phase === "awaiting" || (phase === "failed" && stage >= 3)) && (
               <button onClick={chain} className={primary}>
                 Continue in Ethereum →
               </button>
@@ -658,7 +626,15 @@ function Build({
               </button>
             )}
           </div>
-    </Section>
+      </Section>
+
+      <aside className="lg:sticky lg:top-12 lg:self-start">
+        <Assembly stage={stage} working={phase === "ring" || phase === "chain"} className="w-full" />
+        <p className="mt-3 text-center font-mono text-[10px] uppercase tracking-wider text-neutral-700">
+          {stage >= STAGES ? `${req.label}.harness.eth` : `${stage} of ${STAGES} assembled`}
+        </p>
+      </aside>
+    </div>
   );
 }
 
