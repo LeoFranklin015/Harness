@@ -29,7 +29,7 @@ type State = "provisioning" | "live" | "revoked";
 /** Distance between centres is (N₁+N₂)·m/2, so one module fixes the layout. */
 const MODULE = 3.1;
 /** Seconds per tooth. The only speed control there is. */
-const PACE = 0.5;
+const PACE = 0.28;
 
 const pitchRadius = (teeth: number) => (MODULE * teeth) / 2;
 

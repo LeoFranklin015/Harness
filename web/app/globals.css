@@ -150,7 +150,7 @@ body {
   0%, 14%  { translate: 0 0; opacity: 0; }
   30%      { opacity: 1; }
   76%      { opacity: 1; }
-  100%     { translate: 74px -40px; opacity: 0; }
+  100%     { translate: 58px -34px; opacity: 0; }
 }
 
 @media (prefers-reduced-motion: reduce) {
