@@ -1,0 +1,217 @@
+#!/usr/bin/env python3
+"""Approve what an agent asked for, from a machine your Ledger is attached to.
+
+    harness-approve --tenant acme --account ethereum-1 \\
+        --device-agent http://127.0.0.1:8799
+
+Two ways to run it.
+
+**On the laptop the Ledger is attached to** — wallet-cli signs locally:
+
+    harness-approve --dashboard ... --tenant acme --account ethereum-1
+
+**From an ssh session on the box**, with the laptop lending its device:
+
+    # on the laptop
+    harness-device-agent
+    # ssh in with a remote forward
+    ssh -R 8799:127.0.0.1:8799 opc@<box>
+    # then, on the box
+    harness-approve ... --device-agent http://127.0.0.1:8799
+
+The second exists because the device cannot be moved to the shell. wallet-cli
+reaches a Ledger over libusb, and the box's only USB devices are QEMU's
+virtual keyboard and mouse; usbip would forward a real one, but macOS cannot
+be a usbip host. So the command moves to the device instead, which from where
+you are sitting is the same thing.
+
+What it needs, once:
+
+    npm i -g @ledgerhq/wallet-cli
+    wallet-cli account discover --currency ethereum_sepolia   # device attached
+    wallet-cli session view                                   # note the label
+
+Bluetooth instead of USB, for a Nano X, Stax or Flex:
+
+    EXPERIMENTAL_BLE=1 wallet-cli account discover --currency ethereum_sepolia
+
+The bytes this signs are the same bytes the dashboard would sign. Your device
+shows them either way, and that is the thing worth checking — not which
+program handed them over.
+
+Standard library only.
+"""
+
+import argparse
+import json
+import subprocess
+import sys
+import urllib.error
+import urllib.parse
+import urllib.request
+
+
+def get(url):
+    try:
+        with urllib.request.urlopen(url, timeout=60) as r:
+            return json.loads(r.read())
+    except urllib.error.HTTPError as e:
+        try:
+            raise SystemExit(f"harness-approve: {json.loads(e.read())['error']}")
+        except (ValueError, KeyError):
+            raise SystemExit(f"harness-approve: HTTP {e.code} from {url}")
+    except urllib.error.URLError as e:
+        raise SystemExit(f"harness-approve: cannot reach the dashboard ({e.reason})")
+
+
+def money(n):
+    return f"${float(n):.2f}"
+
+
+def main():
+    p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    p.add_argument("--dashboard", default="http://localhost:3000", help="where the Harness dashboard is")
+    p.add_argument("--tenant", required=True, help="which machine")
+    p.add_argument("--account", default=None, help="wallet-cli session label, e.g. ethereum-1")
+    p.add_argument("--registry", default=None, help="override; normally read from the dashboard")
+    p.add_argument("--cap", type=float, default=None, help="override; normally read from the dashboard")
+    p.add_argument("--days", type=int, default=30)
+    p.add_argument("--wallet-cli", default="wallet-cli")
+    p.add_argument(
+        "--device-agent",
+        default=None,
+        help="sign through a laptop running harness-device-agent, e.g. http://127.0.0.1:8799",
+    )
+    p.add_argument("--dry-run", action="store_true", help="prepare and show, do not sign")
+    args = p.parse_args()
+
+    base = args.dashboard.rstrip("/")
+    answer = get(f"{base}/api/asks?tenant={urllib.parse.quote(args.tenant)}")
+    asks = answer.get("asks", [])
+
+    # The dashboard already knows the registry and today's ceiling. Typing
+    # them again is two chances to get it wrong for no benefit, so the flags
+    # are only there to override.
+    known = answer.get("machine") or {}
+    if args.registry is None:
+        args.registry = known.get("registry")
+    if args.cap is None:
+        args.cap = known.get("capUsd")
+    if known.get("days"):
+        args.days = known["days"]
+
+    if not asks:
+        print(f"{args.tenant}: nothing waiting.")
+        return
+
+    print(f"{args.tenant}: {len(asks)} waiting\n")
+    for n, a in enumerate(asks, 1):
+        print(f"  {n}. {a['want']}")
+        if a.get("why"):
+            print(f"     {a['why']}")
+        print(f"     {money(a['usd'])}\n")
+
+    choice = input("approve which? (number, or blank to leave them) ").strip()
+    if not choice:
+        return
+    try:
+        ask = asks[int(choice) - 1]
+    except (ValueError, IndexError):
+        raise SystemExit("harness-approve: no such number")
+
+    if args.registry is None or args.cap is None:
+        raise SystemExit(
+            "harness-approve: the dashboard did not know this machine's registry or ceiling.\n"
+            "  Pass --registry and --cap; both are on the machine's card."
+        )
+
+    plan = get(
+        f"{base}/api/asks/approve?"
+        + urllib.parse.urlencode(
+            {
+                "tenant": args.tenant,
+                "id": ask["id"],
+                "registry": args.registry,
+                "cap": args.cap,
+                "days": args.days,
+            }
+        )
+    )
+
+    print(f"\nfrom {plan['from']}")
+    print(f"ceiling {money(args.cap)} -> {money(plan['newCapUsd'])}")
+    print(f"{len(plan['transactions'])} transaction(s) to sign on the device:\n")
+    for t in plan["transactions"]:
+        print(f"  {t['what']}")
+        print(f"    to   {t['to']}")
+        print(f"    data {t['data'][:74]}…\n")
+
+    if args.dry_run:
+        print("dry run: nothing signed.")
+        return
+    if not args.account:
+        raise SystemExit("harness-approve: pass --account, the wallet-cli session label")
+
+    for t in plan["transactions"]:
+        print(f"signing: {t['what']} — confirm on the device")
+
+        if args.device_agent:
+            # The device is on somebody's desk and this is not that machine.
+            # wallet-cli runs there; what crosses is the transaction and the
+            # answer. See tools/harness-device-agent.
+            body = json.dumps({
+                "account": args.account,
+                "to": t["to"],
+                "data": t["data"],
+                "what": t["what"],
+                # Which account must sign. The agent refuses if the Ledger it
+                # can see is a different one, before the screen lights up.
+                "expect": plan["from"],
+            }).encode()
+            req = urllib.request.Request(
+                f"{args.device_agent.rstrip('/')}/sign",
+                data=body,
+                headers={"content-type": "application/json"},
+            )
+            try:
+                with urllib.request.urlopen(req, timeout=300) as r:
+                    json.loads(r.read())
+            except urllib.error.HTTPError as e:
+                try:
+                    why = json.loads(e.read())["error"]
+                except Exception:
+                    why = f"HTTP {e.code}"
+                raise SystemExit(f"harness-approve: the device refused: {why}")
+            except urllib.error.URLError as e:
+                raise SystemExit(
+                    f"harness-approve: no device agent at {args.device_agent} ({e.reason}).\n"
+                    "  Run harness-device-agent on the machine your Ledger is attached to,\n"
+                    "  and ssh in with -R 8799:127.0.0.1:8799 so this can reach it."
+                )
+        else:
+            done = subprocess.run([
+                args.wallet_cli, "send",
+                "--account", args.account,
+                "--to", t["to"],
+                "--amount", "0 ETH",
+                "--data", t["data"],
+            ])
+            if done.returncode != 0:
+                raise SystemExit(
+                    "harness-approve: wallet-cli refused or the device declined; nothing further sent"
+                )
+
+    # Only once the chain has it. Forgetting the ask before it is real would
+    # leave the agent waiting on something nobody remembers agreeing to.
+    urllib.request.urlopen(
+        urllib.request.Request(
+            f"{base}/api/asks?tenant={urllib.parse.quote(args.tenant)}&id={urllib.parse.quote(ask['id'])}",
+            method="DELETE",
+        ),
+        timeout=30,
+    )
+    print(f"\napproved. {args.tenant} may now spend up to {money(plan['newCapUsd'])}.")
+
+
+if __name__ == "__main__":
+    main()

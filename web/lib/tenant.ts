@@ -33,6 +33,20 @@ export const REGISTRY_ABI = [
   },
   {
     type: "function",
+    name: "rootDevice",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "address" }],
+  },
+  {
+    type: "function",
+    name: "executor",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "address" }],
+  },
+  {
+    type: "function",
     name: "selfOperator",
     stateMutability: "view",
     inputs: [],

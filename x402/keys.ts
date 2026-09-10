@@ -24,7 +24,7 @@
 
 import { execFileSync } from "node:child_process";
 import { hkdfSync, randomBytes } from "node:crypto";
-import { chmodSync, existsSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";
 import { privateKeyToAccount } from "viem/accounts";
@@ -102,4 +102,32 @@ export function agentSecrets(tenant: string, label: string): Record<string, stri
 
   const parsed: unknown = JSON.parse(opened.toString("utf8"));
   return parsed && typeof parsed === "object" ? (parsed as Record<string, string>) : {};
+}
+
+/**
+ * An Agent asking for something it is not allowed to do.
+ *
+ * The ceiling is enforced on chain, so an Agent that wants more cannot take
+ * it. What it can do is say so, and the request is worth as much as it is
+ * tamper-evident: it names an amount, and it will be read later by a person
+ * deciding whether to sign. So it is sealed under the same ring as everything
+ * else — an ask that could be edited on disk between being made and being
+ * read is an ask worth nothing.
+ *
+ * Held as one file per request so that two asks never race each other, and so
+ * that declining one is a delete rather than a rewrite.
+ */
+export function sealAsk(tenant: string, label: string, ask: Record<string, unknown>): string {
+  const dir = path.join(ENROLMENT_DIR, "pending");
+  mkdirSync(dir, { recursive: true, mode: 0o700 });
+
+  const id = `${Date.now().toString(36)}${randomBytes(4).toString("hex")}`;
+  const body = Buffer.from(JSON.stringify({ ...ask, id, tenant, label, asked: Date.now() }), "utf8");
+
+  const sealed = execFileSync(RING, [tenant, "encrypt", "--key", "harness-secrets"], {
+    input: body,
+    stdio: ["pipe", "pipe", "pipe"],
+  });
+  writeFileSync(path.join(dir, `${tenant}.${label}.${id}.enc`), sealed, { mode: 0o600 });
+  return id;
 }

@@ -63,6 +63,10 @@ def capability(challenge):
             why = f"HTTP {e.code}"
         print(f"x402-fetch: the broker refused: {why}", file=sys.stderr)
         print("  This is an answer, not an error. Do not retry.", file=sys.stderr)
+        # The refusal is where an agent either stops usefully or starts
+        # thrashing. Naming the one legitimate next move costs a line.
+        print('  If the work is worth it, ask: ledger ask "<what>" <usd> "<why>"',
+              file=sys.stderr)
         raise SystemExit(2)
     except urllib.error.URLError as e:
         print(f"x402-fetch: cannot reach the broker at {BROKER}: {e.reason}", file=sys.stderr)

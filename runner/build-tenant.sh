@@ -12,7 +12,7 @@ agent="${2:?}"
 dir="build/${tenant}"
 
 mkdir -p "$dir"
-cp Containerfile sshd_config entrypoint.sh agent.py fetch-secrets profile.sh brain-login x402-fetch CLAUDE.md ../tools/harness-authorized-keys "$dir/"
+cp Containerfile sshd_config entrypoint.sh agent.py fetch-secrets profile.sh brain-login x402-fetch ledger CLAUDE.md ../tools/harness-authorized-keys "$dir/"
 cp -r skel "$dir/"
 echo "${agent}.${tenant}.harness.eth" > "$dir/name"
 

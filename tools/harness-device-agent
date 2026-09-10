@@ -1,0 +1,235 @@
+#!/usr/bin/env python3
+"""Lend your Ledger to a shell on another machine.
+
+Run this on the laptop the device is plugged into. Then, over an ssh session
+to the box, `harness-approve` can sign — the command runs here, the device
+prompts here, and what crosses the wire is a transaction to sign and a result.
+
+    # on the laptop, with the Ledger attached
+    harness-device-agent
+
+    # then ssh in with a remote forward, so the box can reach it
+    ssh -R 8799:127.0.0.1:8799 opc@<box>
+
+    # and on the box
+    harness-approve --dashboard http://localhost:3000 --tenant acme \\
+        --registry 0x... --cap 10 --account ethereum-1 \\
+        --device-agent http://127.0.0.1:8799
+
+Why this exists: wallet-cli reaches the device over libusb, and the box is a
+cloud VM whose only USB devices are QEMU's virtual keyboard and mouse. usbip
+would forward a real one, but macOS cannot be a usbip host. So the device
+cannot be moved to the shell — the command is moved to the device instead,
+which is the same thing from where you are sitting.
+
+What this will and will not do:
+
+  - binds 127.0.0.1 only, so nothing off the laptop can reach it directly; the
+    ssh forward is what lets the box in, and that is a door you opened
+  - signs only what it is given, and shows you the bytes before it does
+  - the device still shows the transaction and still needs your confirmation,
+    which is the part none of this can route around
+
+Standard library only, so there is nothing to install but wallet-cli itself.
+"""
+
+import argparse
+import json
+import re
+import subprocess
+import sys
+from http.server import BaseHTTPRequestHandler, HTTPServer
+
+WALLET_CLI = "wallet-cli"
+
+
+def say(line):
+    """Print so a person reads it now, not when the buffer happens to fill."""
+    print(line, flush=True)
+
+
+def account_address(account):
+    """Which address a session label actually signs from.
+
+    Asked without touching the device — `session view` reads what discovery
+    already stored, and `receive --no-verify` resolves an address without
+    lighting the screen. Both are cheap, and knowing the answer before the
+    device is involved is the difference between refusing a wrong signature
+    and confirming one.
+
+    Returns the address, or None if wallet-cli will not say. None is not
+    permission: the caller treats it as unverified and says so.
+    """
+    seen = subprocess.run(
+        [WALLET_CLI, "session", "view", "--output", "json"],
+        capture_output=True, text=True,
+    )
+    if seen.returncode == 0:
+        found = _find_address(seen.stdout, account)
+        if found:
+            return found
+
+    got = subprocess.run(
+        [WALLET_CLI, "receive", "--account", account, "--no-verify", "--output", "json"],
+        capture_output=True, text=True,
+    )
+    if got.returncode == 0:
+        return _find_address(got.stdout, account) or _any_address(got.stdout)
+    return None
+
+
+def _any_address(blob):
+    m = re.search(r"0x[0-9a-fA-F]{40}", blob or "")
+    return m.group(0) if m else None
+
+
+def _find_address(blob, account):
+    """Pull the address belonging to one label out of whatever shape it came in.
+
+    wallet-cli's JSON is not contracted to us and has changed shape before, so
+    this walks the structure looking for an object that names this account and
+    carries an address, rather than trusting a path through it.
+    """
+    try:
+        doc = json.loads(blob)
+    except (ValueError, TypeError):
+        return None
+
+    hit = []
+
+    def walk(node):
+        if isinstance(node, dict):
+            labels = {str(node.get(k, "")) for k in ("label", "name", "id", "account")}
+            if account in labels:
+                for k in ("freshAddress", "address", "receiveAddress"):
+                    v = node.get(k)
+                    if isinstance(v, str) and re.fullmatch(r"0x[0-9a-fA-F]{40}", v):
+                        hit.append(v)
+                        return
+            for v in node.values():
+                walk(v)
+        elif isinstance(node, list):
+            for v in node:
+                walk(v)
+
+    walk(doc)
+    return hit[0] if hit else None
+
+
+class Handler(BaseHTTPRequestHandler):
+    def log_message(self, *_):
+        pass  # we print what matters ourselves
+
+    def _reply(self, status, body):
+        raw = json.dumps(body).encode()
+        self.send_response(status)
+        self.send_header("content-type", "application/json")
+        self.send_header("content-length", str(len(raw)))
+        self.end_headers()
+        self.wfile.write(raw)
+
+    def do_GET(self):
+        if self.path == "/health":
+            return self._reply(200, {"ok": True, "walletCli": WALLET_CLI})
+        self._reply(404, {"error": "not found"})
+
+    def do_POST(self):
+        if self.path != "/sign":
+            return self._reply(404, {"error": "not found"})
+
+        length = int(self.headers.get("content-length") or 0)
+        try:
+            req = json.loads(self.rfile.read(length) or b"{}")
+        except ValueError:
+            return self._reply(400, {"error": "expected JSON"})
+
+        account = str(req.get("account") or "")
+        to = str(req.get("to") or "")
+        data = str(req.get("data") or "")
+        what = str(req.get("what") or "a transaction")
+        amount = str(req.get("amount") or "0 ETH")
+
+        expect = str(req.get("expect") or "")
+
+        if not account or not to.startswith("0x") or not data.startswith("0x"):
+            return self._reply(400, {"error": "need account, to and data"})
+
+        # Which Ledger, and which account on it. The registry only accepts the
+        # tenant's root device, so a signature from the wrong account is a
+        # revert the person has already confirmed on their screen and paid gas
+        # for. Checking costs one device-free call.
+        if expect:
+            signer = account_address(account)
+            if signer is None:
+                say(f"\n!! cannot confirm which address {account!r} signs from.")
+                say(f"   expected {expect}. Refusing rather than guessing.")
+                say("   run: wallet-cli session view")
+                return self._reply(409, {
+                    "error": f"cannot confirm the address behind {account!r}; expected {expect}",
+                })
+            if signer.lower() != expect.lower():
+                say(f"\n!! wrong account. {account!r} is {signer}")
+                say(f"   this machine answers to {expect}")
+                say("   another Ledger, or another account on this one.")
+                return self._reply(409, {
+                    "error": f"{account!r} is {signer}, but this machine answers to {expect}",
+                })
+
+        # Shown before the device is asked, so the person at the laptop sees
+        # what arrived and can refuse by simply not pressing the button.
+        #
+        # Flushed, every line. Python buffers stdout when it is not a
+        # terminal, and a prompt to check some bytes that appears after the
+        # bytes were signed is worse than no prompt at all.
+        say(f"\n── asked to sign: {what}")
+        say(f"   to     {to}")
+        say(f"   data   {data[:78]}{'…' if len(data) > 78 else ''} ({len(data) // 2} bytes)")
+        say(f"   as     {account}" + (f" ({expect}) — confirmed the right device" if expect else ""))
+        say("   confirm on the device, or reject there to refuse\n")
+
+        cmd = [WALLET_CLI, "send", "--account", account, "--to", to,
+               "--amount", amount, "--data", data, "--output", "json"]
+        done = subprocess.run(cmd, capture_output=True, text=True)
+
+        if done.returncode != 0:
+            err = (done.stderr or done.stdout or "").strip()[-600:]
+            say(f"   refused or failed: {err.splitlines()[-1] if err else 'no output'}")
+            return self._reply(502, {"error": err or "wallet-cli failed"})
+
+        say("   signed.")
+        try:
+            return self._reply(200, {"result": json.loads(done.stdout)})
+        except ValueError:
+            return self._reply(200, {"result": {"raw": done.stdout.strip()}})
+
+
+def main():
+    p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    p.add_argument("--port", type=int, default=8799)
+    p.add_argument("--wallet-cli", default="wallet-cli")
+    args = p.parse_args()
+
+    global WALLET_CLI
+    WALLET_CLI = args.wallet_cli
+
+    found = subprocess.run([WALLET_CLI, "--version"], capture_output=True, text=True)
+    if found.returncode != 0:
+        raise SystemExit(
+            f"harness-device-agent: cannot run {WALLET_CLI!r}.\n"
+            "  npm i -g @ledgerhq/wallet-cli"
+        )
+
+    print("harness-device-agent — your Ledger, lent to a shell elsewhere")
+    print(f"  listening on 127.0.0.1:{args.port} (loopback only)")
+    print(f"  wallet-cli {found.stdout.strip()[:40]}")
+    print("\n  forward it into an ssh session with:")
+    print(f"    ssh -R {args.port}:127.0.0.1:{args.port} <user>@<box>\n")
+    HTTPServer(("127.0.0.1", args.port), Handler).serve_forever()
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except KeyboardInterrupt:
+        print("\nstopped. the device is no longer lent to anything.")
+        sys.exit(0)

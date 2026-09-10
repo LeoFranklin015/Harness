@@ -5,6 +5,7 @@ import { useState } from "react";
 import { BorderBeam } from "@/components/ui/border-beam";
 import { MeshInvite } from "@/components/tenants/MeshInvite";
 import { Terminal } from "@/components/tenants/Terminal";
+import { Asks, type Ask } from "@/components/tenants/Asks";
 import type { ProvisionRequest } from "@/components/tenants/ProvisionDialog";
 
 export type Tenant = {
@@ -36,6 +37,7 @@ export function TenantSlot({
   onContinue,
   onRevoke,
   onAuthorise,
+  onRaise,
 }: {
   tenant: Tenant | null;
   onAdd: () => void;
@@ -43,6 +45,8 @@ export function TenantSlot({
   onRevoke: (t: Tenant) => void;
   /** Puts a visitor's fingerprint on chain. One signature on the device. */
   onAuthorise: (t: Tenant, operator: `0x${string}`) => Promise<void>;
+  /** Signs a new Grant at a higher ceiling, after an agent asked for one. */
+  onRaise: (t: Tenant, ask: Ask, newCapUsd: number) => Promise<void>;
 }) {
   if (!tenant) return <EmptySlot onAdd={onAdd} />;
   return (
@@ -51,6 +55,7 @@ export function TenantSlot({
       onContinue={onContinue}
       onRevoke={onRevoke}
       onAuthorise={onAuthorise}
+      onRaise={onRaise}
     />
   );
 }
@@ -76,11 +81,13 @@ function FilledSlot({
   onContinue,
   onRevoke,
   onAuthorise,
+  onRaise,
 }: {
   tenant: Tenant;
   onContinue: (t: Tenant) => void;
   onRevoke: (t: Tenant) => void;
   onAuthorise: (t: Tenant, operator: `0x${string}`) => Promise<void>;
+  onRaise: (t: Tenant, ask: Ask, newCapUsd: number) => Promise<void>;
 }) {
   const [shell, setShell] = useState(false);
   const provisioning = tenant.status === "provisioning";
@@ -155,6 +162,11 @@ function FilledSlot({
           </div>
           {/* The machine has no public address, so reaching it is a separate,
               deliberate act — and one that expires on its own. */}
+          <Asks
+            tenant={tenant.label}
+            currentCapUsd={Number(tenant.request?.capUsd ?? tenant.cap.replace(/[^0-9.]/g, "")) || 0}
+            onApprove={(ask, newCap) => onRaise(tenant, ask, newCap)}
+          />
           <MeshInvite
             machine={tenant.label}
             agent={tenant.agent}

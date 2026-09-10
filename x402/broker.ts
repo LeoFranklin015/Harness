@@ -38,7 +38,7 @@ import { USDC_3009_ABI } from "./exact.ts";
 import { load } from "./grant.ts";
 import { headroom } from "./headroom.ts";
 import { settle, transferCall } from "./settle.ts";
-import { agentSecrets } from "./keys.ts";
+import { agentSecrets, sealAsk } from "./keys.ts";
 
 const exec = promisify(execFile);
 
@@ -161,6 +161,131 @@ async function secretsFor(ip: string, door: string) {
   return secrets;
 }
 
+/**
+ * The read-only half of wallet-cli, lent to an Agent.
+ *
+ * wallet-cli cannot live in a Runner. Its platform binary is glibc-linked and
+ * the Runner is Alpine: with gcompat it loads and then aborts. Reflavouring the
+ * image would be a large change for a small gain, and the gain is smaller than
+ * it looks — an Agent has no member key and no device, so most of wallet-cli
+ * would refuse it anyway.
+ *
+ * What is left is worth having and is exactly the part that needs neither:
+ * live yield rates, and token resolution. So the host runs them and the Agent
+ * asks, which is the same shape as every other capability here.
+ *
+ * Strictly allowlisted. `send`, `swap execute`, `earn deposit` and every `ring`
+ * subcommand are absent by construction rather than by filtering — those need a
+ * device or the member key, and neither belongs at the end of a socket an Agent
+ * can reach.
+ */
+const LEDGER_COMMANDS: Record<string, (a: Record<string, string>) => string[]> = {
+  // Live rates across Kiln, Figment and StakeKit. No device, no account.
+  yields: (a) => ["earn", "yields", ...(a.network ? ["--network", a.network] : []), "--output", "json"],
+  // Which token an address is, and what an id resolves to.
+  token: (a) => ["assets", "token", "--network", a.network ?? "ethereum", "--address", a.address ?? "", "--output", "json"],
+  "token-by-id": (a) => ["assets", "token-by-id", "--id", a.id ?? "", "--output", "json"],
+};
+
+const WALLET_CLI =
+  process.env.WALLET_CLI ??
+  new URL("../web/node_modules/@ledgerhq/wallet-cli/bin/wallet-cli", import.meta.url).pathname;
+
+async function ledgerFor(ip: string, door: string, body: Record<string, string>) {
+  const { tenant, agent, network } = await whoIsAsking(ip);
+  const own = await gatewayOf(network);
+  if (own && door !== own) {
+    throw Object.assign(new Error(`${tenant} may only ask at ${own}`), { status: 403 });
+  }
+  await stillLive(tenant, agent);
+
+  const build = LEDGER_COMMANDS[body.cmd ?? ""];
+  if (!build) {
+    throw Object.assign(
+      new Error(`no such command; this Agent may ask for: ${Object.keys(LEDGER_COMMANDS).join(", ")}`),
+      { status: 400 },
+    );
+  }
+
+  const { stdout } = await exec(WALLET_CLI, build(body), { maxBuffer: 1 << 22 });
+  try {
+    return JSON.parse(stdout);
+  } catch {
+    throw Object.assign(new Error("wallet-cli did not answer with JSON"), { status: 502 });
+  }
+}
+
+/**
+ * What this Agent may still spend, without spending anything to find out.
+ *
+ * The ceiling is on chain and an Agent should be able to read it before
+ * committing rather than discovering it in a refusal. Knowing the answer is
+ * the difference between "this costs more than I am allowed, shall I ask?" and
+ * a loop of rejected payments.
+ */
+async function limitsFor(ip: string, door: string) {
+  const { tenant, agent, network } = await whoIsAsking(ip);
+  const own = await gatewayOf(network);
+  if (own && door !== own) {
+    throw Object.assign(new Error(`${tenant} may only ask at ${own}`), { status: 403 });
+  }
+  const name = await stillLive(tenant, agent);
+
+  const { grant, registry, rootOfTree } = load(agent, tenant);
+  const room = await headroom(registry, rootOfTree, grant);
+  const cap = BigInt(grant.spends[0]?.allowance ?? 0);
+
+  return {
+    agent: name,
+    live: true,
+    token: "USDC",
+    cap: cap.toString(),
+    left: room.left.toString(),
+    spent: (cap - room.left).toString(),
+    capUsd: Number(cap) / 1e6,
+    leftUsd: Number(room.left) / 1e6,
+    expires: Number(grant.end),
+  };
+}
+
+/**
+ * An Agent saying it needs something it is not allowed to do.
+ *
+ * The ceiling is on chain, so wanting more cannot become having more. What an
+ * Agent can do is stop and ask, and this is where the asking goes: sealed
+ * under the tenant's ring, waiting for the dashboard to show it and a person
+ * to decide with their device.
+ *
+ * This is deliberately not an escape hatch. Recording an ask grants nothing at
+ * all — it moves the decision to somebody who can sign, which is the only
+ * place it was ever going to be made.
+ */
+async function askFor(ip: string, door: string, body: Record<string, unknown>) {
+  const { tenant, agent, network } = await whoIsAsking(ip);
+  const own = await gatewayOf(network);
+  if (own && door !== own) {
+    throw Object.assign(new Error(`${tenant} may only ask at ${own}`), { status: 403 });
+  }
+  const name = await stillLive(tenant, agent);
+
+  const want = String(body.want ?? "").slice(0, 400).trim();
+  const why = String(body.why ?? "").slice(0, 800).trim();
+  const usd = Number(body.usd ?? 0);
+  if (!want) throw Object.assign(new Error("say what you need"), { status: 400 });
+  if (!Number.isFinite(usd) || usd < 0 || usd > 1_000_000) {
+    throw Object.assign(new Error("usd must be a number a person could plausibly approve"), { status: 400 });
+  }
+
+  const id = sealAsk(tenant, agent, { want, why, usd });
+  console.log(`  ${name} asks for $${usd.toFixed(2)}: ${want}`);
+  return {
+    id,
+    recorded: true,
+    agent: name,
+    note: "Recorded and shown to the owner. Nothing is granted until they sign.",
+  };
+}
+
 /** Refuses unless the chain still says yes, and only for as much as it says. */
 async function authorize(ip: string, door: string, challenge: Record<string, string>) {
   const { tenant, agent, network } = await whoIsAsking(ip);
@@ -262,15 +387,28 @@ const handler = async (
     res.end(JSON.stringify(body));
   };
   if (req.method !== "POST") return send(404, { error: "not found" });
-  if (req.url !== "/capability" && req.url !== "/secrets") {
-    return send(404, { error: "not found" });
-  }
+  const routes = ["/capability", "/secrets", "/ledger", "/limits", "/ask"];
+  if (!routes.includes(req.url ?? "")) return send(404, { error: "not found" });
 
   // ::ffff:10.89.0.2 on a dual-stack socket. Taken from the socket, never from
   // the body or a header: a caller does not get to say who it is.
   const strip = (a: string | undefined) => (a ?? "").replace(/^::ffff:/, "");
   const ip = strip(req.socket.remoteAddress);
   const door = strip(req.socket.localAddress);
+
+  if (req.url === "/ledger" || req.url === "/limits" || req.url === "/ask") {
+    try {
+      const body =
+        req.url === "/limits" ? {} : ((JSON.parse((await text(req)) || "{}")) as Record<string, string>);
+      if (req.url === "/ask") return send(200, await askFor(ip, door, body));
+      return send(200, req.url === "/ledger" ? await ledgerFor(ip, door, body) : await limitsFor(ip, door));
+    } catch (err) {
+      const status = httpStatus(err);
+      const why = status === 500 ? explain(err) : (err as Error).message;
+      console.log(`  refused ${ip}: ${why}`);
+      return send(status, { error: why });
+    }
+  }
 
   if (req.url === "/secrets") {
     try {

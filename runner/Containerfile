@@ -88,7 +88,8 @@ RUN chmod 755 /usr/local/bin/brain-login
 # the broker, so this is the tool rather than a paragraph telling an agent to
 # hand-roll the same three calls.
 COPY x402-fetch /usr/local/bin/x402-fetch
-RUN chmod 755 /usr/local/bin/x402-fetch
+COPY ledger /usr/local/bin/ledger
+RUN chmod 755 /usr/local/bin/x402-fetch /usr/local/bin/ledger
 
 COPY fetch-secrets /usr/local/bin/fetch-secrets
 RUN chmod 755 /usr/local/bin/fetch-secrets

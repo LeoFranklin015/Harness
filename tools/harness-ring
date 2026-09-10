@@ -61,4 +61,11 @@ $pubkey"
 keyctl padd user "keyring:${account}@ledger-wallet-cli" @s <<<"$payload" >/dev/null
 unset payload
 
+# The op is still the head of "$@" — one shift was spent on the tenant, and the
+# re-exec above needs it there to reconstruct its own arguments. Drop it now,
+# or wallet-cli is handed `ring decrypt decrypt --key …`. It tolerates that
+# today, which is exactly the kind of thing that stops being true in a release
+# nobody read the notes for.
+shift
+
 exec "$cli" ring "$op" "$@"
