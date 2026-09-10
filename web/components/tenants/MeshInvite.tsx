@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Hex } from "viem";
 
 /**
@@ -43,6 +43,8 @@ export function MeshInvite({
   meshAddress,
   ensName,
   onAuthorise,
+  autoStart = false,
+  onPhase,
 }: {
   machine: string;
   /** Which Agent on this machine, which is half of the key's derivation. */
@@ -52,12 +54,34 @@ export function MeshInvite({
   ensName: string | null;
   /** Puts the fingerprint on chain. Resolves once the device has signed. */
   onAuthorise: (operator: Hex) => Promise<void>;
+  /**
+   * Start minting as soon as this is true, and drop the button.
+   *
+   * The caller already has a button — "Use over SSH" — and asking somebody
+   * to press a second one to get what the first promised is a step that
+   * exists only because the components were written separately.
+   */
+  autoStart?: boolean;
+  /** So the caller's button can carry the progress. */
+  onPhase?: (phase: "idle" | "minting" | "signing" | "open") => void;
 }) {
   const [available, setAvailable] = useState<boolean | null>(null);
   const [invite, setInvite] = useState<Invite | null>(null);
   const [phase, setPhase] = useState<"idle" | "minting" | "signing" | "open">("idle");
   const [error, setError] = useState<string | null>(null);
   const [left, setLeft] = useState(0);
+
+  useEffect(() => onPhase?.(phase), [phase, onPhase]);
+
+  // One shot. `request` is recreated every render, so the effect keys off the
+  // things that decide whether to start, never the function itself.
+  const started = useRef(false);
+  useEffect(() => {
+    if (!autoStart || started.current || available !== true) return;
+    started.current = true;
+    void request();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoStart, available]);
 
   // Ask once whether this host can invite, so the button is absent rather than
   // broken when there is no OAuth client configured.
@@ -122,6 +146,15 @@ export function MeshInvite({
   if (available === false) return null;
 
   if (phase === "idle" || !invite) {
+    // Driven from outside: the caller's button is the button, and while it
+    // is working there is nothing to show here but a failure.
+    if (autoStart) {
+      return error ? (
+        <p className="mt-3 text-xs leading-relaxed text-amber-400/90" role="alert">
+          {error}
+        </p>
+      ) : null;
+    }
     return (
       <div className="mt-3">
         <button

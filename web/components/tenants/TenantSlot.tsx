@@ -156,6 +156,7 @@ function Details({
 }) {
   const [shell, setShell] = useState(false);
   const [ssh, setSsh] = useState(false);
+  const [sshPhase, setSshPhase] = useState<"idle" | "minting" | "signing" | "open">("idle");
   const provisioning = tenant.status === "provisioning";
   const revoked = tenant.status === "revoked";
 
@@ -237,13 +238,32 @@ function Details({
                   <span className="mt-0.5 block text-[11px] text-neutral-600">In the browser</span>
                 </Action>
               )}
+              {/* Pressing it does the work. There is no second button to
+                  find: the key is minted and put on chain from here, and
+                  the button carries the progress while that happens. */}
               <Action
-                icon={<TailscaleMark className="h-5 w-5" />}
+                icon={
+                  ssh && sshPhase !== "open" ? (
+                    <Spinner className="h-5 w-5" />
+                  ) : (
+                    <TailscaleMark className="h-5 w-5" />
+                  )
+                }
                 onClick={() => setSsh((v) => !v)}
                 on={ssh}
               >
                 Use over SSH
-                <span className="mt-0.5 block text-[11px] text-neutral-600">From your own shell</span>
+                <span className="mt-0.5 block text-[11px] text-neutral-600">
+                  {!ssh
+                    ? "From your own shell"
+                    : sshPhase === "minting"
+                      ? "Minting a key…"
+                      : sshPhase === "signing"
+                        ? "Confirm on your Ledger"
+                        : sshPhase === "open"
+                          ? "Ready — paste below"
+                          : "Starting…"}
+                </span>
               </Action>
             </div>
             {/* The machine has no public address, so reaching it is a separate,
@@ -254,6 +274,8 @@ function Details({
                 it. Shown together, in that order. */}
             {ssh && (
               <MeshInvite
+                autoStart
+                onPhase={setSshPhase}
                 machine={tenant.label}
                 agent={tenant.agent}
                 meshAddress={tenant.meshAddress}
@@ -338,6 +360,22 @@ function Spend({
       capUsd={d ? d.capUsd : fallbackCap}
       windowEnds={d?.windowEnds ?? null}
     />
+  );
+}
+
+/** Turning, while the button it sits in is busy. */
+function Spinner({ className = "" }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" className={`${className} animate-spin`} aria-hidden>
+      <circle cx={12} cy={12} r={9} fill="none" stroke="currentColor" strokeOpacity={0.25} strokeWidth={2.4} />
+      <path
+        d="M21 12 A9 9 0 0 0 12 3"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={2.4}
+        strokeLinecap="round"
+      />
+    </svg>
   );
 }
 
