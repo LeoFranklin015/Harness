@@ -1,11 +1,12 @@
 "use client";
 
-import { firstValueFrom } from "rxjs";
+import { filter, firstValueFrom, timeout } from "rxjs";
 import {
   DeviceActionStatus,
   DeviceManagementKitBuilder,
   OpenAppDeviceAction,
   UserInteractionRequired,
+  type DiscoveredDevice,
 } from "@ledgerhq/device-management-kit";
 import {
   webHidIdentifier,
@@ -45,8 +46,16 @@ export function isSupported(): boolean {
  * connection; DMK's session handling covers that, which is why this does not
  * hand-roll the BOLOS open-app APDU.
  *
- * Must be called from a user gesture: the WebHID picker will not appear
- * otherwise, and it fails silently rather than throwing.
+ * Still driven by a click, but a click need not mean the picker. WebHID
+ * permission is per origin and device and it persists, so a device already
+ * granted can be reopened without asking again — otherwise switching from
+ * Ledger Sync to Ethereum asks somebody to select a device they never
+ * unplugged.
+ *
+ * The silent path is time-boxed. Permission is not the same as readiness: a
+ * device re-enumerates when its app changes, and the entry can be stale. If
+ * it does not come up in time the picker takes over, which is only what used
+ * to happen every time.
  */
 export async function openApp(appName: string, onStep: Step): Promise<AppSession> {
   if (!isSupported()) {
@@ -55,13 +64,67 @@ export async function openApp(appName: string, onStep: Step): Promise<AppSession
 
   const dmk = new DeviceManagementKitBuilder().addTransport(webHidTransportFactory).build();
 
-  onStep("Select your Ledger in the browser prompt");
-  const device = await firstValueFrom(dmk.startDiscovering({ transport: webHidIdentifier }));
+  const allowed = await permitted(dmk);
+  if (allowed) {
+    onStep("Reconnecting to your Ledger");
+    const session = await attach(dmk, allowed, appName, onStep, RECONNECT_MS).catch(() => null);
+    if (session) return session;
+  }
 
-  const sessionId = await dmk.connect({
-    device,
-    sessionRefresherOptions: { isRefresherDisabled: false },
-  });
+  onStep("Select your Ledger in the browser prompt");
+  const chosen = await firstValueFrom(dmk.startDiscovering({ transport: webHidIdentifier }));
+  return attach(dmk, chosen, appName, onStep, null);
+}
+
+/** How long a device we believe we already have gets, before we ask again. */
+const RECONNECT_MS = 12_000;
+
+/**
+ * A device this origin may open without prompting, if there is one.
+ *
+ * This only decides whether to *try* silently; whether it answers is settled
+ * by actually connecting, under a deadline.
+ */
+async function permitted(
+  dmk: ReturnType<DeviceManagementKitBuilder["build"]>,
+): Promise<DiscoveredDevice | null> {
+  try {
+    const found = await firstValueFrom(
+      dmk
+        .listenToAvailableDevices({ transport: webHidIdentifier })
+        .pipe(filter((all) => all.length > 0), timeout(2000)),
+    );
+    return found[0] ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Connect, and leave `appName` running.
+ *
+ * `budget` bounds the attempt when we are guessing the device is still there.
+ * Unbounded is the failure worth avoiding: a stale handle leaves the page
+ * saying "confirm on your device" while the device has been asked nothing.
+ */
+async function attach(
+  dmk: ReturnType<DeviceManagementKitBuilder["build"]>,
+  device: DiscoveredDevice,
+  appName: string,
+  onStep: Step,
+  budget: number | null,
+): Promise<AppSession> {
+  const expire = budget
+    ? new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error("the device did not answer in time")), budget),
+      )
+    : null;
+  const within = <T,>(work: Promise<T>) =>
+    expire ? (Promise.race([work, expire]) as Promise<T>) : work;
+
+  const sessionId = await within(
+    dmk.connect({ device, sessionRefresherOptions: { isRefresherDisabled: false } }),
+  );
 
   const release = async () => {
     await dmk.disconnect({ sessionId }).catch(() => {});
@@ -69,13 +132,15 @@ export async function openApp(appName: string, onStep: Step): Promise<AppSession
 
   try {
     onStep(`Open ${appName} on your device`);
-    await runDeviceAction(
-      dmk.executeDeviceAction({
-        sessionId,
-        deviceAction: new OpenAppDeviceAction({ input: { appName } }),
-      }),
-      onStep,
-      appName,
+    await within(
+      runDeviceAction(
+        dmk.executeDeviceAction({
+          sessionId,
+          deviceAction: new OpenAppDeviceAction({ input: { appName } }),
+        }),
+        onStep,
+        appName,
+      ),
     );
   } catch (err) {
     await release();

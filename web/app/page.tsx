@@ -314,15 +314,6 @@ function Machines({
       }
       if (!ready || !executor) throw new Error("the platform stopped before handing over");
 
-      // The executor is named on the registry itself, so a raise does not
-      // depend on remembering what provisioning happened to see.
-      const pub = createPublicClient({ chain: sepolia, transport: sepoliaTransport() });
-      const spender = (await pub.readContract({
-        address: tenant.registry,
-        abi: REGISTRY_ABI,
-        functionName: "executor",
-      })) as Address;
-
       const grant = firstGrant({
         label: req.agent,
         agentKey: ready.agentKey,
