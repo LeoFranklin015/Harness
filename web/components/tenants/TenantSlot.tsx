@@ -8,7 +8,6 @@ import { Terminal } from "@/components/tenants/Terminal";
 import { Asks, type Ask } from "@/components/tenants/Asks";
 import { Agent } from "@/components/tenants/Agent";
 import { Ceiling } from "@/components/tenants/Ceiling";
-import { Machine } from "@/components/tenants/Machine";
 import { RevokeCascade } from "@/components/tenants/RevokeCascade";
 import type { ProvisionRequest } from "@/components/tenants/ProvisionDialog";
 
@@ -104,17 +103,13 @@ function AgentCard({ tenant, onOpen }: { tenant: Tenant; onOpen: () => void }) {
     >
       {tenant.status === "provisioning" && <BorderBeam size={220} duration={7} />}
 
+      {/* No gear train beside it. The tracks already say the machine is
+          running, and they said it better — two mechanisms in one corner
+          only competed. */}
       <Agent
         state={tenant.status}
         awaiting={tenant.awaiting}
         className="h-[74%] transition-transform duration-500 group-hover:scale-[1.03]"
-      />
-
-      {/* The gear train, small, in the corner. Two registers of the same
-          idea: the drawing is what the machine is, this is that it runs. */}
-      <Machine
-        state={tenant.status}
-        className="pointer-events-none absolute bottom-4 right-4 h-16 w-16 opacity-70"
       />
     </button>
   );

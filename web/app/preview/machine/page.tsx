@@ -26,10 +26,19 @@ export default function MachinePreview() {
         ))}
       </div>
 
-      {/* The card as it will be: the agent, and the train in the corner. */}
+      {/* The card as it will be. */}
       <div className="relative flex aspect-[16/10] w-full max-w-3xl items-center justify-center overflow-hidden rounded-2xl border border-neutral-800 bg-neutral-950/60">
         <Agent state={state} className="h-[78%]" />
-        <Machine state={state} className="pointer-events-none absolute bottom-4 right-4 h-24 w-24" />
+      </div>
+
+      {/* The gear train no longer appears on a card — it competed with the
+          tracks. Kept here because it is still the better picture of a
+          mechanism, if somewhere else ever wants one. */}
+      <p className="mt-10 mb-3 font-mono text-[10px] uppercase tracking-wider text-neutral-600">
+        gear train · unused
+      </p>
+      <div className="flex aspect-[16/7] w-full max-w-md items-center justify-center overflow-hidden rounded-2xl border border-neutral-900 bg-neutral-950/40">
+        <Machine state={state} className="h-[80%]" />
       </div>
     </div>
   );
