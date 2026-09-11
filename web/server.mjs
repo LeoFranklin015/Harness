@@ -40,6 +40,15 @@ server.on("upgrade", (req, socket, head) => {
     return;
   }
 
+  // The same gate the rest of the app is behind. An upgrade never reaches
+  // Next, so the middleware that checks this cannot see it, and without this
+  // the one path that bypasses Next would be the one path left open.
+  const originToken = process.env.HARNESS_ORIGIN_TOKEN;
+  if (originToken && req.headers["x-harness-origin"] !== originToken) {
+    socket.destroy();
+    return;
+  }
+
   socket.setNoDelay(true);
 
   const target = connect(TERMINAL_PORT, "127.0.0.1", () => {
