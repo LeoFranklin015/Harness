@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Address, Hex } from "viem";
 import { ConnectLedger } from "@/components/ledger/ConnectLedger";
 import { DeviceHolder } from "@/components/DeviceHolder";
+import { AccountMenu } from "@/components/AccountMenu";
 import { UpgradeAccount } from "@/components/ledger/UpgradeAccount";
 
 import { TenantSlot, type Tenant } from "@/components/tenants/TenantSlot";
@@ -430,32 +431,15 @@ function Machines({
           <h1 className="text-2xl font-medium tracking-tight text-neutral-50">Your machines</h1>
         </div>
 
-        <div className="text-right">
-          <p className="text-xs uppercase tracking-wider text-neutral-600">Authority</p>
-          <CopyAddress address={authority.address} />
-          <p className="text-xs text-neutral-600">
-            {authority.model} · {authority.path} ·{" "}
-            <button onClick={onForget} className="underline decoration-neutral-800 underline-offset-2 hover:text-neutral-400">
-              switch device
-            </button>
-          </p>
-          <p className="mt-1 text-xs text-neutral-600">
-            {upgraded ? (
-              <span className="text-emerald-500/80">one signature per machine</span>
-            ) : (
-              <>
-                four signatures per machine ·{" "}
-                <button
-                  onClick={onUpgrade}
-                  disabled={upgrading}
-                  className="underline decoration-neutral-800 underline-offset-2 hover:text-neutral-400 disabled:opacity-50"
-                >
-                  {upgrading ? "upgrading…" : "make it one"}
-                </button>
-              </>
-            )}
-          </p>
-        </div>
+        <AccountMenu
+          address={authority.address}
+          model={authority.model}
+          path={authority.path}
+          upgraded={upgraded}
+          upgrading={upgrading}
+          onUpgrade={onUpgrade}
+          onForget={onForget}
+        />
       </header>
 
       {error && (
@@ -488,55 +472,3 @@ function Machines({
     </div>
   );
 }
-
-/**
- * The address, whole, one click away.
- *
- * Shown short because it is a label, copied long because it is an address —
- * the thing most often done with it is pasting it into a faucet or a block
- * explorer. The clipboard API is only there on secure origins, so there is a
- * fallback for a page served over plain HTTP.
- */
-function CopyAddress({ address }: { address: Address }) {
-  const [copied, setCopied] = useState(false);
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  async function copy() {
-    await copyText(address);
-    setCopied(true);
-    if (timer.current) clearTimeout(timer.current);
-    timer.current = setTimeout(() => setCopied(false), 1400);
-  }
-
-  return (
-    <button
-      onClick={copy}
-      title={address}
-      className="group inline-flex items-center gap-2 font-mono text-sm text-neutral-300 transition hover:text-neutral-50"
-    >
-      {address.slice(0, 10)}…{address.slice(-8)}
-      <span className={`text-[10px] uppercase tracking-wider ${copied ? "text-emerald-400" : "text-neutral-600 group-hover:text-neutral-400"}`}>
-        {copied ? "copied" : "copy"}
-      </span>
-    </button>
-  );
-}
-
-async function copyText(text: string) {
-  if (navigator.clipboard?.writeText) {
-    try {
-      await navigator.clipboard.writeText(text);
-      return;
-    } catch {}
-  }
-  const ta = document.createElement("textarea");
-  ta.value = text;
-  ta.setAttribute("readonly", "");
-  ta.style.position = "fixed";
-  ta.style.opacity = "0";
-  document.body.appendChild(ta);
-  ta.select();
-  document.execCommand("copy");
-  document.body.removeChild(ta);
-}
-
