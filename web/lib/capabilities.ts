@@ -14,14 +14,17 @@ import { USDC } from "@/lib/tenant";
  * Two layers decide whether a capability actually works, and they are not the
  * same layer. The registry checks calls against the Grant and will happily
  * permit anything listed here. `AllowanceExecutor` then has to *perform* the
- * call, and today it understands exactly one shape: `transfer(address,uint256)`
- * on an ERC-20, which it settles with `transferFrom` out of the Tenant's own
- * account. Anything else is authorised on chain and reverts on execution.
+ * call, and it understands two shapes: `transfer(address,uint256)` on an
+ * ERC-20, settled with `transferFrom` out of the Tenant's own account, and
+ * Uniswap v3's `exactInputSingle`, settled by pulling the input in, approving
+ * the router for exactly that amount and letting it pay the output straight
+ * back to the Tenant. Anything else is authorised on chain and reverts on
+ * execution.
  *
  * Rather than hide that, `executable` says so per capability. Offering a swap
  * that the chain permits and the executor refuses would be a worse lie than
  * not offering it at all — and the gap is the honest state of the work: the
- * grant language is general, this executor implements payments.
+ * grant language is general, this executor implements payments and swaps.
  */
 
 export type Capability = {
@@ -39,7 +42,7 @@ export type Capability = {
   spends: boolean;
 };
 
-/** `transfer(address,uint256)`, the only shape the executor settles. */
+/** `transfer(address,uint256)`. */
 export const TRANSFER: Hex = "0xa9059cbb";
 /** `approve(address,uint256)`. */
 export const APPROVE: Hex = "0x095ea7b3";
@@ -102,12 +105,12 @@ export const CATALOGUE: Capability[] = [
   {
     id: "uniswap-swap",
     name: "Swap on Uniswap v3",
-    detail: "exactInputSingle on the Sepolia router. Authorised on chain; needs a swap executor.",
+    detail: "exactInputSingle on the Sepolia router. The output is forced back to your own account.",
     group: "defi",
     target: UNISWAP_ROUTER,
     selector: EXACT_INPUT_SINGLE,
-    executable: false,
-    spends: false,
+    executable: true,
+    spends: true,
   },
   {
     id: "aave-supply",
@@ -197,7 +200,7 @@ export const PROTOCOLS: Protocol[] = [
     detail: "exactInputSingle",
     target: UNISWAP_ROUTER,
     selector: EXACT_INPUT_SINGLE,
-    executable: false,
+    executable: true,
   },
   {
     id: "aave-v3",
