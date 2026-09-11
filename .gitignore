@@ -8,7 +8,10 @@
 secrets/
 keystore/
 deployer.json
+# Notes and write-ups stay local, all of them. Nothing here goes to a remote
+# unless it is put there deliberately.
 docs/
+planning/
 CONTEXT.md
 Project-details.md
 SPEC.md
