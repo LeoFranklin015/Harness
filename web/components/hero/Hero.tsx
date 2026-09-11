@@ -36,15 +36,17 @@ export function Hero({
       <section className="relative mx-auto w-full max-w-[1500px] px-7 pb-16 lg:min-h-[calc(100dvh-7rem)] lg:px-10 lg:pb-20">
         <div className="max-w-[34rem] lg:pt-6">
           <h1 className="text-[clamp(2.6rem,5vw,4.1rem)] font-medium leading-[0.98] tracking-[-0.042em] text-neutral-50">
-            Scope an agent
+            Give agents
             <br />
-            to a container.
+            machines,
+            <br />
+            not wallets.
           </h1>
 
           <p className="mt-7 max-w-[30rem] text-[16px] leading-[1.65] text-neutral-400">
-            One tap on a Ledger gives an agent its own machine, its own name and a
-            spending ceiling. It runs on its own inside them. Revoke the name and
-            the spending, the access and the address stop together.
+            One tap on a Ledger gives an agent a container, a name you can ssh
+            into, and a daily limit it cannot raise. One more tap ends all
+            three at once.
           </p>
 
           <div className="mt-9">

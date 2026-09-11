@@ -320,3 +320,37 @@ body {
   .rig-shuffle, .rig-wave-inner, .rig-crane, .rig-look { animation: none; }
   .part-landing { opacity: 1; }
 }
+
+/* --- four signatures into one -------------------------------------------- */
+
+/* Plates drift apart, converge into a stack, hold, then come apart again.
+   The distance is per-plate: the top one travels furthest, so the stack
+   closes from the bottom the way something being assembled does. */
+@keyframes batch-gather {
+  0%, 8%    { transform: translateY(calc(var(--i) * -30px)); opacity: 0.45; }
+  40%, 74%  { transform: translateY(0); opacity: 1; }
+  96%, 100% { transform: translateY(calc(var(--i) * -30px)); opacity: 0.45; }
+}
+.batch-plate {
+  animation: batch-gather 6.5s cubic-bezier(0.22, 0.61, 0.36, 1) infinite;
+  /* Staggered so they land in order rather than snapping together. */
+  animation-delay: calc(var(--i) * 0.12s);
+}
+
+/* One ring, once per cycle, at the moment the stack is whole. */
+@keyframes batch-tap {
+  0%, 44%  { opacity: 0; transform: scale(0.4); }
+  52%      { opacity: 0.9; }
+  70%, 100% { opacity: 0; transform: scale(2.6); }
+}
+.batch-tap {
+  transform-origin: center;
+  transform-box: fill-box;
+  animation: batch-tap 6.5s ease-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .batch-plate, .batch-tap { animation: none; }
+  .batch-plate { opacity: 1; transform: none; }
+  .batch-tap { opacity: 0; }
+}

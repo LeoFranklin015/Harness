@@ -14,7 +14,7 @@ export default function Preview() {
       onConnect={() => {}}
       connecting={false}
       supported
-      status={<p className="text-sm text-neutral-600">Unlock your Ledger and open the Ethereum app.</p>}
+      status={<p className="text-sm text-neutral-600">Unlock it and open the Ethereum app.</p>}
     />
   );
 }

@@ -82,5 +82,5 @@ function StatusLine({ state, supported }: { state: State; supported: boolean }) 
     );
   }
 
-  return <p className="text-sm text-neutral-600">Unlock your Ledger and open the Ethereum app.</p>;
+  return <p className="text-sm text-neutral-600">Unlock it and open the Ethereum app.</p>;
 }
