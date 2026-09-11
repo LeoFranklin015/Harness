@@ -46,6 +46,16 @@ export async function forwardToBox(request: Request): Promise<Response> {
   });
   if (TOKEN) headers.set("x-harness-origin", TOKEN);
 
+  // Where the browser thinks it is. `fetch` rewrites Host to the box, and a
+  // route that builds a link out of it would hand somebody an address only
+  // this machine can reach, over a scheme it does not speak. So the public one
+  // travels alongside, the way any reverse proxy carries it.
+  const publicHost = request.headers.get("host");
+  if (publicHost) headers.set("x-forwarded-host", publicHost);
+  if (!headers.has("x-forwarded-proto")) {
+    headers.set("x-forwarded-proto", here.protocol.replace(":", ""));
+  }
+
   const res = await fetch(target, {
     method: request.method,
     headers,

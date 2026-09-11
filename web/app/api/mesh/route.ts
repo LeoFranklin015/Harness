@@ -102,7 +102,12 @@ export async function POST(request: Request) {
     // command works from wherever the visitor is sitting rather than from a
     // hostname this process guessed about itself.
     const proto = request.headers.get("x-forwarded-proto") ?? "http";
-    const origin = `${proto}://${request.headers.get("host") ?? "localhost:3000"}`;
+    // `x-forwarded-host` when this is the box answering for a deployed
+    // instance: the link has to name the address the visitor can actually
+    // reach, not the one this process happens to listen on.
+    const seen =
+      request.headers.get("x-forwarded-host") ?? request.headers.get("host") ?? "localhost:3000";
+    const origin = `${proto}://${seen}`;
 
     // The key lives behind a one-time link rather than inline. A thousand
     // characters of base64 is pasted unread; a short command can be read, and
