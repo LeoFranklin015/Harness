@@ -10,6 +10,10 @@ interface IAgentReadable {
     /// The key that acts for `label`, or zero if it may not act.
     function agentKeyOf(string calldata label) external view returns (address);
 
+    /// The id of the live Agent for `label`, or zero if there is none.
+    /// ENSIP-25 keys a verification record on it.
+    function agentIdOf(string calldata label) external view returns (bytes32);
+
     /// Where the host behind *this* registry's own name can be reached.
     /// Agents beneath it inherit this, because an address belongs to a machine
     /// and every Agent on that machine shares it.

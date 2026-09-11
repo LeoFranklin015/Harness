@@ -102,6 +102,12 @@ contract PlatformRegistry is PermissionedRegistry, IAgentReadable {
     //
     // Answering zero is not a gap, it is the fact.
 
+    /// @inheritdoc IAgentReadable
+    /// @dev A Tenant is a customer, not an Agent, so there is no id to verify.
+    function agentIdOf(string calldata) external pure returns (bytes32) {
+        return bytes32(0);
+    }
+
     function agentKeyOf(string calldata) external pure returns (address) {
         return address(0);
     }

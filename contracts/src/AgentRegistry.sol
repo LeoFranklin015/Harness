@@ -269,6 +269,15 @@ contract AgentRegistry is PermissionedRegistry {
         return agents[id].agentKey;
     }
 
+    /// @notice The live Agent's id for a label, or zero if it may not act.
+    /// @dev Same gate as `agentKeyOf`: an Agent that cannot act is not one
+    ///      anybody should be able to verify against a registry entry.
+    function agentIdOf(string calldata label) external view returns (bytes32) {
+        bytes32 id = current[keccak256(bytes(label))];
+        if (id == bytes32(0) || _checkAuthority(id) != Reason.Ok) return bytes32(0);
+        return id;
+    }
+
     /// @notice Names the funding backend, once.
     /// @dev The executor must know the registry and the registry the executor,
     ///      so one of them is set after deployment rather than predicting an

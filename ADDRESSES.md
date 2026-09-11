@@ -15,7 +15,7 @@ not see each other's names.
 | Ours | |
 |---|---|
 | `PlatformRegistry` — what `harness.eth` points at | `0xbDF56e17F8956268Fc018B77Dac2ebEa7b3928F7` |
-| `AgentResolver` | `0x3735923a7e3CeCdc37F99eDdD8f22df70BB7e93f` |
+| `AgentResolver` | `0x2D5D8575A6CfaD38EB6a901Dbc41f9F827C53991` |
 | `AgentRegistry` implementation (cloned per Tenant) | `0x74dBF4a7a2C2b46b7a1C3F0e1F4d8B0aD5fC2E11` |
 | `demo`'s registry | `0xfE21595f2A1D586B8d098117799c62619707BE59` |
 | `demo`'s executor | `0x923C84Fb1A012eB8B45EC086500A7E194C895953` |

@@ -198,6 +198,140 @@ contract ResolverTest is Test {
         assertEq(_text(RESEARCH, "ssh-operator"), "", "nobody may log in to it");
     }
 
+    // --- ENSIP-26, agent records -------------------------------------------
+
+    /// The endpoint a client is told to use. `research.demo.harness.eth` is the
+    /// whole point: the name is the address, so the record names itself.
+    function test_publishes_an_ssh_agent_endpoint() public view {
+        assertEq(
+            _text(RESEARCH, "agent-endpoint[ssh]"),
+            "ssh://runner@research.demo.harness.eth"
+        );
+    }
+
+    function test_a_revoked_agent_offers_no_endpoint() public {
+        vm.prank(device);
+        demoReg.revoke(researchId);
+        assertEq(_text(RESEARCH, "agent-endpoint[ssh]"), "", "there is nowhere to reach it");
+    }
+
+    /// ENSIP-26's entry point. It has to name the agent it describes, which is
+    /// the only reason the resolver reassembles the queried name at all.
+    function test_agent_context_names_the_agent_and_points_at_the_endpoint() public view {
+        string memory ctx = _text(RESEARCH, "agent-context");
+        assertTrue(bytes(ctx).length > 0, "an agent with a host has context");
+        assertTrue(
+            _contains(ctx, "research.demo.harness.eth"),
+            "the context names the agent it describes"
+        );
+        assertTrue(_contains(ctx, "agent-endpoint[ssh]"), "and points at how to reach it");
+    }
+
+    function test_a_revoked_agent_has_no_context() public {
+        vm.prank(device);
+        demoReg.revoke(researchId);
+        assertEq(_text(RESEARCH, "agent-context"), "");
+    }
+
+    function _contains(string memory haystack, string memory needle)
+        internal
+        pure
+        returns (bool)
+    {
+        bytes memory h = bytes(haystack);
+        bytes memory n = bytes(needle);
+        if (n.length == 0 || n.length > h.length) return false;
+        for (uint256 i = 0; i <= h.length - n.length; i++) {
+            bool hit = true;
+            for (uint256 j = 0; j < n.length; j++) {
+                if (h[i + j] != n[j]) {
+                    hit = false;
+                    break;
+                }
+            }
+            if (hit) return true;
+        }
+        return false;
+    }
+
+    // --- ENSIP-25, registry verification -----------------------------------
+
+    /// The record answers for this Agent's own registry and id, and the key is
+    /// rebuilt here the same way a verifier would build it from the outside.
+    function test_confirms_its_own_registry_entry() public view {
+        string memory key = string.concat(
+            "agent-registration[",
+            _erc7930(address(demoReg)),
+            "][",
+            _hex32(researchId),
+            "]"
+        );
+        assertEq(_text(RESEARCH, key), "1");
+    }
+
+    function test_refuses_a_key_naming_another_agent() public view {
+        string memory key = string.concat(
+            "agent-registration[",
+            _erc7930(address(demoReg)),
+            "][",
+            _hex32(bytes32(uint256(researchId) ^ 1)),
+            "]"
+        );
+        assertEq(_text(RESEARCH, key), "", "an id we did not issue is not ours");
+    }
+
+    function test_refuses_a_key_naming_another_registry() public view {
+        string memory key = string.concat(
+            "agent-registration[",
+            _erc7930(address(0xdeadbeef)),
+            "][",
+            _hex32(researchId),
+            "]"
+        );
+        assertEq(_text(RESEARCH, key), "", "another registry's entry is not ours to confirm");
+    }
+
+    function test_a_revoked_agent_confirms_nothing() public {
+        string memory key = string.concat(
+            "agent-registration[",
+            _erc7930(address(demoReg)),
+            "][",
+            _hex32(researchId),
+            "]"
+        );
+        vm.prank(device);
+        demoReg.revoke(researchId);
+        assertEq(_text(RESEARCH, key), "");
+    }
+
+    function _erc7930(address a) internal view returns (string memory) {
+        uint256 v = block.chainid;
+        uint256 len;
+        for (uint256 t = v; t != 0; t >>= 8) len++;
+        if (len == 0) len = 1;
+        bytes memory ref = new bytes(len);
+        for (uint256 i; i < len; i++) ref[len - 1 - i] = bytes1(uint8(v >> (8 * i)));
+        return _hexStr(
+            abi.encodePacked(bytes2(0x0001), bytes2(0x0000), uint8(len), ref, uint8(20), a)
+        );
+    }
+
+    function _hex32(bytes32 v) internal pure returns (string memory) {
+        return _hexStr(abi.encodePacked(v));
+    }
+
+    function _hexStr(bytes memory raw) internal pure returns (string memory) {
+        bytes memory d = "0123456789abcdef";
+        bytes memory out = new bytes(2 + raw.length * 2);
+        out[0] = "0";
+        out[1] = "x";
+        for (uint256 i; i < raw.length; i++) {
+            out[2 + i * 2] = d[uint8(raw[i]) >> 4];
+            out[3 + i * 2] = d[uint8(raw[i]) & 0x0f];
+        }
+        return string(out);
+    }
+
     function test_declares_ensip10() public view {
         assertTrue(resolver.supportsInterface(0x9061b923));
         assertTrue(resolver.supportsInterface(0x01ffc9a7));

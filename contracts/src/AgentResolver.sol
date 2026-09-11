@@ -85,7 +85,12 @@ contract AgentResolver {
         // text(bytes32,string) — ENSIP-5.
         if (selector == 0x59d1d43c) {
             (, string memory key) = abi.decode(data[4:], (bytes32, string));
-            return abi.encode(_text(host, key));
+            // ENSIP-25 keys carry the registry and the id inside the key
+            // itself, neither of which `_text` is given.
+            if (_looksLikeRegistration(key)) {
+                return abi.encode(_registration(registry, label, key));
+            }
+            return abi.encode(_text(host, key, _join(name)));
         }
 
         // data(bytes32,string) — ENSIP-24 arbitrary bytes. Carries the raw
@@ -112,8 +117,37 @@ contract AgentResolver {
 
     /// @dev Where the Agent runs and what it is, as text, so an ENS client shows
     ///      something useful while knowing nothing about this system.
-    function _text(Host memory host, string memory key) internal pure returns (string memory) {
+    function _text(Host memory host, string memory key, string memory name)
+        internal
+        pure
+        returns (string memory)
+    {
         bytes32 k = keccak256(bytes(key));
+
+        // ENSIP-26 — agent records. The entry point a client reads first to
+        // learn what this name is and how to reach it.
+        if (k == keccak256("agent-context")) {
+            if (host.ipv4 == bytes4(0)) return "";
+            return string.concat(
+                "# ",
+                name,
+                "\n\nAn autonomous agent running on its own machine, inside a spending "
+                "ceiling set on a hardware wallet. It holds a capability, not a key: it may "
+                "call only what its Grant permits, up to that ceiling, and the whole of it "
+                "ends on one transaction.\n\nReach it over SSH - see agent-endpoint[ssh]. "
+                "The fingerprint admitted at the door is published as ssh-operator, and the "
+                "host key as ssh-hostkey, so a visitor can verify both ends before "
+                "connecting.\n"
+            );
+        }
+
+        // ENSIP-26 — `agent-endpoint[<protocol>]`. The spec names mcp, a2a and
+        // web, and allows more as the ecosystem grows. A shell is how you reach
+        // this kind of agent, so ssh is the protocol that matters here.
+        if (k == keccak256("agent-endpoint[ssh]")) {
+            return host.ipv4 == bytes4(0) ? "" : string.concat("ssh://runner@", name);
+        }
+
         if (k == keccak256("url")) {
             return host.ipv4 == bytes4(0) ? "" : string.concat("ssh://", _ipv4(host.ipv4));
         }
@@ -135,6 +169,90 @@ contract AgentResolver {
             return "An agent acting within a hardware-rooted spending limit.";
         }
         return "";
+    }
+
+    // --- ENSIP-25 -----------------------------------------------------------
+
+    /*
+     * `agent-registration[<registry>][<agentId>]`, answered for this Agent's
+     * own registry and id and nothing else.
+     *
+     * Worth being straight about what this is worth here. ENSIP-25 exists to
+     * bridge two systems: a registry that *claims* a name, and the name
+     * confirming the claim from the other side. In this design the
+     * registration and the name are the same write — `grant` mints the name —
+     * so the record cannot be false and cannot be missing while the name
+     * resolves. It carries no information a client did not already have.
+     *
+     * It is implemented because it costs little and because the moment an
+     * Agent here is also listed in an external registry — ERC-8004 — the
+     * handshake has two real sides and the record starts doing work.
+     *
+     * The key is rebuilt from scratch and compared whole, rather than parsed.
+     * A comparison cannot accept a key it was not built for; a parser can.
+     */
+    function _looksLikeRegistration(string memory key) internal pure returns (bool) {
+        bytes memory k = bytes(key);
+        bytes memory prefix = "agent-registration[";
+        if (k.length <= prefix.length) return false;
+        for (uint256 i; i < prefix.length; i++) {
+            if (k[i] != prefix[i]) return false;
+        }
+        return true;
+    }
+
+    function _registration(IAgentReadable registry, string memory label, string memory key)
+        internal
+        view
+        returns (string memory)
+    {
+        bytes32 id = registry.agentIdOf(label);
+        if (id == bytes32(0)) return "";
+
+        string memory expected = string.concat(
+            "agent-registration[",
+            _erc7930(address(registry)),
+            "][",
+            _hex(abi.encodePacked(id)),
+            "]"
+        );
+        // A non-empty value is the whole signal; ENSIP-25 recommends "1".
+        return keccak256(bytes(key)) == keccak256(bytes(expected)) ? "1" : "";
+    }
+
+    /// @dev ERC-7930 interoperable address: version, eip155 chain type, the
+    ///      chain id in as few bytes as it needs, then the 20-byte address.
+    function _erc7930(address a) internal view returns (string memory) {
+        bytes memory ref = _trim(block.chainid);
+        return _hex(
+            abi.encodePacked(
+                bytes2(0x0001), bytes2(0x0000), uint8(ref.length), ref, uint8(20), a
+            )
+        );
+    }
+
+    /// @dev A chain id with its leading zero bytes removed.
+    function _trim(uint256 v) internal pure returns (bytes memory out) {
+        uint256 len;
+        for (uint256 t = v; t != 0; t >>= 8) len++;
+        if (len == 0) len = 1;
+        out = new bytes(len);
+        for (uint256 i; i < len; i++) {
+            out[len - 1 - i] = bytes1(uint8(v >> (8 * i)));
+        }
+    }
+
+    /// @dev `0x` and lower-case hex, which is the form ENSIP-25 keys use.
+    function _hex(bytes memory raw) internal pure returns (string memory) {
+        bytes memory digits = "0123456789abcdef";
+        bytes memory out = new bytes(2 + raw.length * 2);
+        out[0] = "0";
+        out[1] = "x";
+        for (uint256 i; i < raw.length; i++) {
+            out[2 + i * 2] = digits[uint8(raw[i]) >> 4];
+            out[3 + i * 2] = digits[uint8(raw[i]) & 0x0f];
+        }
+        return string(out);
     }
 
     // --- walking the name ---------------------------------------------------
@@ -210,6 +328,19 @@ contract AgentResolver {
     }
 
     /// @dev Splits a DNS wire-format name into its labels, outermost first.
+    /// @dev The queried name as text, for records that have to say what they
+    ///      are — ENSIP-26's `agent-context` reads poorly without it.
+    function _join(bytes calldata name) internal pure returns (string memory out) {
+        uint256 i;
+        while (i < name.length && name[i] != 0) {
+            uint256 len = uint8(name[i]);
+            out = bytes(out).length == 0
+                ? string(name[i + 1:i + 1 + len])
+                : string.concat(out, ".", string(name[i + 1:i + 1 + len]));
+            i += len + 1;
+        }
+    }
+
     function _labels(bytes calldata name) internal pure returns (string[] memory out) {
         out = new string[](_countLabels(name));
         uint256 n;

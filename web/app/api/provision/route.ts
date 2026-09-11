@@ -35,7 +35,7 @@ const exec = promisify(execFile);
 const PLATFORM = (process.env.PLATFORM_REGISTRY ??
   "0xbDF56e17F8956268Fc018B77Dac2ebEa7b3928F7") as Address;
 const RESOLVER = (process.env.AGENT_RESOLVER ??
-  "0x3735923a7e3CeCdc37F99eDdD8f22df70BB7e93f") as Address;
+  "0x2D5D8575A6CfaD38EB6a901Dbc41f9F827C53991") as Address;
 const RUNNER_DIR = process.env.RUNNER_DIR ?? "/home/opc/hackathon/runner";
 
 const PLATFORM_ABI = [
