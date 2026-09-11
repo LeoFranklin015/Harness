@@ -108,16 +108,30 @@ export default function NewMachine() {
   };
 
   if (authority === undefined) return null;
+  // Someone who lands here directly, or after clearing the browser. A machine
+  // is rooted in a device, so there is nothing to fill in until there is one.
   if (!authority) {
     return (
       <Shell>
-        <p className="text-sm text-neutral-400">
-          No device remembered in this browser.{" "}
-          <button onClick={() => router.push("/")} className="underline underline-offset-2">
-            Connect one first
+        <div className="mx-auto flex min-h-[60dvh] max-w-md flex-col items-center justify-center text-center">
+          <div className="mb-4 flex items-center gap-2 text-xs font-medium uppercase tracking-[0.2em] text-neutral-500">
+            <span className="h-px w-8 bg-neutral-700" />
+            Harness
+          </div>
+          <h1 className="text-xl font-medium tracking-tight text-neutral-50">
+            No device in this browser
+          </h1>
+          <p className="mt-2 text-sm leading-relaxed text-neutral-500">
+            A machine is rooted in a Ledger, and there is nothing to set up
+            until one is connected.
+          </p>
+          <button
+            onClick={() => router.push("/")}
+            className="mt-6 rounded-full bg-neutral-50 px-5 py-2 text-sm font-medium text-neutral-950 transition hover:bg-white"
+          >
+            Connect a Ledger
           </button>
-          .
-        </p>
+        </div>
       </Shell>
     );
   }
