@@ -6,9 +6,19 @@ import { createRequire } from "node:module";
 import type { MemberCredentials, Trustchain } from "@ledgerhq/ledger-key-ring-protocol/lib/types";
 
 const require = createRequire(import.meta.url);
-const { Entry } = require("@napi-rs/keyring") as {
-  Entry: new (service: string, account: string) => { setPassword(v: string): void };
-};
+
+/**
+ * Loaded on use, not on import.
+ *
+ * It is a native binding to this host's kernel keyring, and the deployed
+ * instance of this app forwards the one route that needs it. Requiring it at
+ * module load would make every other route depend on a binary that only the
+ * box has any use for.
+ */
+const keyring = () =>
+  require("@napi-rs/keyring") as {
+    Entry: new (service: string, account: string) => { setPassword(v: string): void };
+  };
 
 /**
  * Writes the state `wallet-cli` expects, so the CLI works on this host with no
@@ -65,7 +75,7 @@ export function writeWalletCliState(trustchain: Trustchain, credentials: MemberC
   // The keychain account name derives from the state directory path.
   const account =
     "member-private-key-" + crypto.createHash("sha256").update(dir).digest("hex").slice(0, 16);
-  new Entry(APP, account).setPassword(value);
+  new (keyring().Entry)(APP, account).setPassword(value);
 
   const store = keystorePath();
   mkdirSync(path.dirname(store), { recursive: true, mode: 0o700 });

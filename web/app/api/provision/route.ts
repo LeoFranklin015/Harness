@@ -16,6 +16,7 @@ import { secret } from "@/lib/secrets";
 import { visitorKeyFor } from "@/lib/sshkey";
 import { BRAIN_VAR, BRAINS, sealSecrets, validName, type BrainChoice } from "@/lib/vault";
 import { agentKeyFor } from "@/lib/agent-root";
+import { BOX, forwardToBox } from "@/lib/box";
 
 /**
  * The platform's half of making a machine.
@@ -79,6 +80,9 @@ const ZERO = "0x0000000000000000000000000000000000000000" as Address;
 
 /** Reads a variable out of contracts/.env without pulling the file into env. */
 export async function POST(req: Request) {
+  // Only the box can do this; everywhere else forwards to it.
+  if (BOX) return forwardToBox(req);
+
   const body = (await req.json()) as {
     label: string;
     agent: string;

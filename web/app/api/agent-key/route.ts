@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { agentKeyFor } from "@/lib/agent-root";
+import { BOX, forwardToBox } from "@/lib/box";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -16,6 +17,9 @@ export const dynamic = "force-dynamic";
 const label = /^[a-z0-9][a-z0-9-]*$/;
 
 export async function POST(request: Request) {
+  // Only the box can do this; everywhere else forwards to it.
+  if (BOX) return forwardToBox(request);
+
   const { label: tenant, agent } = (await request.json().catch(() => ({}))) as {
     label?: string;
     agent?: string;

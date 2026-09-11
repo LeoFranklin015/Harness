@@ -26,6 +26,22 @@ const HOST = process.env.HOST ?? "0.0.0.0";
 const TERMINAL_PORT = Number(process.env.HARNESS_TERMINAL_PORT ?? 8023);
 const TERMINAL_PATH = "/api/terminal/ws";
 
+/**
+ * Where the shell actually is.
+ *
+ * The terminal server attaches to containers, so it only exists on the box. A
+ * deployed instance splices the upgrade to the box instead of to loopback, and
+ * the box splices it on to the terminal server — two hops, both raw sockets,
+ * neither parsing a frame.
+ *
+ * When `HARNESS_BOX` is set this instance is the deployed one, and the
+ * handshake it forwards keeps its own path so the box recognises it. The box
+ * refuses anything without the origin token, so that is added here too.
+ */
+const BOX = process.env.HARNESS_BOX?.replace(/^https?:\/\//, "").replace(/\/$/, "");
+const ORIGIN_TOKEN = process.env.HARNESS_ORIGIN_TOKEN;
+const [BOX_HOST, BOX_PORT] = BOX ? BOX.split(":") : [];
+
 const app = next({ dev: false, hostname: HOST, port: PORT });
 await app.prepare();
 const handle = app.getRequestHandler();
@@ -43,7 +59,9 @@ server.on("upgrade", (req, socket, head) => {
   // The same gate the rest of the app is behind. An upgrade never reaches
   // Next, so the middleware that checks this cannot see it, and without this
   // the one path that bypasses Next would be the one path left open.
-  const originToken = process.env.HARNESS_ORIGIN_TOKEN;
+  // Same asymmetry as in proxy.ts: the box demands the token, the deployed
+  // instance presents it.
+  const originToken = BOX ? undefined : process.env.HARNESS_ORIGIN_TOKEN;
   if (originToken && req.headers["x-harness-origin"] !== originToken) {
     socket.destroy();
     return;
@@ -51,15 +69,22 @@ server.on("upgrade", (req, socket, head) => {
 
   socket.setNoDelay(true);
 
-  const target = connect(TERMINAL_PORT, "127.0.0.1", () => {
+  const port = BOX ? Number(BOX_PORT ?? 80) : TERMINAL_PORT;
+  const host = BOX ? BOX_HOST : "127.0.0.1";
+
+  const target = connect(port, host, () => {
     // Replay the handshake verbatim, with only the path changed: the terminal
     // server expects the token on `/`, and everything else about the request —
-    // the Sec-WebSocket-Key above all — has to arrive untouched.
-    const path = url.slice(TERMINAL_PATH.length) || "/";
-    target.write(`GET ${path.startsWith("/") ? path : `/${path}`} HTTP/1.1\r\n`);
+    // the Sec-WebSocket-Key above all — has to arrive untouched. Forwarding to
+    // the box is the exception: it is this same server on the far side, so the
+    // path it knows is the one that arrived.
+    const tail = url.slice(TERMINAL_PATH.length) || "/";
+    const path = BOX ? url : tail.startsWith("/") ? tail : `/${tail}`;
+    target.write(`GET ${path} HTTP/1.1\r\n`);
     for (let i = 0; i < req.rawHeaders.length; i += 2) {
       target.write(`${req.rawHeaders[i]}: ${req.rawHeaders[i + 1]}\r\n`);
     }
+    if (BOX && ORIGIN_TOKEN) target.write(`x-harness-origin: ${ORIGIN_TOKEN}\r\n`);
     target.write("\r\n");
     if (head?.length) target.write(head);
 

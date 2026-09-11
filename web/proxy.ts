@@ -37,7 +37,9 @@ export async function proxy(request: NextRequest) {
   //
   // The broker is the one exception. It runs on this machine and calls one
   // route, with a bearer token of its own, so it is let through on that.
-  const originToken = process.env.HARNESS_ORIGIN_TOKEN;
+  // Only the box guards its door. A deployed instance holds the same secret,
+  // but to *present* it, not to demand it — its visitors are browsers.
+  const originToken = process.env.HARNESS_BOX ? undefined : process.env.HARNESS_ORIGIN_TOKEN;
   if (originToken) {
     const brokerToken = process.env.HARNESS_BROKER_TOKEN;
     const bearer = request.headers.get("authorization")?.replace(/^Bearer /, "") ?? "";

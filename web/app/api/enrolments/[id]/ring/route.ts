@@ -4,6 +4,7 @@ import { getEnrolment, completeEnrolment, brokerCredentials } from "@/lib/enrolm
 import { openSession, closeSession } from "@/lib/relay";
 import { joinRing } from "@/lib/ring-server";
 import { writeWalletCliState } from "@/lib/wallet-cli-state";
+import { BOX, forwardToBox } from "@/lib/box";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -20,7 +21,10 @@ type Params = { params: Promise<{ id: string }> };
  * the work — the two are the same request because the SDK call and the relay
  * have to overlap.
  */
-export async function POST(_request: Request, { params }: Params) {
+export async function POST(request: Request, { params }: Params) {
+  // Only the box can do this; everywhere else forwards to it.
+  if (BOX) return forwardToBox(request);
+
   const { id } = await params;
   const enrolment = getEnrolment(id);
   if (!enrolment) return NextResponse.json({ error: "not found" }, { status: 404 });

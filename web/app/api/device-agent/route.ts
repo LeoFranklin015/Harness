@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
+import { BOX, forwardToBox } from "@/lib/box";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -22,7 +23,10 @@ const AGENT = process.env.HARNESS_TOOLS
   ? path.join(process.env.HARNESS_TOOLS, "harness-device-agent")
   : "/home/opc/hackathon/tools/harness-device-agent";
 
-export function GET() {
+export function GET(request: Request) {
+  // The script lives beside the containers, so only the box can read it.
+  if (BOX) return forwardToBox(request);
+
   try {
     return new Response(readFileSync(AGENT, "utf8"), {
       headers: {
