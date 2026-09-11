@@ -40,7 +40,7 @@ export function Asks({
   /** Today's ceiling, so a raise can be expressed as a new total. */
   currentCapUsd: number;
   /** Signs a new Grant at the higher ceiling. Resolves once it has landed. */
-  onApprove: (ask: Ask, newCapUsd: number) => Promise<void>;
+  onApprove: (ask: Ask) => Promise<void>;
 }) {
   const [asks, setAsks] = useState<Ask[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
@@ -81,7 +81,7 @@ export function Asks({
       // Raise the ceiling by what was asked for, rather than to some round
       // number: the agent said what it needed, and granting more than that
       // without being asked is not generosity, it is inattention.
-      await onApprove(ask, currentCapUsd + ask.usd);
+      await onApprove(ask);
       await settle(ask);
     } catch (err) {
       setError((err as Error).message);

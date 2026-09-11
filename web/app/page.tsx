@@ -23,7 +23,7 @@ import {
 } from "@/lib/session";
 import { explain } from "@/lib/explain";
 import { finishOnChain } from "@/lib/provision";
-import { agentIdFrom, allowanceFor, calldata, firstGrant, readHost, REGISTRY_ABI, USDC } from "@/lib/tenant";
+import { agentIdFrom, calldata, readHost } from "@/lib/tenant";
 import { sepoliaTransport } from "@/lib/rpc";
 import { createPublicClient } from "viem";
 import { sepolia } from "viem/chains";
@@ -173,9 +173,6 @@ export default function Home() {
 /** Two slots, because you have two devices. Add more when you have more. */
 const SLOTS = 2;
 
-/** The device app LKRP speaks to. Not Ethereum. */
-const RING_APP = "Ledger Sync";
-
 function Machines({
   session,
   upgraded,
@@ -207,8 +204,6 @@ function Machines({
     };
   }, [authority.address]);
 
-  const taken = tenants.filter(Boolean).map((t) => t!.label);
-
   function setSlot(i: number, next: Tenant | null) {
     setTenants((prev) => prev.map((t, j) => (j === i ? next : t)));
     // Fire and forget: the page has already moved, and a store that refuses is
@@ -221,17 +216,6 @@ function Machines({
       void saveTenant(authority.address, i, next[i]);
       return next;
     });
-  }
-  /** A slot the server has to accept before the work behind it is worth doing. */
-  async function record(i: number, next: Tenant): Promise<boolean> {
-    const refused = await saveTenant(authority.address, i, next);
-    if (refused) {
-      setSlot(i, null);
-      setError(refused);
-      return false;
-    }
-    setTenants((prev) => prev.map((t, j) => (j === i ? next : t)));
-    return true;
   }
   function narrate(slot: number, step: string) {
     // Steps are narration, not state worth a round trip on every line.
@@ -342,7 +326,7 @@ function Machines({
    * The transaction is built server-side from the chain, so this signs what
    * the endpoint says rather than reconstructing it and hoping the two agree.
    */
-  async function approveAsk(tenant: Tenant, ask: Ask, _newCapUsd: number) {
+  async function approveAsk(tenant: Tenant, ask: Ask) {
     const i = tenants.findIndex((t) => t?.label === tenant.label);
     setError(null);
 

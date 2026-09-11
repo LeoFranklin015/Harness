@@ -30,7 +30,7 @@ export async function CodeBlock({ fileName, code, language = "tsx" }: CodeBlockP
       }
 
       codeString = fs.readFileSync(existingFilePath, "utf8");
-    } catch (e) {
+    } catch {
       codeString = `// Error reading file: ${fileName}\n// Looked in src/registry, src/components/ui, and src/components/docs`;
     }
   }

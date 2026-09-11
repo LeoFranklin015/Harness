@@ -57,7 +57,7 @@ export function TenantSlot({
   /** Puts a visitor's fingerprint on chain. One signature on the device. */
   onAuthorise: (t: Tenant, operator: `0x${string}`) => Promise<void>;
   /** Signs a new Grant at a higher ceiling, after an agent asked for one. */
-  onRaise: (t: Tenant, ask: Ask, newCapUsd: number) => Promise<void>;
+  onRaise: (t: Tenant, ask: Ask) => Promise<void>;
 }) {
   const [open, setOpen] = useState(false);
 
@@ -152,7 +152,7 @@ function Details({
   onContinue: (t: Tenant) => void;
   onRevoke: (t: Tenant) => void;
   onAuthorise: (t: Tenant, operator: `0x${string}`) => Promise<void>;
-  onRaise: (t: Tenant, ask: Ask, newCapUsd: number) => Promise<void>;
+  onRaise: (t: Tenant, ask: Ask) => Promise<void>;
 }) {
   const [shell, setShell] = useState(false);
   const [ssh, setSsh] = useState(false);
@@ -288,7 +288,7 @@ function Details({
               agent={tenant.agent ?? undefined}
               tenant={tenant.label}
               currentCapUsd={capUsd(tenant)}
-              onApprove={(ask, newCap) => onRaise(tenant, ask, newCap)}
+              onApprove={(ask) => onRaise(tenant, ask)}
             />
 
             {tenant.agent && (
