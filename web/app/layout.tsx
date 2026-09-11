@@ -25,7 +25,7 @@ const mono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Harness — scope an agent to a container",
+  title: "Harness — give agents machines, not wallets",
   description:
     "One tap on a Ledger gives an agent its own machine, its own ENS name and a spending ceiling. Revoke the name and the spending, the access and the address stop together.",
 };
