@@ -137,36 +137,36 @@ export default function Home() {
     );
   }
 
-  if (offering) {
-    return (
-      <UpgradeAccount
-        address={session.authority.address}
-        appVersion={appVersion}
-        busy={busy}
-        step={step}
-        error={error}
+  // The offer sits over the machines rather than in front of them: it
+  // improves how the next step behaves, it is not a step of its own.
+  return (
+    <>
+      <Machines
+        session={session}
+        upgraded={upgraded === true}
         onUpgrade={runUpgrade}
-        onSkip={() => {
-          declineUpgrade(session.authority.address);
-          setOffering(false);
+        upgrading={busy}
+        onForget={async () => {
+          await session.release();
+          remember(null);
+          setSession(null);
+          setUpgraded(null);
         }}
       />
-    );
-  }
-
-  return (
-    <Machines
-      session={session}
-      upgraded={upgraded === true}
-      onUpgrade={runUpgrade}
-      upgrading={busy}
-      onForget={async () => {
-        await session.release();
-        remember(null);
-        setSession(null);
-        setUpgraded(null);
-      }}
-    />
+      {offering && (
+        <UpgradeAccount
+          appVersion={appVersion}
+          busy={busy}
+          step={step}
+          error={error}
+          onUpgrade={runUpgrade}
+          onSkip={() => {
+            declineUpgrade(session.authority.address);
+            setOffering(false);
+          }}
+        />
+      )}
+    </>
   );
 }
 
