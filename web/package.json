@@ -5,8 +5,9 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start",
-    "lint": "eslint"
+    "start": "node server.mjs",
+    "lint": "eslint",
+    "start:next": "next start"
   },
   "dependencies": {
     "@ledgerhq/device-management-kit": "^1.9.0",
