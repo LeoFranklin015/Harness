@@ -443,7 +443,14 @@ async function escalateFor(ip: string, door: string, body: Record<string, unknow
 
   const res = await fetch(`${DASHBOARD}/api/sign`, {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: {
+      "content-type": "application/json",
+      // The dashboard is gated. This route is the one the broker needs and
+      // a bearer token is what a process without a browser can present.
+      ...(process.env.HARNESS_BROKER_TOKEN
+        ? { authorization: `Bearer ${process.env.HARNESS_BROKER_TOKEN}` }
+        : {}),
+    },
     body: JSON.stringify({
       tenant,
       to: USDC,

@@ -109,6 +109,15 @@ cmd_up() {
     fi
     export MONGODB_URI
 
+    # The dashboard is gated behind a passcode. The broker has no browser and
+    # so no cookie; it presents this token on the one route it calls. Both
+    # live in `web/.env`, because the gate and the caller have to agree.
+    HARNESS_BROKER_TOKEN="${HARNESS_BROKER_TOKEN:-$(secret HARNESS_BROKER_TOKEN "$repo/web/.env")}"
+    export HARNESS_BROKER_TOKEN
+    if [ -z "$(secret HARNESS_PASSCODE "$repo/web/.env")" ]; then
+        log "no HARNESS_PASSCODE in web/.env — the dashboard is open to anyone who can reach it"
+    fi
+
     # The nameserver runs on the mesh rather than on this host, so that a
     # visitor's `.eth` lookups have somewhere to go that the host is not part
     # of. It is also the one container with a real TUN: DNS is UDP and
