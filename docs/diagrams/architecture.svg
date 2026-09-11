@@ -1,0 +1,110 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="960" viewBox="0 0 1400 960" font-family="Inter, ui-sans-serif, system-ui, sans-serif">
+<defs>
+<marker id="me8a33d" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#e8a33d"/></marker>
+<marker id="m9b8cf5" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#9b8cf5"/></marker>
+<marker id="m5fb3e0" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#5fb3e0"/></marker>
+<marker id="m4fd1c0" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#4fd1c0"/></marker>
+<marker id="me2615f" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#e2615f"/></marker>
+</defs>
+<rect width="1400" height="960" rx="20" fill="#08090a"/>
+<rect x="48" y="44" width="792" height="202" rx="16" fill="none" stroke="#e8a33d" stroke-opacity="0.45" stroke-width="1.4" stroke-dasharray="7 6"/>
+<text x="72" y="75" fill="#e8a33d" font-size="13" font-weight="600" letter-spacing="1.7">SETTING UP THE RING · ONCE, AND THEN NEVER AGAIN</text>
+<text x="72" y="95" fill="#e8a33d" fill-opacity="0.58" font-size="11.5">The key never leaves the device. The browser is a wire, not a participant.</text>
+<rect x="72" y="118" width="224" height="90" rx="12" fill="#2a1d08" stroke="#e8a33d" stroke-opacity="0.7" stroke-width="1.3"/>
+<text x="184" y="160" fill="#eef2f8" font-size="15.5" font-weight="600" text-anchor="middle">Ledger</text>
+<text x="184" y="180" fill="#e8a33d" fill-opacity="0.78" font-size="12" text-anchor="middle">holds the seed, signs on a press</text>
+<rect x="332" y="118" width="224" height="90" rx="12" fill="#2a1d08" stroke="#e8a33d" stroke-opacity="0.7" stroke-width="1.3"/>
+<text x="444" y="160" fill="#eef2f8" font-size="15.5" font-weight="600" text-anchor="middle">Browser</text>
+<text x="444" y="180" fill="#e8a33d" fill-opacity="0.78" font-size="12" text-anchor="middle">WebHID · reads none of it</text>
+<rect x="592" y="118" width="224" height="90" rx="12" fill="#2a1d08" stroke="#e8a33d" stroke-opacity="0.7" stroke-width="1.3"/>
+<text x="704" y="160" fill="#eef2f8" font-size="15.5" font-weight="600" text-anchor="middle">Broker</text>
+<text x="704" y="180" fill="#e8a33d" fill-opacity="0.78" font-size="12" text-anchor="middle">speaks LKRP · stream 17</text>
+<path d="M 296 163 L 330 163" fill="none" stroke="#e8a33d" stroke-opacity="0.9" stroke-width="1.7" stroke-linejoin="round" marker-end="url(#me8a33d)"/>
+<text x="314" y="108" fill="#e8a33d" fill-opacity="0.92" font-size="12" text-anchor="middle">1  opens it over USB</text>
+<path d="M 556 163 L 590 163" fill="none" stroke="#e8a33d" stroke-opacity="0.9" stroke-width="1.7" stroke-linejoin="round" marker-end="url(#me8a33d)"/>
+<text x="574" y="108" fill="#e8a33d" fill-opacity="0.92" font-size="12" text-anchor="middle">2  relays the protocol</text>
+<text x="704" y="228" fill="#e8a33d" fill-opacity="0.85" font-size="12" text-anchor="middle">3  one press admits the broker as a member</text>
+<rect x="48" y="282" width="792" height="612" rx="16" fill="none" stroke="#4fd1c0" stroke-opacity="0.45" stroke-width="1.4" stroke-dasharray="7 6"/>
+<text x="72" y="313" fill="#4fd1c0" font-size="13" font-weight="600" letter-spacing="1.7">TAILSCALE MESH</text>
+<text x="72" y="333" fill="#4fd1c0" fill-opacity="0.58" font-size="11.5">No public address, no open port. Invites are single-use.</text>
+<rect x="72" y="344" width="360" height="84" rx="12" fill="#07211f" stroke="#4fd1c0" stroke-opacity="0.7" stroke-width="1.3"/>
+<text x="252" y="383" fill="#eef2f8" font-size="15.5" font-weight="600" text-anchor="middle">Your laptop</text>
+<text x="252" y="403" fill="#4fd1c0" fill-opacity="0.78" font-size="12" text-anchor="middle">ssh runner.alex.harness.eth</text>
+<rect x="456" y="344" width="360" height="84" rx="12" fill="#07211f" stroke="#4fd1c0" stroke-opacity="0.7" stroke-width="1.3"/>
+<text x="636" y="383" fill="#eef2f8" font-size="15.5" font-weight="600" text-anchor="middle">Nameserver</text>
+<text x="636" y="403" fill="#4fd1c0" fill-opacity="0.78" font-size="12" text-anchor="middle">answers .eth over DNS</text>
+<rect x="72" y="466" width="744" height="404" rx="16" fill="none" stroke="#9b8cf5" stroke-opacity="0.45" stroke-width="1.4" stroke-dasharray="7 6"/>
+<text x="96" y="497" fill="#9b8cf5" font-size="13" font-weight="600" letter-spacing="1.7">THE HOST · ONE VM</text>
+<rect x="96" y="528" width="338" height="318" rx="16" fill="none" stroke="#9b8cf5" stroke-opacity="0.45" stroke-width="1.4" stroke-dasharray="4 5"/>
+<text x="120" y="559" fill="#9b8cf5" font-size="13" font-weight="600" letter-spacing="1.7">ALEX.HARNESS.ETH</text>
+<text x="120" y="579" fill="#9b8cf5" fill-opacity="0.58" font-size="11.5">own network, no shared filesystem</text>
+<rect x="116" y="592" width="298" height="64" rx="12" fill="#191630" stroke="#9b8cf5" stroke-opacity="0.7" stroke-width="1.3"/>
+<text x="265" y="621" fill="#eef2f8" font-size="14.5" font-weight="600" text-anchor="middle">sshd</text>
+<text x="265" y="641" fill="#9b8cf5" fill-opacity="0.78" font-size="12" text-anchor="middle">AuthorizedKeysCommand</text>
+<rect x="116" y="668" width="298" height="64" rx="12" fill="#191630" stroke="#9b8cf5" stroke-opacity="0.7" stroke-width="1.3"/>
+<text x="265" y="697" fill="#eef2f8" font-size="14.5" font-weight="600" text-anchor="middle">runner</text>
+<text x="265" y="717" fill="#9b8cf5" fill-opacity="0.78" font-size="12" text-anchor="middle">a key with no authority</text>
+<rect x="116" y="744" width="298" height="94" rx="16" fill="none" stroke="#9b8cf5" stroke-opacity="0.45" stroke-width="1.4" stroke-dasharray="3 4"/>
+<text x="140" y="775" fill="#9b8cf5" font-size="13" font-weight="600" letter-spacing="1.7">WHAT IT KNOWS</text>
+<rect x="130" y="790" width="83" height="34" rx="9" fill="#191630" stroke="#9b8cf5" stroke-opacity="0.6" stroke-width="1.2"/>
+<text x="172" y="811" fill="#eef2f8" fill-opacity="0.9" font-size="12.5" font-weight="500" text-anchor="middle">Claude</text>
+<rect x="223" y="790" width="83" height="34" rx="9" fill="#191630" stroke="#9b8cf5" stroke-opacity="0.6" stroke-width="1.2"/>
+<text x="265" y="811" fill="#eef2f8" fill-opacity="0.9" font-size="12.5" font-weight="500" text-anchor="middle">Codex</text>
+<rect x="317" y="790" width="83" height="34" rx="9" fill="#191630" stroke="#9b8cf5" stroke-opacity="0.6" stroke-width="1.2"/>
+<text x="358" y="811" fill="#eef2f8" fill-opacity="0.9" font-size="12.5" font-weight="500" text-anchor="middle">GitHub</text>
+<rect x="454" y="528" width="338" height="318" rx="16" fill="none" stroke="#9b8cf5" stroke-opacity="0.45" stroke-width="1.4" stroke-dasharray="4 5"/>
+<text x="478" y="559" fill="#9b8cf5" font-size="13" font-weight="600" letter-spacing="1.7">LEO.HARNESS.ETH</text>
+<text x="478" y="579" fill="#9b8cf5" fill-opacity="0.58" font-size="11.5">own network, no shared filesystem</text>
+<rect x="474" y="592" width="298" height="64" rx="12" fill="#191630" stroke="#9b8cf5" stroke-opacity="0.7" stroke-width="1.3"/>
+<text x="623" y="621" fill="#eef2f8" font-size="14.5" font-weight="600" text-anchor="middle">sshd</text>
+<text x="623" y="641" fill="#9b8cf5" fill-opacity="0.78" font-size="12" text-anchor="middle">AuthorizedKeysCommand</text>
+<rect x="474" y="668" width="298" height="64" rx="12" fill="#191630" stroke="#9b8cf5" stroke-opacity="0.7" stroke-width="1.3"/>
+<text x="623" y="697" fill="#eef2f8" font-size="14.5" font-weight="600" text-anchor="middle">indexer</text>
+<text x="623" y="717" fill="#9b8cf5" fill-opacity="0.78" font-size="12" text-anchor="middle">a key with no authority</text>
+<rect x="474" y="744" width="298" height="94" rx="16" fill="none" stroke="#9b8cf5" stroke-opacity="0.45" stroke-width="1.4" stroke-dasharray="3 4"/>
+<text x="498" y="775" fill="#9b8cf5" font-size="13" font-weight="600" letter-spacing="1.7">WHAT IT KNOWS</text>
+<rect x="488" y="790" width="83" height="34" rx="9" fill="#191630" stroke="#9b8cf5" stroke-opacity="0.6" stroke-width="1.2"/>
+<text x="530" y="811" fill="#eef2f8" fill-opacity="0.9" font-size="12.5" font-weight="500" text-anchor="middle">Claude</text>
+<rect x="581" y="790" width="83" height="34" rx="9" fill="#191630" stroke="#9b8cf5" stroke-opacity="0.6" stroke-width="1.2"/>
+<text x="623" y="811" fill="#eef2f8" fill-opacity="0.9" font-size="12.5" font-weight="500" text-anchor="middle">Codex</text>
+<rect x="675" y="790" width="83" height="34" rx="9" fill="#191630" stroke="#9b8cf5" stroke-opacity="0.6" stroke-width="1.2"/>
+<text x="716" y="811" fill="#eef2f8" fill-opacity="0.9" font-size="12.5" font-weight="500" text-anchor="middle">GitHub</text>
+<rect x="950" y="44" width="402" height="850" rx="16" fill="none" stroke="#5fb3e0" stroke-opacity="0.45" stroke-width="1.4" stroke-dasharray="7 6"/>
+<text x="974" y="75" fill="#5fb3e0" font-size="13" font-weight="600" letter-spacing="1.7">ON CHAIN · ENSv2 AND OUR REGISTRIES</text>
+<text x="974" y="95" fill="#5fb3e0" fill-opacity="0.58" font-size="11.5">Read at request time. Nothing here is a copy of anything.</text>
+<rect x="974" y="128" width="354" height="264" rx="16" fill="none" stroke="#5fb3e0" stroke-opacity="0.45" stroke-width="1.4" stroke-dasharray="5 5"/>
+<text x="998" y="159" fill="#5fb3e0" font-size="13" font-weight="600" letter-spacing="1.7">harness.eth · PLATFORMREGISTRY</text>
+<rect x="998" y="178" width="306" height="190" rx="16" fill="none" stroke="#5fb3e0" stroke-opacity="0.45" stroke-width="1.4" stroke-dasharray="4 5"/>
+<text x="1022" y="209" fill="#5fb3e0" font-size="13" font-weight="600" letter-spacing="1.7">alex.harness.eth · MACHINE REGISTRY</text>
+<rect x="1022" y="228" width="258" height="116" rx="12" fill="#0b2130" stroke="#5fb3e0" stroke-opacity="0.7" stroke-width="1.3"/>
+<text x="1151" y="283" fill="#eef2f8" font-size="14.5" font-weight="600" text-anchor="middle">runner.alex.harness.eth</text>
+<text x="1151" y="303" fill="#5fb3e0" fill-opacity="0.78" font-size="12" text-anchor="middle">agentKey · window · revoked</text>
+<rect x="974" y="470" width="354" height="92" rx="12" fill="#0b2130" stroke="#5fb3e0" stroke-opacity="0.7" stroke-width="1.3"/>
+<text x="1151" y="513" fill="#eef2f8" font-size="15.5" font-weight="600" text-anchor="middle">AgentResolver</text>
+<text x="1151" y="533" fill="#5fb3e0" fill-opacity="0.78" font-size="12" text-anchor="middle">ENSIP-10 · computed at read time</text>
+<rect x="974" y="620" width="354" height="92" rx="12" fill="#0b2130" stroke="#5fb3e0" stroke-opacity="0.7" stroke-width="1.3"/>
+<text x="1151" y="663" fill="#eef2f8" font-size="15.5" font-weight="600" text-anchor="middle">AllowanceExecutor</text>
+<text x="1151" y="683" fill="#5fb3e0" fill-opacity="0.78" font-size="12" text-anchor="middle">runs the call, holds nothing after</text>
+<path d="M 1151 470 L 1151 394" fill="none" stroke="#5fb3e0" stroke-opacity="0.9" stroke-width="1.7" stroke-linejoin="round" marker-end="url(#m5fb3e0)"/>
+<text x="1139" y="436" fill="#5fb3e0" fill-opacity="0.92" font-size="12" text-anchor="end">walks down, reads these rows</text>
+<text x="974" y="776" fill="#5fb3e0" fill-opacity="0.58" font-size="11.8" text-anchor="start">None of these rows exist for ENS. They are what</text>
+<text x="974" y="796" fill="#5fb3e0" fill-opacity="0.58" font-size="11.8" text-anchor="start">the door and the spend path already read; the</text>
+<text x="974" y="816" fill="#5fb3e0" fill-opacity="0.58" font-size="11.8" text-anchor="start">resolver is a second reader of them.</text>
+<path d="M 184 118 L 184 24 L 1376 24 L 1376 116 L 1354 116" fill="none" stroke="#e8a33d" stroke-opacity="0.9" stroke-width="1.7" stroke-linejoin="round" marker-end="url(#me8a33d)"/>
+<text x="198" y="18" fill="#e8a33d" fill-opacity="0.92" font-size="12" text-anchor="start">the same two taps mint the name and set the ceiling</text>
+<path d="M 704 208 L 704 266 L 24 266 L 24 795 L 70 795" fill="none" stroke="#e8a33d" stroke-opacity="0.9" stroke-width="1.7" stroke-linejoin="round" marker-end="url(#me8a33d)"/>
+<text x="690" y="260" fill="#e8a33d" fill-opacity="0.92" font-size="12" text-anchor="end">4  sealed under the ring, written to the machine</text>
+<path d="M 432 386 L 454 386" fill="none" stroke="#4fd1c0" stroke-opacity="0.9" stroke-width="1.7" stroke-linejoin="round" marker-end="url(#m4fd1c0)"/>
+<text x="444" y="334" fill="#4fd1c0" fill-opacity="0.92" font-size="12" text-anchor="middle">1  where?</text>
+<path d="M 816 386 L 910 386 L 910 498 L 972 498" fill="none" stroke="#4fd1c0" stroke-opacity="0.9" stroke-width="1.7" stroke-linejoin="round" marker-end="url(#m4fd1c0)"/>
+<text x="898" y="456" fill="#4fd1c0" fill-opacity="0.92" font-size="12" text-anchor="end">2  resolve — an address, or nothing</text>
+<path d="M 342 428 L 342 578" fill="none" stroke="#4fd1c0" stroke-opacity="0.9" stroke-width="1.7" stroke-linejoin="round" marker-end="url(#m4fd1c0)"/>
+<text x="354" y="506" fill="#4fd1c0" fill-opacity="0.92" font-size="12" text-anchor="start">3  connects, offers a key</text>
+<path d="M 816 612 L 910 612 L 910 534 L 972 534" fill="none" stroke="#9b8cf5" stroke-opacity="0.9" stroke-width="1.7" stroke-linejoin="round" marker-end="url(#m9b8cf5)"/>
+<text x="898" y="700" fill="#9b8cf5" fill-opacity="0.92" font-size="12" text-anchor="start" transform="rotate(-90 898 700)">4  is this fingerprint admitted?</text>
+<path d="M 816 688 L 870 688 L 870 666 L 972 666" fill="none" stroke="#9b8cf5" stroke-opacity="0.9" stroke-width="1.7" stroke-linejoin="round" marker-end="url(#m9b8cf5)"/>
+<text x="858" y="700" fill="#9b8cf5" fill-opacity="0.92" font-size="12" text-anchor="start" transform="rotate(-90 858 700)">spends, against the ceiling</text>
+<path d="M 950 764 L 842 764" fill="none" stroke="#e2615f" stroke-opacity="0.9" stroke-width="1.7" stroke-linejoin="round" marker-end="url(#me2615f)"/>
+<text x="895" y="754" fill="#e2615f" fill-opacity="0.92" font-size="12" text-anchor="middle">revoke</text>
+<text x="48" y="934" fill="#8d97a6" font-size="13">Two handshakes and one boundary. The ring is why a server can decrypt at 3am; the door is why a shell exists only while the chain still says so; the mesh is why neither is reachable without an invite.</text>
+</svg>
