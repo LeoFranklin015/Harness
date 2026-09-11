@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { claimNext } from "@/lib/signing";
+import { BOX, forwardToBox } from "@/lib/box";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -18,6 +19,9 @@ const POLL_MS = 25_000;
 const label = /^[a-z0-9][a-z0-9-]*$/;
 
 export async function GET(request: Request) {
+  // Shares state with the box; the whole exchange happens there.
+  if (BOX) return forwardToBox(request);
+
   const tenant = new URL(request.url).searchParams.get("tenant") ?? "";
   if (!label.test(tenant)) return NextResponse.json({ error: "which machine?" }, { status: 400 });
 

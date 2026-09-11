@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { BOX, forwardToBox } from "@/lib/box";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -19,6 +20,9 @@ export const dynamic = "force-dynamic";
 const TERMINAL = process.env.HARNESS_TERMINAL ?? "http://127.0.0.1:8023";
 
 export async function POST(request: Request) {
+  // The terminal server is loopback-only on the box, by design.
+  if (BOX) return forwardToBox(request);
+
   const { tenant, agent } = (await request.json().catch(() => ({}))) as {
     tenant?: string;
     agent?: string;

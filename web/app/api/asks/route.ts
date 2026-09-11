@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { asksFor, settle } from "@/lib/pending";
 import { findGrant } from "@/lib/store";
+import { BOX, forwardToBox } from "@/lib/box";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -42,6 +43,9 @@ async function machine(tenant: string, agent: string) {
 }
 
 export async function GET(request: Request) {
+  // Asks are sealed files on the box's disk.
+  if (BOX) return forwardToBox(request);
+
   const tenant = new URL(request.url).searchParams.get("tenant") ?? "";
   if (!label.test(tenant)) return NextResponse.json({ error: "which machine?" }, { status: 400 });
 
@@ -80,6 +84,9 @@ export async function GET(request: Request) {
 }
 
 export async function DELETE(request: Request) {
+  // Asks are sealed files on the box's disk.
+  if (BOX) return forwardToBox(request);
+
   const url = new URL(request.url);
   const tenant = url.searchParams.get("tenant") ?? "";
   const id = url.searchParams.get("id") ?? "";

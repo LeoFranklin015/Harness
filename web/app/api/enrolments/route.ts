@@ -1,9 +1,13 @@
 import { NextResponse } from "next/server";
 import { createEnrolment } from "@/lib/enrolment";
+import { BOX, forwardToBox } from "@/lib/box";
 
 export const runtime = "nodejs";
 
 export async function POST(request: Request) {
+  // Shares state with the box; the whole exchange happens there.
+  if (BOX) return forwardToBox(request);
+
   let tenant = "acme";
   try {
     const body = await request.json();

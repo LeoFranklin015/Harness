@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { answer, submit } from "@/lib/signing";
+import { BOX, forwardToBox } from "@/lib/box";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -16,6 +17,9 @@ export const maxDuration = 300;
 const label = /^[a-z0-9][a-z0-9-]*$/;
 
 export async function POST(request: Request) {
+  // Shares state with the box; the whole exchange happens there.
+  if (BOX) return forwardToBox(request);
+
   const body = (await request.json().catch(() => ({}))) as Record<string, string>;
   const tenant = body.tenant ?? "";
   if (!label.test(tenant)) return NextResponse.json({ error: "which machine?" }, { status: 400 });
@@ -45,6 +49,9 @@ export async function POST(request: Request) {
 }
 
 export async function PUT(request: Request) {
+  // Shares state with the box; the whole exchange happens there.
+  if (BOX) return forwardToBox(request);
+
   const body = (await request.json().catch(() => ({}))) as {
     id?: string;
     ok?: boolean;

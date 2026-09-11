@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { takeNextApdu, deliverResponse, hasSession } from "@/lib/relay";
+import { BOX, forwardToBox } from "@/lib/box";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -12,7 +13,10 @@ const POLL_WAIT_MS = 25_000;
  * The browser asks for the next APDU. Held open until there is one, or until
  * the poll window closes and the browser asks again.
  */
-export async function GET(_request: Request, { params }: Params) {
+export async function GET(request: Request, { params }: Params) {
+  // Shares state with the box; the whole exchange happens there.
+  if (BOX) return forwardToBox(request);
+
   const { id } = await params;
   if (!hasSession(id)) return NextResponse.json({ error: "no such session" }, { status: 404 });
 
@@ -22,6 +26,9 @@ export async function GET(_request: Request, { params }: Params) {
 
 /** The browser returns what the device replied. */
 export async function POST(request: Request, { params }: Params) {
+  // Shares state with the box; the whole exchange happens there.
+  if (BOX) return forwardToBox(request);
+
   const { id } = await params;
   if (!hasSession(id)) return NextResponse.json({ error: "no such session" }, { status: 404 });
 

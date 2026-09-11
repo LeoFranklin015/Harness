@@ -6,6 +6,7 @@ import { DELEGATE, delegateFrom } from "@/lib/delegation";
 import { explain } from "@/lib/explain";
 import { publicClient, sepoliaTransport } from "@/lib/rpc";
 import { secret } from "@/lib/secrets";
+import { BOX, forwardToBox } from "@/lib/box";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -30,6 +31,9 @@ const pub = () => publicClient;
 
 /** What the account runs today, and the nonce an authorisation must carry. */
 export async function GET(request: Request) {
+  // Pays the gas, so the key stays on one machine.
+  if (BOX) return forwardToBox(request);
+
   const address = new URL(request.url).searchParams.get("address") as Address | null;
   if (!address || !/^0x[0-9a-fA-F]{40}$/.test(address)) {
     return NextResponse.json({ error: "bad address" }, { status: 400 });
@@ -53,6 +57,9 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+  // Pays the gas, so the key stays on one machine.
+  if (BOX) return forwardToBox(request);
+
   const body = (await request.json()) as {
     address: Address;
     nonce: number;

@@ -1,12 +1,16 @@
 import { NextResponse } from "next/server";
 import { getEnrolment, completeEnrolment } from "@/lib/enrolment";
+import { BOX, forwardToBox } from "@/lib/box";
 
 export const runtime = "nodejs";
 
 type Params = { params: Promise<{ id: string }> };
 
 /** The dashboard polls this while the Tenant runs the helper. */
-export async function GET(_request: Request, { params }: Params) {
+export async function GET(request: Request, { params }: Params) {
+  // Shares state with the box; the whole exchange happens there.
+  if (BOX) return forwardToBox(request);
+
   const { id } = await params;
   const record = getEnrolment(id);
   if (!record) return NextResponse.json({ error: "not found" }, { status: 404 });
@@ -15,6 +19,9 @@ export async function GET(_request: Request, { params }: Params) {
 
 /** The helper posts here once `ring init` and `addMember` have both run. */
 export async function POST(request: Request, { params }: Params) {
+  // Shares state with the box; the whole exchange happens there.
+  if (BOX) return forwardToBox(request);
+
   const { id } = await params;
   if (!getEnrolment(id)) return NextResponse.json({ error: "not found" }, { status: 404 });
 
