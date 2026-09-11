@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { setupCommand, setupScript, sshCommand, visitorKeyFor } from "@/lib/sshkey";
 import { stash } from "@/lib/handoff";
 import { canInvite, installCommand, mintInvite, type Platform } from "@/lib/tailscale";
+import { BOX, forwardToBox } from "@/lib/box";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -32,6 +33,9 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  // The visitor key derives from the sealed root, which only the box has.
+  if (BOX) return forwardToBox(request);
+
   let machine = "a machine";
   let platform: Platform = "linux";
   let meshAddress: string | null = null;

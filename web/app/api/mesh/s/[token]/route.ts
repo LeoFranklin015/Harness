@@ -1,4 +1,5 @@
 import { fetchHeld } from "@/lib/handoff";
+import { BOX, forwardToBox } from "@/lib/box";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -17,7 +18,10 @@ export const dynamic = "force-dynamic";
  * the key it carries only opens anything while the chain still names its
  * fingerprint, which ends the moment the Tenant signs the next invite.
  */
-export async function GET(_request: Request, { params }: { params: Promise<{ token: string }> }) {
+export async function GET(request: Request, { params }: { params: Promise<{ token: string }> }) {
+  // Shares the handoff stash with the route that minted it.
+  if (BOX) return forwardToBox(request);
+
   const { token } = await params;
 
   const body = fetchHeld(token);
