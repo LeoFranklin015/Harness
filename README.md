@@ -95,7 +95,7 @@ Ledger's Device Management Kit for onboarding, its Key Ring for encrypting
 what the agent knows, EIP-7702 to batch four signatures into one, x402 for
 machine payments, and Tailscale for the private network.
 
-61 contract tests. Everything is live on Sepolia.
+60 contract tests. Everything is live on Sepolia.
 
 ## Verify it
 
@@ -145,11 +145,6 @@ than "grant runner.acme $10/day". That needs ERC-7730 metadata, which we
 have not written, so today you are trusting the dashboard composed the
 right transaction. It is a metadata file rather than a change to the
 design.
-
-**The executor settles transfers and swaps.** Those are the two shapes the
-contract that carries actions out understands. You can authorise more than
-that and the registry will permit it, but it will not execute. The setup
-screen marks which options are settleable rather than hiding it.
 
 **Sepolia only**, against the ENSv2 hackathon deployment, which is a
 separate namespace from the ENSv2 Beta.

@@ -307,7 +307,6 @@ function Capabilities({
     list.includes(v) ? list.filter((x) => x !== v) : [...list, v];
 
   const ruleCount = tokens.length * actions.length + protocols.length + custom.length;
-  const settles = actions.some((a) => ACTIONS.find((x) => x.id === a)?.executable) && tokens.length > 0;
 
   return (
     <Section
@@ -343,7 +342,6 @@ function Capabilities({
             on={protocols.includes(pr.id)}
             onClick={() => set({ protocols: flip(protocols, pr.id) })}
             sub={pr.detail}
-            warn
           >
             {pr.name}
           </Chip>
@@ -381,7 +379,6 @@ function Capabilities({
             on={actions.includes(a.id)}
             onClick={() => set({ actions: flip(actions, a.id) })}
             sub={a.detail}
-            warn={!a.executable}
           >
             {a.name}
           </Chip>
@@ -408,12 +405,13 @@ function Capabilities({
       <p className="border-t border-neutral-900 pt-4 text-xs text-neutral-500">
         <span className="text-neutral-300">{ruleCount}</span> rule{ruleCount === 1 ? "" : "s"} on
         the grant.{" "}
-        {settles ? (
-          <span className="text-neutral-600">The executor can settle transfers.</span>
-        ) : (
+        {ruleCount === 0 ? (
           <span className="text-amber-400/90">
-            Nothing here can be carried out yet — the grant will be valid and every call will
-            revert at the executor.
+            With none of these it can hold a name and a shell, and spend nothing.
+          </span>
+        ) : (
+          <span className="text-neutral-600">
+            A protocol needs its approval chosen too, since that is how it is paid.
           </span>
         )}
       </p>
@@ -448,24 +446,19 @@ function Chip({
   children,
   sub,
   mono,
-  warn,
 }: {
   on: boolean;
   onClick: () => void;
   children: React.ReactNode;
   sub?: string;
   mono?: boolean;
-  /** Permitted by the grant, but nothing can carry it out yet. */
-  warn?: boolean;
 }) {
   return (
     <button
       onClick={onClick}
       className={`rounded-lg border px-3 py-2 text-left transition ${
         on
-          ? warn
-            ? "border-amber-900/60 bg-amber-950/20"
-            : "border-neutral-500 bg-neutral-900"
+          ? "border-neutral-500 bg-neutral-900"
           : "border-neutral-900 bg-neutral-950/40 hover:border-neutral-700"
       }`}
     >

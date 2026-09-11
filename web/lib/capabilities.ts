@@ -11,20 +11,13 @@ import { USDC } from "@/lib/tenant";
  * of the Grant language is that it is more general than whatever list we
  * happened to think of.
  *
- * Two layers decide whether a capability actually works, and they are not the
- * same layer. The registry checks calls against the Grant and will happily
- * permit anything listed here. `AllowanceExecutor` then has to *perform* the
- * call, and it understands two shapes: `transfer(address,uint256)` on an
- * ERC-20, settled with `transferFrom` out of the Tenant's own account, and
- * Uniswap v3's `exactInputSingle`, settled by pulling the input in, approving
- * the router for exactly that amount and letting it pay the output straight
- * back to the Tenant. Anything else is authorised on chain and reverts on
- * execution.
- *
- * Rather than hide that, `executable` says so per capability. Offering a swap
- * that the chain permits and the executor refuses would be a worse lie than
- * not offering it at all — and the gap is the honest state of the work: the
- * grant language is general, this executor implements payments and swaps.
+ * Everything listed here is carried out as written. `AllowanceExecutor` runs
+ * calls verbatim and only rewrites the two ERC-20 shapes the allowance
+ * mechanism forces it to — a transfer becomes a `transferFrom` from the
+ * Tenant, and an approval is made by the executor because an approval can only
+ * be made by whoever holds the tokens. It does not decode a swap or a deposit,
+ * which is why adding a protocol here costs a row in this file and nothing on
+ * chain.
  */
 
 export type Capability = {
@@ -36,8 +29,6 @@ export type Capability = {
   target: Address;
   /** The 4-byte function selector this permits. */
   selector: Hex;
-  /** Whether `AllowanceExecutor` can carry it out today. */
-  executable: boolean;
   /** Counts against the ceiling. Only spend-shaped calls do. */
   spends: boolean;
 };
@@ -69,7 +60,6 @@ export const CATALOGUE: Capability[] = [
     group: "payments",
     target: USDC,
     selector: TRANSFER,
-    executable: true,
     spends: true,
   },
   {
@@ -79,7 +69,6 @@ export const CATALOGUE: Capability[] = [
     group: "payments",
     target: TOKENS[1]!.address,
     selector: TRANSFER,
-    executable: true,
     spends: true,
   },
   {
@@ -89,38 +78,34 @@ export const CATALOGUE: Capability[] = [
     group: "payments",
     target: TOKENS[2]!.address,
     selector: TRANSFER,
-    executable: true,
     spends: true,
   },
   {
     id: "usdc-approve",
     name: "Approve spenders",
-    detail: "Let a named contract draw USDC. Authorised on chain; the executor cannot settle it yet.",
+    detail: "Let a named contract draw USDC, which is how a protocol is paid.",
     group: "payments",
     target: USDC,
     selector: APPROVE,
-    executable: false,
     spends: false,
   },
   {
     id: "uniswap-swap",
     name: "Swap on Uniswap v3",
-    detail: "exactInputSingle on the Sepolia router. The output is forced back to your own account.",
+    detail: "exactInputSingle on the Sepolia router. Pair it with an approval.",
     group: "defi",
     target: UNISWAP_ROUTER,
     selector: EXACT_INPUT_SINGLE,
-    executable: true,
     spends: true,
   },
   {
     id: "aave-supply",
     name: "Supply to Aave v3",
-    detail: "supply() on the Sepolia pool. Authorised on chain; needs a lending executor.",
+    detail: "supply() on the Sepolia pool. Pair it with an approval.",
     group: "defi",
     target: AAVE_POOL,
     selector: AAVE_SUPPLY,
-    executable: false,
-    spends: false,
+    spends: true,
   },
 ];
 
@@ -141,10 +126,6 @@ export function validateCustom(r: CustomRule): string | null {
   return null;
 }
 
-/** Whether anything chosen can actually be carried out. */
-export function anyExecutable(ids: string[]): boolean {
-  return ids.some((id) => byId(id)?.executable);
-}
 
 
 // --- composed the way a grant actually reads -------------------------------
@@ -164,7 +145,6 @@ export type Action = {
   name: string;
   selector: Hex;
   detail: string;
-  executable: boolean;
 };
 
 export const ACTIONS: Action[] = [
@@ -173,14 +153,12 @@ export const ACTIONS: Action[] = [
     name: "Transfer",
     selector: TRANSFER,
     detail: "Send it to an address",
-    executable: true,
   },
   {
     id: "approve",
     name: "Approve",
     selector: APPROVE,
     detail: "Let a contract draw it",
-    executable: false,
   },
 ];
 
@@ -190,7 +168,6 @@ export type Protocol = {
   detail: string;
   target: Address;
   selector: Hex;
-  executable: boolean;
 };
 
 export const PROTOCOLS: Protocol[] = [
@@ -200,7 +177,6 @@ export const PROTOCOLS: Protocol[] = [
     detail: "exactInputSingle",
     target: UNISWAP_ROUTER,
     selector: EXACT_INPUT_SINGLE,
-    executable: true,
   },
   {
     id: "aave-v3",
@@ -208,7 +184,6 @@ export const PROTOCOLS: Protocol[] = [
     detail: "supply",
     target: AAVE_POOL,
     selector: AAVE_SUPPLY,
-    executable: false,
   },
 ];
 

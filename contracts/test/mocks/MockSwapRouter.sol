@@ -1,11 +1,25 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.30;
 
-import {ExactInputSingleParams} from "../../src/AllowanceExecutor.sol";
 import {MockToken} from "./MockToken.sol";
 
+/// Uniswap v3's single-hop swap, exactly as the router declares it. It lives
+/// here rather than in the executor because the executor does not know what a
+/// swap is — only a test that wants to build one needs the shape.
+struct ExactInputSingleParams {
+    address tokenIn;
+    address tokenOut;
+    uint24 fee;
+    address recipient;
+    uint256 deadline;
+    uint256 amountIn;
+    uint256 amountOutMinimum;
+    uint160 sqrtPriceLimitX96;
+}
+
 /// A router that trades at a fixed rate, so a test can assert on amounts
-/// rather than on a pool's behaviour.
+/// rather than on a pool's behaviour. It pulls under an allowance, which is
+/// what makes it a real exercise of the approve-then-call path.
 contract MockSwapRouter {
     /// Output per unit of input, in basis points. 10000 is one for one.
     uint256 public rate = 10_000;

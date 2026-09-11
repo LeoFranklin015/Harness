@@ -11,29 +11,10 @@ interface IERC20 {
     function balanceOf(address account) external view returns (uint256);
 }
 
-/// @dev Uniswap v3's single-hop swap, exactly as the router declares it.
-///      Selector `0x414bf389`.
-struct ExactInputSingleParams {
-    address tokenIn;
-    address tokenOut;
-    uint24 fee;
-    address recipient;
-    uint256 deadline;
-    uint256 amountIn;
-    uint256 amountOutMinimum;
-    uint160 sqrtPriceLimitX96;
-}
-
-interface ISwapRouter {
-    function exactInputSingle(ExactInputSingleParams calldata params)
-        external
-        payable
-        returns (uint256 amountOut);
-}
-
 /// @title AllowanceExecutor
-/// @notice Spends a Tenant's ERC-20 out of the Tenant's own account, under an
-///         approval they granted once at onboarding.
+/// @notice Carries out whatever the registry has already permitted, out of the
+///         Tenant's own account, under an approval they granted once at
+///         onboarding.
 ///
 /// No custody between transactions: funds live in the Tenant's account and
 /// this contract can only move what the approval permits, when the registry
@@ -42,22 +23,40 @@ interface ISwapRouter {
 /// entry, so no executor module can be installed on it. An allowance is the
 /// one lever available.
 ///
-/// Two shapes are understood, and everything else is refused:
+/// **Calls are opaque.** The Grant already names a contract and a function,
+/// and the registry has already decided this Agent may call it. Teaching this
+/// contract about Uniswap, then Aave, then whatever is next, would mean every
+/// new protocol is a redeploy — and would quietly make the Grant language a
+/// lie, since a Grant could permit what the executor could not perform. So
+/// only two selectors are understood, and they are understood because the
+/// allowance mechanism itself requires it:
 ///
-/// - **`transfer(address,uint256)`** on a token. Settled with `transferFrom`,
-///   straight from the Tenant to the recipient. Nothing is ever held.
+/// - **`transfer(address,uint256)`** on a token is rewritten as
+///   `transferFrom`, straight from the Tenant to the recipient. Nothing is
+///   held, because nothing needs to be.
 ///
-/// - **`exactInputSingle(...)`** on a swap router. A router cannot pull from
-///   an allowance it was not given, so this one is settled by pulling the
-///   input in, approving the router for exactly that amount, swapping, and
-///   resetting the approval. The output never passes through here: the router
-///   sends it to the Tenant directly.
+/// - **`approve(address,uint256)`** cannot be forwarded, because an approval
+///   is made by the holder and the holder is the Tenant. So the batch's
+///   approvals are read first, the tokens they cover are pulled in, and the
+///   approval is made by this contract instead. It is zeroed before the
+///   transaction ends.
 ///
-/// The registry decides *whether* a call is permitted and what it costs
-/// against the ceiling; this contract only knows *how* to carry the permitted
-/// shapes out. Spend is measured by the registry from the Tenant's actual
-/// balance movement, so a swap is accounted by what it really cost rather
-/// than by what its calldata claimed.
+/// Everything else is executed verbatim. A swap is the two calls anyone would
+/// write — `approve(router, n)` then `exactInputSingle(...)` — and this
+/// contract has no idea which is which.
+///
+/// **What bounds the damage.** Not an inspection of arguments, which cannot
+/// generalise. The registry snapshots the Tenant's balance of every token the
+/// Grant tracks, runs the batch, and charges the difference against the
+/// ceiling — reverting the whole batch if it does not fit. An Agent that
+/// directs a swap's output to itself has spent the input, and that spend is
+/// counted and capped exactly as if it had simply sent itself the money. The
+/// ceiling is the answer to every variation of the question.
+///
+/// Output should be directed at the Tenant, as any sane call would. Anything
+/// a call pays to this contract in a token the batch never approved stays
+/// here, so a Grant whose calls return a second token should list that token
+/// among its spend limits and have the call name the Tenant as recipient.
 contract AllowanceExecutor is IExecutor {
     /// Only this registry may direct funds. Authority is checked there.
     address public immutable registry;
@@ -65,13 +64,14 @@ contract AllowanceExecutor is IExecutor {
     error NotRegistry();
     error UnsupportedCall();
     error TransferFailed();
-    error RecipientNotTenant();
-    error NothingSwapped();
+    error CallFailed();
 
     /// `transfer(address,uint256)`
     bytes4 private constant TRANSFER = 0xa9059cbb;
-    /// `exactInputSingle((address,address,uint24,address,uint256,uint256,uint256,uint160))`
-    bytes4 private constant EXACT_INPUT_SINGLE = 0x414bf389;
+    /// `approve(address,uint256)`
+    bytes4 private constant APPROVE = 0x095ea7b3;
+    /// Both are `(address,uint256)`, so both are 4 + 32 + 32.
+    uint256 private constant ERC20_ARGS = 68;
 
     constructor(address registry_) {
         registry = registry_;
@@ -81,69 +81,84 @@ contract AllowanceExecutor is IExecutor {
     function execute(address tenant, Call[] calldata calls) external payable {
         if (msg.sender != registry) revert NotRegistry();
 
-        for (uint256 i; i < calls.length; ++i) {
-            bytes calldata data = calls[i].data;
-            if (data.length < 4) revert UnsupportedCall();
-            bytes4 selector = bytes4(data[:4]);
+        uint256 n = calls.length;
+        // What this batch approves, so it can be taken back afterwards. At
+        // most one per call, which is the only bound that is always true.
+        address[] memory tokens = new address[](n);
+        address[] memory spenders = new address[](n);
+        uint256 approvals;
 
-            if (selector == TRANSFER) {
-                _transfer(tenant, calls[i].to, data);
-            } else if (selector == EXACT_INPUT_SINGLE) {
-                _swap(tenant, calls[i].to, data);
-            } else {
-                revert UnsupportedCall();
+        // Pass one: bring in what the batch's approvals will hand out. An
+        // approval this contract makes is worthless unless it is holding the
+        // tokens, and it has to hold them before the call that spends them.
+        for (uint256 i; i < n; ++i) {
+            bytes calldata data = calls[i].data;
+            if (data.length != ERC20_ARGS || bytes4(data[:4]) != APPROVE) continue;
+
+            (address spender, uint256 amount) = abi.decode(data[4:], (address, uint256));
+            address token = calls[i].to;
+            tokens[approvals] = token;
+            spenders[approvals] = spender;
+            ++approvals;
+
+            // An infinite approval is the ordinary way to write this, and
+            // pulling infinity would only revert. Take what there is; the
+            // ceiling is what decides whether that was too much.
+            uint256 held = IERC20(token).balanceOf(tenant);
+            if (amount > held) amount = held;
+            if (amount != 0 && !IERC20(token).transferFrom(tenant, address(this), amount)) {
+                revert TransferFailed();
             }
+        }
+
+        // Pass two: do the work.
+        for (uint256 i; i < n; ++i) {
+            address to = calls[i].to;
+            bytes calldata data = calls[i].data;
+
+            if (data.length == ERC20_ARGS) {
+                bytes4 selector = bytes4(data[:4]);
+
+                if (selector == TRANSFER) {
+                    (address dst, uint256 amount) = abi.decode(data[4:], (address, uint256));
+                    if (!IERC20(to).transferFrom(tenant, dst, amount)) revert TransferFailed();
+                    continue;
+                }
+                if (selector == APPROVE) {
+                    (address spender, uint256 amount) = abi.decode(data[4:], (address, uint256));
+                    IERC20(to).approve(spender, amount);
+                    continue;
+                }
+            }
+
+            (bool ok, bytes memory returned) = to.call{value: calls[i].value}(data);
+            if (!ok) _bubble(returned);
+        }
+
+        // Pass three: leave nothing behind. An approval that outlives the
+        // transaction is a standing invitation, and a token left here is the
+        // Tenant's money in a contract with no way to ask for it.
+        for (uint256 i; i < approvals; ++i) {
+            IERC20 token = IERC20(tokens[i]);
+            token.approve(spenders[i], 0);
+
+            uint256 left = token.balanceOf(address(this));
+            if (left != 0 && !token.transfer(tenant, left)) revert TransferFailed();
+        }
+
+        uint256 change = address(this).balance;
+        if (change != 0) {
+            (bool sent,) = tenant.call{value: change}("");
+            if (!sent) revert TransferFailed();
         }
     }
 
-    /// @dev A Call names the token in `to`, and the recipient and amount in
-    ///      its calldata, exactly as if the Agent were calling the token
-    ///      directly. The Agent never has to know it is spending through an
-    ///      approval.
-    function _transfer(address tenant, address token, bytes calldata data) private {
-        if (data.length != 68) revert UnsupportedCall();
-        (address to, uint256 amount) = abi.decode(data[4:], (address, uint256));
-        if (!IERC20(token).transferFrom(tenant, to, amount)) revert TransferFailed();
-    }
-
-    /**
-     * @dev A swap, settled through the allowance.
-     *
-     * The Tenant approved *this contract*, not the router, so the input has
-     * to come here first. It is held for the length of one call and no
-     * longer: pulled in, swapped, and gone before the transaction ends.
-     *
-     * The check that matters is `recipient`. The registry permitted a call to
-     * this router with this selector; it does not read the arguments. Without
-     * this, an Agent could swap the Tenant's funds and have the router pay the
-     * proceeds to the Agent instead, which is a drain dressed as a trade. The
-     * output must land in the account it came from.
-     *
-     * What the Agent still controls is `amountOutMinimum`. It can accept a bad
-     * price, and no contract can tell a bad price from a volatile one. That
-     * risk is bounded by the ceiling, which is the same bound as any other
-     * spending mistake it could make.
-     */
-    function _swap(address tenant, address router, bytes calldata data) private {
-        ExactInputSingleParams memory p = abi.decode(data[4:], (ExactInputSingleParams));
-        if (p.recipient != tenant) revert RecipientNotTenant();
-
-        IERC20 tokenIn = IERC20(p.tokenIn);
-        if (!tokenIn.transferFrom(tenant, address(this), p.amountIn)) revert TransferFailed();
-
-        // Exactly what this swap needs, and reset afterwards, so a router that
-        // misbehaves later cannot reach anything.
-        tokenIn.approve(router, p.amountIn);
-        uint256 out = ISwapRouter(router).exactInputSingle(p);
-        tokenIn.approve(router, 0);
-
-        if (out == 0) revert NothingSwapped();
-
-        // A router that took less than it was given leaves the remainder here.
-        // It belongs to the Tenant, not to this contract.
-        uint256 dust = tokenIn.balanceOf(address(this));
-        if (dust != 0) {
-            if (!tokenIn.transfer(tenant, dust)) revert TransferFailed();
+    /// @dev Rethrows a failed call's own revert, so a protocol's reason
+    ///      reaches the Agent instead of being flattened into ours.
+    function _bubble(bytes memory returned) private pure {
+        if (returned.length == 0) revert CallFailed();
+        assembly {
+            revert(add(returned, 0x20), mload(returned))
         }
     }
 
@@ -151,4 +166,7 @@ contract AllowanceExecutor is IExecutor {
     function balanceOf(address tenant, address token) external view returns (uint256) {
         return IERC20(token).balanceOf(tenant);
     }
+
+    /// @dev Native change from a call that took less than it was sent.
+    receive() external payable {}
 }
