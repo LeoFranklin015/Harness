@@ -22,10 +22,38 @@ import { COOKIE, same, sessionToken } from "@/lib/auth";
  * before it existed.
  */
 export async function proxy(request: NextRequest) {
+  const { pathname } = request.nextUrl;
+
+  // --- who may reach this box at all ------------------------------------
+  //
+  // The dashboard is served to the world by a front door on a host that has a
+  // certificate, and that front door forwards to this port. So the port has to
+  // be open to the internet — but only one caller should be using it.
+  //
+  // The front door holds a shared secret and presents it on every request,
+  // including the websocket upgrade. Anything arriving without it is somebody
+  // who found the address, and gets nothing. This is not a login: it decides
+  // which *origin* may talk to the box, not which person is on the far side.
+  //
+  // The broker is the one exception. It runs on this machine and calls one
+  // route, with a bearer token of its own, so it is let through on that.
+  const originToken = process.env.HARNESS_ORIGIN_TOKEN;
+  if (originToken) {
+    const brokerToken = process.env.HARNESS_BROKER_TOKEN;
+    const bearer = request.headers.get("authorization")?.replace(/^Bearer /, "") ?? "";
+    const fromBroker =
+      pathname === "/api/sign" &&
+      request.method === "POST" &&
+      !!brokerToken &&
+      same(bearer, brokerToken);
+
+    if (!fromBroker && !same(request.headers.get("x-harness-origin") ?? "", originToken)) {
+      return new NextResponse("not here", { status: 403 });
+    }
+  }
+
   const passcode = process.env.HARNESS_PASSCODE;
   if (!passcode) return NextResponse.next();
-
-  const { pathname } = request.nextUrl;
 
   if (pathname === "/login" || pathname === "/api/auth") return NextResponse.next();
   if (pathname.startsWith("/api/mesh/s/")) return NextResponse.next();

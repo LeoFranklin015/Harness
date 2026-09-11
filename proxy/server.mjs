@@ -28,6 +28,17 @@ const PORT = Number(PORT_STR ?? 80);
 const LISTEN = Number(process.env.PORT ?? 8080);
 
 /**
+ * The secret that says this request came through the front door.
+ *
+ * The box's port has to be open to the internet for this to reach it, so the
+ * box refuses anything that does not carry this. Set the same value here and
+ * in the box's environment. Unset, nothing is added and the box lets everything
+ * through — which is right for running the two on one machine.
+ */
+const TOKEN = process.env.HARNESS_ORIGIN_TOKEN;
+const stamp = (headers) => (TOKEN ? { ...headers, "x-harness-origin": TOKEN } : headers);
+
+/**
  * The Host header is forwarded as it arrived, not rewritten to the box.
  *
  * The dashboard builds mesh invite links out of it, so rewriting would mint
@@ -36,7 +47,7 @@ const LISTEN = Number(process.env.PORT ?? 8080);
  */
 const server = createServer((req, res) => {
   const upstream = httpRequest(
-    { host: HOST, port: PORT, path: req.url, method: req.method, headers: req.headers },
+    { host: HOST, port: PORT, path: req.url, method: req.method, headers: stamp(req.headers) },
     (up) => {
       res.writeHead(up.statusCode ?? 502, up.headers);
       up.pipe(res);
@@ -65,6 +76,8 @@ server.on("upgrade", (req, socket, head) => {
     for (let i = 0; i < req.rawHeaders.length; i += 2) {
       lines.push(`${req.rawHeaders[i]}: ${req.rawHeaders[i + 1]}`);
     }
+    // The upgrade is replayed by hand, so the stamp has to be added by hand.
+    if (TOKEN) lines.push(`x-harness-origin: ${TOKEN}`);
     upstream.write(lines.join("\r\n") + "\r\n\r\n");
     if (head?.length) upstream.write(head);
     upstream.pipe(socket);
