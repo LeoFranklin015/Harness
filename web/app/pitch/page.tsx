@@ -2,6 +2,7 @@
 
 import { Deck } from "./Deck";
 import { LiveTerminal } from "./Terminal";
+import { Cascade } from "./Cascade";
 import { Agent } from "@/components/tenants/Agent";
 
 /**
@@ -261,60 +262,29 @@ function Cool() {
 // --- 4 ---------------------------------------------------------------------
 
 function How() {
-  const asks = [
-    ["The name", "resolves, or does not"],
-    ["The door", "sshd, at the fingerprint"],
-    ["The shell", "re-asks every 15s"],
-    ["The money", "before every payment"],
-  ];
   return (
     <div>
       <Rise at={0}>
-        <h2 className="text-[clamp(1.7rem,3.4vw,2.4rem)] font-medium tracking-[-0.03em] text-neutral-50">
-          One tap writes it. Four things ask it.
+        <p className="text-[11px] font-semibold tracking-[0.2em] text-neutral-600">
+          WHY ONE TAP IS ENOUGH
+        </p>
+        <h2 className="mt-5 text-[clamp(1.8rem,3.6vw,2.6rem)] font-medium tracking-[-0.03em] text-neutral-50">
+          Nothing gets switched off.
         </h2>
       </Rise>
 
-      <Rise at={140}>
-        <div className="mt-12 rounded-xl border border-amber-900/40 bg-amber-950/10 px-6 py-5 text-center">
-          <p className="text-[17px] font-medium text-neutral-100">One grant, on chain</p>
-          <p className="mt-1 font-mono text-[12px] text-amber-400/70">
-            who it is · what it may call · how much a day · revoked
-          </p>
+      <Rise at={160}>
+        <div className="mt-10">
+          <Cascade />
         </div>
       </Rise>
 
-      <Rise at={260}>
-        <div className="flex justify-center py-5">
-          <div className="flex w-full max-w-[820px] justify-around">
-            {asks.map(([n]) => (
-              <svg key={n} width="14" height="42" viewBox="0 0 14 42" aria-hidden>
-                <path d="M7 42 L7 8" stroke="#9b8cf5" strokeOpacity="0.5" strokeWidth="1.5" />
-                <path d="M2.5 13 L7 6 L11.5 13" fill="none" stroke="#9b8cf5" strokeOpacity="0.7" strokeWidth="1.5" />
-              </svg>
-            ))}
-          </div>
-        </div>
-      </Rise>
-
-      <Rise at={380}>
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          {asks.map(([name, sub]) => (
-            <div
-              key={name}
-              className="rounded-xl border border-violet-950/70 bg-violet-950/15 px-4 py-4 text-center"
-            >
-              <p className="text-[15px] font-medium text-neutral-100">{name}</p>
-              <p className="mt-1 text-[11px] leading-snug text-violet-300/50">{sub}</p>
-            </div>
-          ))}
-        </div>
-      </Rise>
-
-      <Rise at={520}>
-        <p className="mt-11 border-t border-neutral-900 pt-6 text-[15px] leading-relaxed text-neutral-500">
-          Nothing keeps a copy of the answer — so one more tap makes all four say
-          no, for every client, not just ours.
+      <Rise at={340}>
+        <p className="mt-10 border-t border-neutral-900 pt-6 text-[15px] leading-relaxed text-neutral-500">
+          No orchestration, no propagation, nothing to clean up. Four separate
+          things read the same field and each one answers for itself — which is
+          why revoking is a boolean and why it is true for every client, not
+          just ours.
           <span className="mt-2 block font-mono text-[11px] tracking-wide text-neutral-700">
             ENSv2 · Ledger Key Ring · EIP-7702 · x402 · Tailscale · 60 contract tests · live on Sepolia
           </span>
