@@ -130,26 +130,38 @@ panel(BX + NW + 34, BY + 60, BW - NW - 58, 62, "AgentResolver", "computed, store
 panel(BX + NW + 34, BY + 132, BW - NW - 58, 62, "AllowanceExecutor", "runs the call",
       SKY, "#0b2130", size=14)
 
-# --- bottom left: the host ------------------------------------------------
+# --- bottom left: the mesh, and the machines on it ------------------------
 CX, CY = AX, AY + AH + 44
-CW, CH = 560, FH - AH - 2 * PAD - 44
-zone(CX, CY, CW, CH, "THE HOST · ON THE MESH", VIOLET, "no public address, no neighbours")
+CW, CH = 604, FH - AH - 2 * PAD - 44
+zone(CX, CY, CW, CH, "TAILSCALE MESH", TEAL,
+     "no public address, no open port · invites are single-use")
 
-MX, MY = CX + 24, CY + 68
-MW, MH = CW - 48, CH - 92
-zone(MX, MY, MW, MH, "ACME.HARNESS.ETH", VIOLET, "its own container, its own network", dash="4 5", r=13)
-panel(MX + 22, MY + 76, MW - 44, 62, "runner", "a key with no authority", VIOLET, "#191630", size=16)
+# The nameserver is what makes an .eth name something you can ssh to.
+panel(CX + 24, CY + 60, CW - 48, 46, "Nameserver", "answers .eth over DNS",
+      TEAL, "#07211f", size=14)
 
-KX, KY = MX + 22, MY + 156
-KW, KH = MW - 44, 74
-add(f'<rect x="{KX}" y="{KY}" width="{KW}" height="{KH}" rx="11" fill="none" stroke="{VIOLET}" '
-    f'stroke-opacity="0.4" stroke-width="1.2" stroke-dasharray="4 5"/>')
-text(KX + 18, KY + 22, "WHAT IT KNOWS", VIOLET, 10.5, 600, "start", 0.72, spacing=1.5)
-for i, m in enumerate(("claude", "openai", "github")):
-    logo(m, KX + KW / 2 - 62 + i * 62, KY + 50, 24)
+HX, HY = CX + 24, CY + 122
+HW, HH = CW - 48, CH - 146
+zone(HX, HY, HW, HH, "THE HOST · ONE VM", VIOLET, dash="7 6", r=14)
+
+# Two tenants, side by side, each sealed off from the other.
+MW, MH = 246, 152
+for i, name in enumerate(("ACME.HARNESS.ETH", "LEO.HARNESS.ETH")):
+    MX, MY = HX + 22 + i * (MW + 22), HY + 34
+    zone(MX, MY, MW, MH, name, VIOLET, dash="4 5", r=12)
+    panel(MX + 16, MY + 44, MW - 32, 46, "runner", "a key with no authority",
+          VIOLET, "#191630", size=14)
+
+    KX, KY = MX + 16, MY + 100
+    KW, KH = MW - 32, 42
+    add(f'<rect x="{KX}" y="{KY}" width="{KW}" height="{KH}" rx="10" fill="none" stroke="{VIOLET}" '
+        f'stroke-opacity="0.4" stroke-width="1.2" stroke-dasharray="3 4"/>')
+    text(KX + 14, KY + 26, "KNOWS", VIOLET, 10.5, 600, "start", 0.72, spacing=1.5)
+    for j, m in enumerate(("claude", "openai", "github")):
+        logo(m, KX + KW - 96 + j * 34, KY + KH / 2, 19)
 
 # --- bottom right: a terminal ---------------------------------------------
-TX, TY = CX + CW + 72, CY + 44
+TX, TY = CX + CW + 56, CY + 44
 TW, TH = FX + FW - PAD - TX, 214
 add(f'<rect x="{TX}" y="{TY}" width="{TW}" height="{TH}" rx="12" fill="#05070a" stroke="{TEAL}" '
     f'stroke-opacity="0.55" stroke-width="1.3"/>')
@@ -203,10 +215,10 @@ arrow([(AX + 88, AY + AH + 2), (AX + 88, CY - 2)], AMBER,
 # The channel between the host and the terminal, where the host's questions run.
 CH1, CH2 = CX + CW + 22, CX + CW + 46
 L1, L2, L3 = BY + BH + 26, BY + BH + 50, BY + BH + 74
-arrow([(CX + CW + 2, MY + 56), (CH1, MY + 56), (CH1, L1), (BX + 116, L1), (BX + 116, BY + BH + 2)],
+arrow([(CX + CW + 2, HY + 62), (CH1, MY + 56), (CH1, L1), (BX + 116, L1), (BX + 116, BY + BH + 2)],
       VIOLET)
 text(BX + 128, L1 - 8, "4  is this fingerprint admitted?", VIOLET, 12.4, 400, "start", 0.92)
-arrow([(CX + CW + 2, MY + 144), (CH2, MY + 144), (CH2, L2), (BX + 292, L2), (BX + 292, BY + BH + 2)],
+arrow([(CX + CW + 2, HY + 152), (CH2, MY + 144), (CH2, L2), (BX + 292, L2), (BX + 292, BY + BH + 2)],
       VIOLET)
 text(BX + 304, L2 - 8, "5  spends, against the ceiling", VIOLET, 12.4, 400, "start", 0.92)
 
