@@ -111,14 +111,14 @@ export function Terminal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm duration-200 animate-in fade-in-0"
       onClick={onClose}
       role="dialog"
       aria-modal="true"
       aria-label={`Terminal on ${agent}.${tenant}.harness.eth`}
     >
       <div
-        className="w-full max-w-4xl overflow-hidden rounded-2xl border border-neutral-800 bg-neutral-950"
+        className="w-full max-w-4xl overflow-hidden rounded-2xl border border-neutral-800 bg-neutral-950 duration-200 animate-in fade-in-0 zoom-in-95"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between border-b border-neutral-900 px-4 py-2.5">

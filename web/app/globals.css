@@ -471,3 +471,39 @@ button:not(:disabled):not([role="menuitem"]):active {
   button:not(:disabled):active { transform: none; }
   .step-in, .value-in { animation: none; }
 }
+
+/* --- things arriving ------------------------------------------------------ */
+
+/*
+ * An interruption, and a result.
+ *
+ * An Agent asking for more than its ceiling arrives on a poll, and a minted
+ * invite arrives on a click. Both used to materialise: one frame absent, the
+ * next frame present, which reads as the page having always looked that way
+ * and you having missed it.
+ *
+ * Enter only, never exit. These are things you act on, and something sliding
+ * away while you reach for it is worse than one that simply goes.
+ */
+@keyframes ask-in {
+  from { opacity: 0; translate: 0 6px; }
+  to   { opacity: 1; translate: 0 0; }
+}
+.ask-in { animation: ask-in 260ms var(--ease-snap) both; }
+
+/*
+ * The machines, on arrival.
+ *
+ * They are fetched, so there is a moment of nothing and then a moment of two
+ * cards. Staggered by 60ms, which at two items costs the page 60ms in total
+ * and reads as them being dealt rather than switched on.
+ */
+@keyframes slot-in {
+  from { opacity: 0; translate: 0 8px; }
+  to   { opacity: 1; translate: 0 0; }
+}
+.slot-in { animation: slot-in 220ms var(--ease-snap) both; }
+
+@media (prefers-reduced-motion: reduce) {
+  .ask-in, .slot-in { animation: none; }
+}

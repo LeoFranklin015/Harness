@@ -176,7 +176,7 @@ export function MeshInvite({
   const spent = left <= 0;
 
   return (
-    <div className="mt-4 rounded-lg border border-neutral-800 bg-black/40 p-3">
+    <div className="ask-in mt-4 rounded-lg border border-neutral-800 bg-black/40 p-3">
       <div className="flex items-baseline justify-between gap-3">
         <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-neutral-500">
           visitor invite

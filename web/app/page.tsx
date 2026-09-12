@@ -441,8 +441,8 @@ function Machines({
 
       <div className="mt-6 grid gap-5 sm:grid-cols-2">
         {tenants.map((tenant, i) => (
+          <div key={i} className="slot-in" style={{ animationDelay: `${i * 60}ms` }}>
           <TenantSlot
-            key={i}
             tenant={tenant}
             onAdd={() => router.push("/machines/new")}
             onContinue={continueProvision}
@@ -450,6 +450,7 @@ function Machines({
             onAuthorise={authorise}
             onRaise={approveAsk}
           />
+          </div>
         ))}
       </div>
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { BorderBeam } from "@/components/ui/border-beam";
 import { MeshInvite } from "@/components/tenants/MeshInvite";
@@ -13,6 +13,92 @@ import { Gauge } from "@/components/tenants/Gauge";
 import { RevokeMark, TailscaleMark, TerminalMark } from "@/components/tenants/icons";
 import { RevokeCascade } from "@/components/tenants/RevokeCascade";
 import type { ProvisionRequest } from "@/components/tenants/ProvisionDialog";
+
+/** How long the button has to be held before it means it. */
+const HOLD_MS = 1600;
+
+/**
+ * The end of a machine, behind a press you have to mean.
+ *
+ * Everything else in this panel is recoverable. This one ends the spending,
+ * the name, the door and any open shell in a single transaction, and a stray
+ * click should not be able to reach it.
+ *
+ * A confirmation dialog would do the same job and is worse: it asks the same
+ * question twice and trains people to dismiss it. Holding puts the weight in
+ * the gesture instead — the fill is the decision being made, and letting go is
+ * how you change your mind.
+ *
+ * Slow while you are deciding, fast when the system answers: 1.6s linear to
+ * fill, 200ms to snap back. The fill is clipped rather than sized, so it is
+ * composited rather than laid out.
+ */
+export function HoldToRevoke({ onRevoke }: { onRevoke: () => void }) {
+  const [holding, setHolding] = useState(false);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const stop = useCallback(() => {
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = null;
+    setHolding(false);
+  }, []);
+
+  useEffect(() => stop, [stop]);
+
+  function start() {
+    if (timer.current) return;
+    setHolding(true);
+    timer.current = setTimeout(() => {
+      timer.current = null;
+      setHolding(false);
+      onRevoke();
+    }, HOLD_MS);
+  }
+
+  return (
+    <button
+      onPointerDown={start}
+      onPointerUp={stop}
+      onPointerLeave={stop}
+      onPointerCancel={stop}
+      // Keyboards cannot hold. Space and Enter go straight through, because
+      // requiring a gesture nobody can perform is not a safeguard.
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onRevoke();
+        }
+      }}
+      aria-label="Revoke. Press and hold."
+      className="group relative w-full overflow-hidden rounded-lg border border-red-950/70 bg-red-950/10 text-left transition-colors duration-150 ease-snap hover:border-red-900 hover:bg-red-950/25"
+    >
+      {/* The decision, filling. Underneath the words so they stay readable. */}
+      <span
+        aria-hidden
+        className="pointer-events-none absolute inset-0 bg-red-900/35"
+        style={{
+          clipPath: holding ? "inset(0 0 0 0)" : "inset(0 100% 0 0)",
+          transition: holding
+            ? `clip-path ${HOLD_MS}ms linear`
+            : "clip-path 200ms var(--ease-snap)",
+        }}
+      />
+      <span className="relative flex items-center gap-3 px-4 py-3">
+        <RevokeMark className="h-5 w-5 shrink-0 text-red-400/80" />
+        <span>
+          <span className="block text-sm text-red-300/90">
+            {holding ? "Keep holding…" : "Revoke"}
+          </span>
+          <span className="block text-[11px] text-neutral-600">
+            {holding
+              ? "Let go to cancel."
+              : "Hold. Spending, the name, SSH and any open shell, in one transaction."}
+          </span>
+        </span>
+      </span>
+    </button>
+  );
+}
 
 export type Tenant = {
   label: string;
@@ -300,18 +386,7 @@ function Details({
             {/* Apart from the rest, and last. It is not one of three things
                 you might do, it is the end of the machine. */}
             <div className="mt-6 border-t border-neutral-900 pt-5">
-              <button
-                onClick={() => onRevoke(tenant)}
-                className="group flex w-full items-center gap-3 rounded-lg border border-red-950/70 bg-red-950/10 px-4 py-3 text-left transition hover:border-red-900 hover:bg-red-950/25"
-              >
-                <RevokeMark className="h-5 w-5 shrink-0 text-red-400/80" />
-                <span>
-                  <span className="block text-sm text-red-300/90">Revoke</span>
-                  <span className="block text-[11px] text-neutral-600">
-                    Spending, the name, SSH and any open shell, in one transaction.
-                  </span>
-                </span>
-              </button>
+              <HoldToRevoke onRevoke={() => onRevoke(tenant)} />
             </div>
           </>
         )}

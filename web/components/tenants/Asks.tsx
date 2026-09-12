@@ -99,7 +99,10 @@ export function Asks({
       </p>
 
       {asks.map((ask) => (
-        <div key={ask.id} className="mt-3 border-t border-amber-900/20 pt-3 first:border-0 first:pt-1">
+        <div
+          key={ask.id}
+          className="ask-in mt-3 border-t border-amber-900/20 pt-3 first:border-0 first:pt-1"
+        >
           <p className="text-sm leading-snug text-neutral-200">{ask.want}</p>
           {ask.why && <p className="mt-1 text-[11px] leading-relaxed text-neutral-500">{ask.why}</p>}
 
