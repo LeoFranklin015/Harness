@@ -2,15 +2,14 @@
 
 import { Deck } from "./Deck";
 import { LiveTerminal } from "./Terminal";
-import { Cascade } from "./Cascade";
 import { Agent } from "@/components/tenants/Agent";
 
 /**
  * Four slides.
  *
- * What it is, why it needs to exist, the part worth watching, and how it
- * works. In that order, because a room that already knows what you built
- * hears the problem as confirmation rather than as a preamble to sit through.
+ * What it is, why it needs to exist, the part worth watching, and the
+ * architecture. In that order, because a room that already knows what you
+ * built hears the problem as confirmation, not as a preamble to sit through.
  */
 export default function Pitch() {
   return (
@@ -20,7 +19,6 @@ export default function Pitch() {
         <Why key="2" />,
         <Cool key="3" />,
         <Built key="4" />,
-        <How key="5" />,
       ]}
     />
   );
@@ -269,68 +267,24 @@ function Cool() {
 
 function Built() {
   return (
-    <div>
-      <Rise at={0}>
-        <div className="flex flex-wrap items-baseline justify-between gap-4">
-          <h2 className="text-[clamp(1.6rem,3.2vw,2.2rem)] font-medium tracking-[-0.03em] text-neutral-50">
-            One tap writes the grant. The machine is built around it.
-          </h2>
-          <p className="font-mono text-[11px] text-neutral-700">live on Sepolia</p>
-        </div>
-      </Rise>
-
-      <Rise at={160}>
-        <div className="mt-8">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src="/diagrams/architecture.svg"
-            alt="Harness architecture"
-            className="w-full"
-          />
-        </div>
-      </Rise>
-
-      <Rise at={340}>
-        <p className="mt-7 font-mono text-[11px] tracking-wide text-neutral-700">
-          ENSv2 · Ledger Key Ring · EIP-7702 · x402 · Tailscale · 60 contract tests
-        </p>
-      </Rise>
-    </div>
+    <Rise at={0}>
+      {/* The diagram is the whole slide: full width, shrinking to fit. */}
+      <div
+        className="relative left-1/2 -translate-x-1/2"
+        style={{ width: "min(100vw - 4rem, 1700px)" }}
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/diagrams/architecture.svg"
+          alt="Harness architecture"
+          className="mx-auto w-full object-contain"
+          style={{ maxHeight: "calc(100dvh - 6rem)" }}
+        />
+      </div>
+    </Rise>
   );
 }
 
-function How() {
-  return (
-    <div>
-      <Rise at={0}>
-        <p className="text-[11px] font-semibold tracking-[0.2em] text-neutral-600">
-          WHY ONE TAP IS ENOUGH
-        </p>
-        <h2 className="mt-5 text-[clamp(1.8rem,3.6vw,2.6rem)] font-medium tracking-[-0.03em] text-neutral-50">
-          Nothing gets switched off.
-        </h2>
-      </Rise>
-
-      <Rise at={160}>
-        <div className="mt-10">
-          <Cascade />
-        </div>
-      </Rise>
-
-      <Rise at={340}>
-        <p className="mt-10 border-t border-neutral-900 pt-6 text-[15px] leading-relaxed text-neutral-500">
-          No orchestration, no propagation, nothing to clean up. Four separate
-          things read the same field and each one answers for itself — which is
-          why revoking is a boolean and why it is true for every client, not
-          just ours.
-          <span className="mt-2 block font-mono text-[11px] tracking-wide text-neutral-700">
-            ENSv2 · Ledger Key Ring · EIP-7702 · x402 · Tailscale · 60 contract tests · live on Sepolia
-          </span>
-        </p>
-      </Rise>
-    </div>
-  );
-}
 
 /* Devices, drawn at a weight that sits beside body text rather than shouting.
    They are a list, not an illustration. */

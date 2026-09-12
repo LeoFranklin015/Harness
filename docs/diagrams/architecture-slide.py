@@ -11,7 +11,7 @@ Brand marks are nested whole, so this file has no external references.
 import os
 import re
 
-W, H = 1400, 840
+W, H = 1600, 800
 BG = "#08090a"
 INK = "#eef2f8"
 SUB = "#8d97a6"
@@ -96,36 +96,36 @@ add("</defs>")
 add(f'<rect width="{W}" height="{H}" fill="{BG}"/>')
 
 # =========================================================================
-FX, FY, FW, FH = 56, 118, 1130, 672
+FX, FY, FW, FH = 32, 80, 1430, 700
 add(f'<rect x="{FX}" y="{FY}" width="{FW}" height="{FH}" rx="26" fill="none" stroke="{GREY}" '
     f'stroke-width="1.8"/>')
 PAD = 28
 
 # --- top left: the ring ---------------------------------------------------
-AX, AY, AW, AH = FX + PAD, FY + PAD, 500, 232
+AX, AY, AW, AH = FX + PAD, FY + PAD, 650, 232
 zone(AX, AY, AW, AH, "THE RING · ONCE", AMBER, "the key never leaves the device")
 
 row = AY + 142
-logo("ledger", AX + 88, row, 22)
-text(AX + 88, row + 42, "holds the seed", SUB, 12, 400, "middle", 0.72)
-for cx, name, note in ((AX + 246, "browser", "carries bytes"), (AX + 402, "broker", "speaks LKRP")):
+logo("ledger", AX + 110, row, 22)
+text(AX + 110, row + 42, "holds the seed", SUB, 12, 400, "middle", 0.72)
+for cx, name, note in ((AX + 300, "browser", "carries bytes"), (AX + 490, "broker", "speaks LKRP")):
     panel(cx - 70, row - 30, 140, 60, name, None, AMBER, "#2a1d08", size=16)
     text(cx, row + 42, note, SUB, 12, 400, "middle", 0.72)
-arrow([(AX + 126, row), (AX + 172, row)], AMBER, "opens it", (AX + 149, row - 40), step="1")
-arrow([(AX + 318, row), (AX + 330, row)], AMBER, "relays", (AX + 324, row - 40), step="2")
+arrow([(AX + 148, row), (AX + 226, row)], AMBER, "opens it", (AX + 187, row - 40), step="1")
+arrow([(AX + 372, row), (AX + 416, row)], AMBER, "relays", (AX + 394, row - 40), step="2")
 
 # --- top right: the chain -------------------------------------------------
 BX, BY = AX + AW + 28, AY
 BW, BH = FW - AW - 2 * PAD - 28, AH
 zone(BX, BY, BW, BH, "ON CHAIN · ENSv2", SKY, "read at request time, never copied")
 
-PW = 230
+PW = 280
 panel(BX + 22, BY + 60, PW, 62, "AgentResolver", "computed, stores none",
       SKY, "#0b2130", size=14)
 panel(BX + 22, BY + 132, PW, 62, "AllowanceExecutor", "runs the call",
       SKY, "#0b2130", size=14)
 
-NW = 252
+NW = 300
 NX, NY = BX + BW - 22 - NW, BY + 60
 zone(NX, NY, NW, 152, "harness.eth", SKY, dash="5 5", r=12)
 zone(NX + 14, NY + 40, NW - 28, 98, "acme.harness.eth", SKY, dash="4 5", r=11)
@@ -134,7 +134,7 @@ logo("ens", NX + NW - 30, NY + 20, 22)
 
 # --- bottom left: the mesh, and the machines on it ------------------------
 CX, CY = AX, AY + AH + 44
-CW, CH = 604, FH - AH - 2 * PAD - 44
+CW, CH = 700, FH - AH - 2 * PAD - 44
 zone(CX, CY, CW, CH, "TAILSCALE MESH", TEAL,
      "no public address, no open port · invites are single-use")
 
@@ -147,7 +147,7 @@ HW, HH = CW - 48, CH - 146
 zone(HX, HY, HW, HH, "THE HOST · ONE VM", VIOLET, dash="7 6", r=14)
 
 # Two tenants, side by side, each sealed off from the other.
-MW, MH = 246, 152
+MW, MH = 290, 152
 for i, (name, agent) in enumerate((("ACME.HARNESS.ETH", "claude"),
                                    ("LEO.HARNESS.ETH", "openai"))):
     MX, MY = HX + 22 + i * (MW + 22), HY + 34
@@ -212,12 +212,12 @@ add(f'<text x="{GATE}" y="{AY + 116}" fill="{AMBER}" fill-opacity="0.9" font-siz
     f'text-anchor="middle" transform="rotate(-90 {GATE} {AY + 116})">mints the name · sets the ceiling</text>')
 
 # The ring's whole point: the secrets land on the machine.
-arrow([(AX + 88, AY + AH + 2), (AX + 88, CY - 2)], AMBER,
-      "seals what the agent knows", (AX + 102, CY - 16), "start", step="3")
+arrow([(AX + 110, AY + AH + 2), (AX + 110, CY - 2)], AMBER,
+      "seals what the agent knows", (AX + 124, CY - 16), "start", step="3")
 
 # The channel between the host and the chain, where the host's questions run.
 # Bands run low-to-high left-to-right, so no label ever crosses another line.
-CH1, CH2 = CX + CW + 22, CX + CW + 46
+CH1, CH2 = CX + CW + 16, CX + CW + 38
 L1, L2, L3 = BY + BH + 22, BY + BH + 48, BY + BH + 74
 
 arrow([(CX + CW + 2, HY + 62), (CH1, HY + 62), (CH1, L1), (NX + 60, L1), (NX + 60, BY + BH + 2)],
@@ -229,17 +229,17 @@ arrow([(CX + CW + 2, HY + 152), (CH2, HY + 152), (CH2, L2), (BX + 170, L2), (BX 
 text(BX + 182, L2 - 8, "5  spends, against the ceiling", VIOLET, 12.4, 400, "start", 0.92)
 
 # The nameserver is only ever a reader: it asks the resolver for an address.
-arrow([(CX + 476, CY + 58), (CX + 476, L3), (BX + 70, L3), (BX + 70, BY + BH + 2)], TEAL)
-text(BX + 64, L3 - 8, "6  resolve — an address, or nothing", TEAL, 12.4, 400, "end", 0.92)
+arrow([(CX + 560, CY + 58), (CX + 560, L3), (BX + 70, L3), (BX + 70, BY + BH + 2)], TEAL)
+text(BX + 82, L3 - 8, "6  resolve — an address, or nothing", TEAL, 12.4, 400, "start", 0.92)
 
 # Revoke: one bool, and everything above answers differently.
 arrow([(BX + BW - 16, BY + BH + 2), (BX + BW - 16, TY - 2)], "#e2615f")
 text(BX + BW - 24, L2 - 8, "revoke", "#e2615f", 12.4, 400, "end", 0.95)
 
 # The loop, round the outside.
-LOOP_X, LOOP_TOP = FX + FW + 72, 58
+LOOP_X, LOOP_TOP = FX + FW + 72, 44
 arrow([(TX + TW + 2, TY + TH / 2), (LOOP_X, TY + TH / 2), (LOOP_X, LOOP_TOP),
-       (AX + 88, LOOP_TOP), (AX + 88, AY - 4)], AMBER)
+       (AX + 110, LOOP_TOP), (AX + 110, AY - 4)], AMBER)
 add(f'<text x="{LOOP_X + 26}" y="{(LOOP_TOP + TY + TH / 2) / 2:.0f}" fill="{AMBER}" '
     f'fill-opacity="0.9" font-size="14.5" text-anchor="middle" '
     f'transform="rotate(-90 {LOOP_X + 26} {(LOOP_TOP + TY + TH / 2) / 2:.0f})">human in the loop</text>')
