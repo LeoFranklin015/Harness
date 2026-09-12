@@ -138,60 +138,142 @@ export default function NewMachine() {
 
   return (
     <Shell>
-      <header className="mb-10 mx-auto max-w-2xl">
-        <button
-          onClick={() => router.push("/")}
-          className="mb-6 text-xs text-neutral-600 transition hover:text-neutral-400"
-        >
-          ← Your machines
-        </button>
-        <h1 className="text-2xl font-medium tracking-tight text-neutral-50">A new machine</h1>
-        <p className="mt-1 text-sm text-neutral-600">
-          Signed by {short(authority.address)}. Everything here is fixed on chain by that
-          signature.
+      {/* A band across the top, so the page has a lid rather than starting
+          in mid-air. */}
+      <header className="flex flex-wrap items-end justify-between gap-4 border-b border-neutral-900 pb-6">
+        <div>
+          <button
+            onClick={() => router.push("/")}
+            className="mb-3 text-xs text-neutral-600 transition hover:text-neutral-400"
+          >
+            ← Your machines
+          </button>
+          <h1 className="text-2xl font-medium tracking-tight text-neutral-50">A new machine</h1>
+        </div>
+        <p className="pb-1 text-xs text-neutral-600">
+          signed by <span className="font-mono text-neutral-500">{short(authority.address)}</span>
         </p>
       </header>
 
-      <div className="mx-auto max-w-2xl">
-        <Rail step={step} onJump={(i) => i < step && setStep(i)} />
-      </div>
+      {/* Two columns the whole way through: what you are filling in, and what
+          it is adding up to. The right side used to be nothing at all, which
+          left a form floating in a page four times its size. */}
+      <div className="mt-8 grid gap-10 lg:grid-cols-[minmax(0,1fr)_306px] lg:gap-12">
+        <div className="min-w-0">
+          <Rail step={step} onJump={(i) => i < step && setStep(i)} />
 
-      {/* A reading column, centred while it is alone on the page. The build
-          step brings the machine and takes the full width for itself. */}
-      <div className={`mt-12 ${step === 3 ? "" : "mx-auto max-w-2xl"}`}>
-          {step === 0 && <Identity form={form} set={set} error={labelError ?? agentError} />}
-          {step === 1 && <Capabilities form={form} set={set} />}
-          {step === 2 && <Secrets form={form} set={set} />}
-          {step === 3 && session && (
-            <Build session={session} req={form} authority={authority} onDone={() => router.push("/")} />
-          )}
+          {step === 3 && session ? (
+            <div className="mt-8">
+              <Build session={session} req={form} authority={authority} onDone={() => router.push("/")} />
+            </div>
+          ) : (
+            <section className="mt-8 rounded-2xl border border-neutral-900 bg-neutral-950/40 p-7">
+              {step === 0 && <Identity form={form} set={set} error={labelError ?? agentError} />}
+              {step === 1 && <Capabilities form={form} set={set} />}
+              {step === 2 && <Secrets form={form} set={set} />}
 
-      {step < 3 && (
-        <div className="mt-10 flex items-center gap-3">
-          {step > 0 && (
-            <button
-              onClick={() => setStep((s) => (s - 1) as StepIndex)}
-              className="rounded-full border border-neutral-800 px-5 py-2 text-xs text-neutral-400 transition hover:border-neutral-700"
-            >
-              Back
-            </button>
+              <div className="mt-8 flex items-center justify-between border-t border-neutral-900 pt-6">
+                <button
+                  onClick={() => setStep((s) => (s - 1) as StepIndex)}
+                  disabled={step === 0}
+                  className="rounded-full border border-neutral-800 px-5 py-2 text-xs text-neutral-400 transition hover:border-neutral-700 disabled:pointer-events-none disabled:opacity-0"
+                >
+                  Back
+                </button>
+                <button
+                  onClick={() => setStep((s) => (s + 1) as StepIndex)}
+                  disabled={!canLeave[step]}
+                  className="rounded-full bg-neutral-50 px-6 py-2 text-xs font-medium text-neutral-950 transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  {step === 2 ? "Build it" : "Continue"}
+                </button>
+              </div>
+            </section>
           )}
-          <button
-            onClick={() => setStep((s) => (s + 1) as StepIndex)}
-            disabled={!canLeave[step]}
-            className="rounded-full bg-neutral-50 px-5 py-2 text-xs font-medium text-neutral-950 transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            {step === 2 ? "Build it" : "Continue"}
-          </button>
         </div>
-      )}
+
+        {step < 3 && <Ledgerside form={form} />}
       </div>
     </Shell>
   );
 }
 
+/**
+ * What the form adds up to, beside the form.
+ *
+ * A wizard asks four screens of questions and shows you one at a time, which
+ * makes it easy to lose track of what you have already said. This is the
+ * answer so far, in one place, filling in as you go — and it is also what
+ * stops the page being a narrow column in an empty room.
+ *
+ * Nothing here is editable. It is a receipt, not a second form.
+ */
+function Ledgerside({ form }: { form: ProvisionRequest }) {
+  const machine = form.label.trim();
+  const agent = form.agent.trim();
+  const tokens = form.tokens ?? [];
+  const actions = form.actions ?? [];
+  const protocols = form.protocols ?? [];
+  const custom = form.customRules ?? [];
+  const rules = tokens.length * actions.length + protocols.length + custom.length;
+  const extras = form.extraSecrets.split("\n").filter((l) => l.includes("=")).length;
+
+  const brain =
+    form.brain === "none"
+      ? null
+      : form.brain === "claude-plan"
+        ? "Claude sign-in"
+        : form.brain === "claude-key"
+          ? "Claude API key"
+          : "Codex key";
+
+  return (
+    <aside className="lg:sticky lg:top-10 lg:self-start">
+      <div className="overflow-hidden rounded-2xl border border-neutral-900 bg-neutral-950/60">
+        <div className="border-b border-neutral-900 px-5 py-4">
+          <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-neutral-600">
+            The machine
+          </p>
+          <p className="mt-2 break-all font-mono text-[13px] text-neutral-200">
+            {machine ? `${machine}.harness.eth` : <span className="text-neutral-700">….harness.eth</span>}
+          </p>
+          <p className="mt-1 break-all font-mono text-[12px] text-neutral-500">
+            {machine && agent ? `${agent}.${machine}.harness.eth` : <span className="text-neutral-800">the agent under it</span>}
+          </p>
+        </div>
+
+        <dl className="divide-y divide-neutral-900 text-[13px]">
+          <Line label="Ceiling" value={form.capUsd ? `$${form.capUsd} a day` : null} />
+          <Line label="Window" value={form.days ? `${form.days} days` : null} />
+          <Line label="Rules" value={rules ? `${rules} on the grant` : null} />
+          <Line label="Knows" value={[brain, extras ? `${extras} more` : null].filter(Boolean).join(" · ") || null} />
+        </dl>
+
+        <p className="border-t border-neutral-900 px-5 py-4 text-[11px] leading-relaxed text-neutral-600">
+          None of this exists yet. It is written on chain by the signature at
+          the end, and one revoke takes all of it back.
+        </p>
+      </div>
+    </aside>
+  );
+}
+
+/** One row of the receipt. Dashes until there is something to say. */
+function Line({ label, value }: { label: string; value: string | null }) {
+  return (
+    <div className="flex items-baseline justify-between gap-4 px-5 py-3">
+      <dt className="text-neutral-600">{label}</dt>
+      <dd className={value ? "text-right text-neutral-300" : "text-neutral-800"}>{value ?? "—"}</dd>
+    </div>
+  );
+}
+
 function Shell({ children }: { children: React.ReactNode }) {
-  return <div className="min-h-dvh px-8 py-12 lg:px-16">{children}</div>;
+  return (
+    <div className="min-h-dvh px-6 py-10 lg:px-10">
+      <div className="mx-auto w-full max-w-[1080px]">{children}</div>
+    </div>
+  );
 }
 
 /** Where you are, and how much is left. */
@@ -272,19 +354,10 @@ function Identity({
         />
       </Field>
 
-      <div className="rounded-lg border border-neutral-900 bg-neutral-950/60 p-4">
-        <p className="text-[10px] uppercase tracking-wider text-neutral-600">Names it will hold</p>
-        <p className="mt-2 font-mono text-sm text-neutral-300">
-          {form.label || "…"}.harness.eth
-        </p>
-        <p className="font-mono text-sm text-neutral-400">
-          {form.agent || "…"}.{form.label || "…"}.harness.eth
-        </p>
-        <p className="mt-3 text-xs leading-relaxed text-neutral-600">
-          The agent name resolves to the machine for exactly as long as the chain says it
-          should — and stops the moment you revoke, for every client, not just ours.
-        </p>
-      </div>
+      <p className="border-t border-neutral-900 pt-5 text-xs leading-relaxed text-neutral-600">
+        The agent name resolves to the machine for exactly as long as the chain says it
+        should — and stops the moment you revoke, for every client, not just ours.
+      </p>
     </Section>
   );
 }
@@ -727,9 +800,11 @@ function Build({
 
       <aside className="lg:sticky lg:top-12 lg:self-start">
         <Assembly stage={stage} working={phase === "ring" || phase === "chain"} className="w-full" />
-        <p className="mt-3 text-center font-mono text-[10px] uppercase tracking-wider text-neutral-700">
-          {stage >= STAGES ? `${req.label}.harness.eth` : `${stage} of ${STAGES} assembled`}
-        </p>
+        {stage >= STAGES && (
+          <p className="mt-3 text-center font-mono text-[11px] tracking-wider text-neutral-500">
+            {req.label}.harness.eth
+          </p>
+        )}
       </aside>
 
       <Saying note={note} working={phase === "ring" || phase === "chain"} done={phase === "done"} />
