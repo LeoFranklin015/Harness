@@ -181,23 +181,51 @@ export function Assembly({
         </g>
       </g>
 
-      {/* Screws. Every part that is on has them, and they never stop
-          turning — the machine is being worked on continuously, not only at
-          the moments a step happens to complete. This is the whole of the
-          life in the picture between one stage and the next. */}
+      {/* Screws, and somebody working one of them.
+          Each sits in a fixed socket: the position is on the outer group and
+          the animation on the inner one, so nothing the animation does can
+          move a screw off the hole it belongs in. They turn; they do not
+          travel. The hammer taps the collar bolt, which is the one you can
+          actually see being reached. */}
       {SCREWS.filter((sc) => stage >= PART_AT[sc.on]).map((sc, i) => (
-        <g
-          key={i}
-          transform={`translate(${sc.x} ${sc.y})`}
-          className={working ? "screw screw-fast" : "screw"}
-          style={{ animationDelay: `${(i % 5) * -0.7}s`, animationDuration: `${3.2 + (i % 3) * 0.9}s` }}
-        >
-          <circle r={4.2} fill="#3A424C" stroke="#6B7681" strokeWidth={1.2} />
-          <line x1={-2.4} y1={0} x2={2.4} y2={0} stroke="#C9D2DC" strokeWidth={1.3} strokeLinecap="round" />
+        <g key={i} transform={`translate(${sc.x} ${sc.y})`}>
+          <g
+            className={working ? "screw screw-fast" : "screw"}
+            style={{ animationDelay: `${(i % 3) * -0.7}s`, animationDuration: `${3.2 + (i % 3) * 0.9}s` }}
+          >
+            <circle r={4.2} fill="#3A424C" stroke="#6B7681" strokeWidth={1.2} />
+            <line x1={-2.4} y1={0} x2={2.4} y2={0} stroke="#C9D2DC" strokeWidth={1.3} strokeLinecap="round" />
+          </g>
         </g>
       ))}
 
+      {stage >= PART_AT.neck && <Hammer x={150} y={95} working={working} />}
+
     </svg>
+  );
+}
+
+/**
+ * A hammer, tapping a bolt home.
+ *
+ * The screws turning say the machine is being worked on; a hammer says
+ * somebody is working on it. It swings from the head of the handle, strikes,
+ * and lifts — and the bolt takes a small knock at the same moment, because a
+ * hit that moves nothing reads as a hit that missed.
+ */
+function Hammer({ x, y, working }: { x: number; y: number; working: boolean }) {
+  return (
+    <g transform={`translate(${x} ${y})`} className={working ? "hammer hammer-fast" : "hammer"}>
+      {/* The pivot sits directly above the bolt, so that at rest angle zero
+          the head is on it. Anywhere else and the hammer swings past. */}
+      <g transform="translate(0 -34)">
+        <rect x={-2.5} y={0} width={5} height={30} rx={2.5} fill="#7A5A33" stroke={RIM} strokeWidth={1.6} />
+        <g transform="translate(0 32)">
+          <rect x={-11} y={-5.5} width={22} height={11} rx={3} fill="#4A535E" stroke={RIM} strokeWidth={1.8} />
+          <rect x={-11} y={-5.5} width={6} height={11} rx={2.5} fill="#68737F" stroke={RIM} strokeWidth={1.5} />
+        </g>
+      </g>
+    </g>
   );
 }
 

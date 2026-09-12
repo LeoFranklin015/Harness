@@ -700,9 +700,6 @@ function Build({
             state={chainState}
           />
 
-          <p className="text-sm text-neutral-400" role="status" aria-live="polite">
-            {note}
-          </p>
           {error && (
             <p className="rounded-lg border border-amber-900/50 bg-amber-950/20 px-4 py-2.5 text-sm text-amber-300/90">
               {error}
@@ -734,6 +731,49 @@ function Build({
           {stage >= STAGES ? `${req.label}.harness.eth` : `${stage} of ${STAGES} assembled`}
         </p>
       </aside>
+
+      <Saying note={note} working={phase === "ring" || phase === "chain"} done={phase === "done"} />
+    </div>
+  );
+}
+
+/**
+ * What the machine is doing, at the bottom of the screen.
+ *
+ * It used to sit under the two numbered steps, where it read as a caption on
+ * the step above rather than as the live thing it is. Down here it belongs to
+ * the whole page, which is what it is about: the device, the host and the
+ * chain, none of which are the step you happen to be looking at.
+ *
+ * Fixed rather than in the flow, because the one moment it matters most is
+ * the moment somebody has looked away from the screen and down at the device.
+ */
+function Saying({ note, working, done }: { note: string; working: boolean; done: boolean }) {
+  return (
+    <div className="pointer-events-none fixed inset-x-0 bottom-7 z-40 flex justify-center px-4">
+      <p
+        role="status"
+        aria-live="polite"
+        className={`flex max-w-[min(90vw,34rem)] items-center gap-2.5 rounded-full border px-5 py-2.5 text-sm backdrop-blur-md transition-colors ${
+          done
+            ? "border-emerald-900/60 bg-emerald-950/40 text-emerald-300/90"
+            : "border-neutral-800 bg-neutral-950/80 text-neutral-300"
+        }`}
+      >
+        <span
+          className={`h-1.5 w-1.5 shrink-0 rounded-full ${
+            done ? "bg-emerald-400" : working ? "saying-dot bg-sky-400" : "bg-neutral-600"
+          }`}
+        />
+        <span className="truncate">{note}</span>
+        {working && (
+          <span className="shrink-0 text-neutral-500" aria-hidden>
+            <span className="saying-ellipsis">.</span>
+            <span className="saying-ellipsis">.</span>
+            <span className="saying-ellipsis">.</span>
+          </span>
+        )}
+      </p>
     </div>
   );
 }
