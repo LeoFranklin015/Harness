@@ -24,6 +24,14 @@ import { COOKIE, same, sessionToken } from "@/lib/auth";
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
+  // Anything with a file extension is something out of `public/` — a logo, a
+  // font, an image. None of it is secret, and gating it breaks the page that
+  // references it while telling an attacker nothing they could not fetch from
+  // the repo.
+  if (!pathname.startsWith("/api/") && /\.[a-z0-9]+$/i.test(pathname)) {
+    return NextResponse.next();
+  }
+
   // --- who may reach this box at all ------------------------------------
   //
   // The dashboard is served to the world by a front door on a host that has a

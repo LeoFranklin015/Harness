@@ -2,6 +2,7 @@
 
 import { Deck } from "./Deck";
 import { LiveTerminal } from "./Terminal";
+import { Agent } from "@/components/tenants/Agent";
 
 /**
  * Four slides.
@@ -29,9 +30,16 @@ function Rise({ at, children }: { at: number; children: React.ReactNode }) {
 
 // --- 1 ---------------------------------------------------------------------
 
+/** Real marks, fetched from the brands, not drawn by us. */
+function Logo({ src, alt, h = 26, className = "" }: { src: string; alt: string; h?: number; className?: string }) {
+  // eslint-disable-next-line @next/next/no-img-element
+  return <img src={src} alt={alt} style={{ height: h }} className={`w-auto ${className}`} />;
+}
+
 function What() {
   return (
-    <div>
+    <div className="grid items-center gap-14 lg:grid-cols-[1fr_minmax(0,380px)] lg:gap-20">
+      <div>
       <Rise at={0}>
         <div className="mb-8 flex items-center gap-2.5">
           <Mark />
@@ -40,7 +48,7 @@ function What() {
       </Rise>
 
       <Rise at={90}>
-        <h1 className="text-[clamp(2.8rem,7vw,5.6rem)] font-medium leading-[0.97] tracking-[-0.04em] text-neutral-50">
+        <h1 className="text-[clamp(2.3rem,5vw,4.3rem)] font-medium leading-[0.97] tracking-[-0.04em] text-neutral-50">
           A scoped sandbox
           <br />
           for your agents.
@@ -60,6 +68,48 @@ function What() {
           One tap on a Ledger creates all three. One tap ends them.
         </p>
       </Rise>
+      </div>
+
+      {/* The sandbox, drawn. A bordered box with the agent inside it is the
+          slide's own sentence, and it belonged in the half that was empty. */}
+      <Rise at={200}>
+        <div className="relative">
+          <div className="rounded-2xl border border-neutral-800 bg-neutral-950/70 p-5">
+            <div className="flex items-center justify-between">
+              <p className="font-mono text-[11px] tracking-wider text-neutral-600">
+                acme.harness.eth
+              </p>
+              <span className="rounded-full border border-emerald-900/60 px-2 py-0.5 text-[9px] uppercase tracking-widest text-emerald-500/80">
+                live
+              </span>
+            </div>
+
+            <div className="mt-4 overflow-hidden rounded-xl border border-neutral-900 bg-black/50">
+              <Agent state="live" className="w-full" />
+            </div>
+
+            <dl className="mt-4 space-y-1.5 font-mono text-[11px]">
+              <Row k="name" v="runner.acme.harness.eth" />
+              <Row k="ceiling" v="$10.00 / day" />
+              <Row k="spent" v="$4.25" />
+            </dl>
+          </div>
+
+          <div className="mt-7 flex items-center gap-7 opacity-80">
+            <Logo src="/logos/ledger.svg" alt="Ledger" h={22} />
+            <Logo src="/logos/ens.svg" alt="ENS" h={26} />
+          </div>
+        </div>
+      </Rise>
+    </div>
+  );
+}
+
+function Row({ k, v }: { k: string; v: string }) {
+  return (
+    <div className="flex justify-between gap-4">
+      <dt className="text-neutral-700">{k}</dt>
+      <dd className="text-neutral-400">{v}</dd>
     </div>
   );
 }
@@ -90,18 +140,12 @@ function Why() {
       </div>
 
       <Rise at={340}>
-        <div className="grid gap-4">
+        <div className="grid gap-3">
           <div className="grid grid-cols-2 gap-4">
             <Owned label="COMPUTE" note="someone else's">
-              {/* Slots for real marks. Keep them small: big vendor logos turn
-                  a diagnosis into an attack. */}
-              <div className="flex gap-2">
-                {[0, 1, 2].map((n) => (
-                  <span
-                    key={n}
-                    className="h-9 w-9 rounded-lg border border-dashed border-neutral-800"
-                  />
-                ))}
+              <div className="flex items-center gap-4">
+                <Logo src="/logos/amazonwebservices.svg" alt="AWS" h={22} />
+                <Logo src="/logos/googlecloud.svg" alt="Google Cloud" h={24} />
               </div>
             </Owned>
             <Owned label="KMS" note="someone else's">
@@ -109,14 +153,21 @@ function Why() {
             </Owned>
           </div>
 
-          <div className="flex items-center justify-around px-8 text-[11px] text-neutral-700">
-            <span>runs on</span>
-            <span>signs with</span>
+          {/* The dependency, drawn rather than labelled. Bright enough to be
+              the thing you follow, since it is the argument. */}
+          <div className="relative h-14">
+            <svg className="h-full w-full" viewBox="0 0 400 56" preserveAspectRatio="none" aria-hidden>
+              <path d="M100 0 L100 30 L200 30 L200 56" fill="none" stroke="#8d97a6" strokeWidth="1.6" />
+              <path d="M300 0 L300 30 L200 30 L200 56" fill="none" stroke="#8d97a6" strokeWidth="1.6" />
+              <path d="M194 46 L200 56 L206 46" fill="none" stroke="#8d97a6" strokeWidth="1.6" />
+            </svg>
+            <span className="absolute left-[14%] top-1 text-[11px] text-neutral-500">runs on</span>
+            <span className="absolute right-[13%] top-1 text-[11px] text-neutral-500">signs with</span>
           </div>
 
-          <div className="rounded-xl border border-dashed border-red-950/80 bg-red-950/10 px-5 py-5 text-center">
-            <p className="text-[17px] font-medium text-neutral-100">your agent</p>
-            <p className="mt-1 text-[12px] text-red-400/70">
+          <div className="rounded-xl border border-red-900/70 bg-red-950/25 px-5 py-5 text-center">
+            <p className="text-[17px] font-medium text-neutral-50">your agent</p>
+            <p className="mt-1 text-[12px] text-red-300/70">
               runs on one, signs with the other
             </p>
           </div>
@@ -136,10 +187,10 @@ function Owned({
   children: React.ReactNode;
 }) {
   return (
-    <div className="rounded-xl border border-neutral-900 bg-neutral-950/60 px-5 py-5">
-      <p className="text-[10px] font-semibold tracking-[0.16em] text-neutral-600">{label}</p>
+    <div className="rounded-xl border border-neutral-700 bg-neutral-900/60 px-5 py-5">
+      <p className="text-[10px] font-semibold tracking-[0.16em] text-neutral-400">{label}</p>
       <div className="mt-4 flex h-10 items-center">{children}</div>
-      <p className="mt-4 text-[11px] text-neutral-700">{note}</p>
+      <p className="mt-4 text-[11px] text-neutral-500">{note}</p>
     </div>
   );
 }
@@ -177,6 +228,15 @@ function Cool() {
             A real ENS name, over ordinary DNS. No wallet, no plugin, no copied
             IP address.
           </p>
+
+          {/* Because it is DNS and not a wallet connection, the list of things
+              that can reach it is just "things with a terminal". */}
+          <div className="mt-7 flex items-center gap-5">
+            <Laptop />
+            <Phone />
+            <Watch />
+            <span className="text-[13px] text-neutral-600">anything with a terminal</span>
+          </div>
         </Rise>
 
         <Rise at={340}>
@@ -261,6 +321,42 @@ function How() {
         </p>
       </Rise>
     </div>
+  );
+}
+
+/* Devices, drawn at a weight that sits beside body text rather than shouting.
+   They are a list, not an illustration. */
+const dev = {
+  fill: "none" as const,
+  stroke: "#8d97a6",
+  strokeWidth: 1.5,
+  strokeLinejoin: "round" as const,
+};
+
+function Laptop() {
+  return (
+    <svg width="34" height="26" viewBox="0 0 34 26" aria-hidden {...dev}>
+      <rect x="5" y="3" width="24" height="15" rx="2" />
+      <path d="M1 22 H33" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function Phone() {
+  return (
+    <svg width="18" height="26" viewBox="0 0 18 26" aria-hidden {...dev}>
+      <rect x="3" y="2" width="12" height="21" rx="2.5" />
+      <path d="M7.6 20 H10.4" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function Watch() {
+  return (
+    <svg width="18" height="26" viewBox="0 0 18 26" aria-hidden {...dev}>
+      <rect x="4" y="7" width="10" height="11" rx="2.5" />
+      <path d="M7 7 V3.5 M11 7 V3.5 M7 18 V21.5 M11 18 V21.5" strokeLinecap="round" />
+    </svg>
   );
 }
 
