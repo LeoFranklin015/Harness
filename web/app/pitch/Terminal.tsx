@@ -18,8 +18,8 @@ import { useEffect, useRef, useState } from "react";
 type Line = { text: string; tone?: "dim" | "ok" | "warn"; delay: number };
 
 const SCRIPT: Line[] = [
-  { text: "$ ssh runner@acme.harness.eth", delay: 0 },
-  { text: "resolving over DNS · runner.acme.harness.eth", tone: "dim", delay: 1500 },
+  { text: "$ ssh runner.acme.harness.eth", delay: 0 },
+  { text: "resolving over DNS · 100.71.4.19", tone: "dim", delay: 1500 },
   { text: "host key from the chain · ok", tone: "dim", delay: 2100 },
   { text: "fingerprint admitted · ok", tone: "dim", delay: 2600 },
   { text: "", delay: 3000 },
@@ -28,7 +28,7 @@ const SCRIPT: Line[] = [
   { text: "", delay: 4600 },
   { text: "◆ revoke — one tap on the Ledger", tone: "warn", delay: 5600 },
   { text: "", delay: 6100 },
-  { text: "Connection to acme.harness.eth closed.", tone: "warn", delay: 6900 },
+  { text: "Connection to runner.acme.harness.eth closed.", tone: "warn", delay: 6900 },
 ];
 
 const TYPED = 0; // which line types character by character
@@ -74,7 +74,7 @@ export function LiveTerminal() {
         <span className="h-2 w-2 rounded-full bg-neutral-800" />
         <span className="h-2 w-2 rounded-full bg-neutral-800" />
         <p className="ml-2 font-mono text-[11px] tracking-wider text-neutral-700">
-          {dead ? "closed" : "acme.harness.eth"}
+          {dead ? "closed" : "runner.acme.harness.eth"}
         </p>
       </div>
 
