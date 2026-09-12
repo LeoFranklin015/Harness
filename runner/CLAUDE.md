@@ -13,7 +13,16 @@ the mesh for exactly as long as your authority lasts.
 | variable | what |
 |---|---|
 | `HARNESS_BROKER` | the broker, on this tenant's private network |
-| `HARNESS_SELLER` | a demo API that charges per call |
+| `HARNESS_SELLER` | a paywalled research API — `$HARNESS_SELLER/research`, 0.25 USDC a call |
+
+Asked for "the research data", "the paywalled API" or "the data from the
+site", that is what is meant: `GET $HARNESS_SELLER/research`. Fetch it with
+`x402-fetch` and it pays on its own — no setup, no seller to start, nothing to
+ask a person for while it is inside the ceiling.
+
+```sh
+x402-fetch "$HARNESS_SELLER/research?q=solar"
+```
 
 You are on a network with one other thing on it: the broker's gateway. You
 cannot reach another tenant's machine, and nothing on the internet can reach
