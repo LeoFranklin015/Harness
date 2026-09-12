@@ -71,13 +71,41 @@ export async function openApp(appName: string, onStep: Step): Promise<AppSession
     if (session) return session;
   }
 
+  // The picker is `requestDevice` underneath, and Chrome only allows it during
+  // a transient user activation — a few seconds after the click. A silent
+  // reconnect that took its whole budget has already spent that, so calling
+  // the picker here opens nothing and reports a device that is plainly plugged
+  // in as inaccessible. Ask for a fresh click instead; the next one arrives
+  // with its activation intact and reaches the prompt.
+  if (allowed) throw new NeedsAClick();
+
   onStep("Select your Ledger in the browser prompt");
   const chosen = await firstValueFrom(dmk.startDiscovering({ transport: webHidIdentifier }));
   return attach(dmk, chosen, appName, onStep, null);
 }
 
-/** How long a device we believe we already have gets, before we ask again. */
-const RECONNECT_MS = 12_000;
+/**
+ * The gesture ran out before the device did.
+ *
+ * Not a device fault and not worth a reconnect: the browser needs the picker
+ * to happen inside a click, and the only thing that produces one is a person
+ * pressing the button again.
+ */
+export class NeedsAClick extends Error {
+  constructor() {
+    super("The browser needs a click to reach the device again. Press Continue.");
+    this.name = "NeedsAClick";
+  }
+}
+
+/**
+ * How long a device we believe we already have gets, before we ask again.
+ *
+ * Bounded by the browser, not by the device: Chrome's transient activation
+ * lasts about five seconds, and whatever this spends comes out of it. Twelve
+ * seconds always outlived the gesture, so the fallback picker never opened.
+ */
+const RECONNECT_MS = 3_500;
 
 /**
  * A device this origin may open without prompting, if there is one.
@@ -230,6 +258,7 @@ export class RejectedOnDevice extends Error {
 }
 
 export function describe(error: unknown, appName: string): Error {
+  if (error instanceof NeedsAClick) return error;
   const tag = (error as { _tag?: string; name?: string })?._tag ?? (error as Error)?.name ?? "";
   const raw = `${tag} ${(error as Error)?.message ?? ""} ${JSON.stringify(error ?? {})}`;
 
@@ -252,5 +281,9 @@ export function describe(error: unknown, appName: string): Error {
   if (/denied|permission/i.test(raw)) {
     return new Error("The browser denied access to the device. Click connect and allow it.");
   }
+  // Nothing matched, which means we do not actually know what happened. The
+  // raw error is the only thing that can tell us, so it goes to the console
+  // rather than being swallowed by a sentence that explains nothing.
+  console.error(`[device] unrecognised error from ${appName}:`, error);
   return new Error(`Lost contact with the device while using ${appName}. Reconnect it and try again.`);
 }
