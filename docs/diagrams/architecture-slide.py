@@ -119,16 +119,18 @@ BX, BY = AX + AW + 28, AY
 BW, BH = FW - AW - 2 * PAD - 28, AH
 zone(BX, BY, BW, BH, "ON CHAIN · ENSv2", SKY, "read at request time, never copied")
 
-NX, NY, NW = BX + 22, BY + 60, 252
+PW = 230
+panel(BX + 22, BY + 60, PW, 62, "AgentResolver", "computed, stores none",
+      SKY, "#0b2130", size=14)
+panel(BX + 22, BY + 132, PW, 62, "AllowanceExecutor", "runs the call",
+      SKY, "#0b2130", size=14)
+
+NW = 252
+NX, NY = BX + BW - 22 - NW, BY + 60
 zone(NX, NY, NW, 152, "harness.eth", SKY, dash="5 5", r=12)
 zone(NX + 14, NY + 40, NW - 28, 98, "acme.harness.eth", SKY, dash="4 5", r=11)
 panel(NX + 28, NY + 76, NW - 56, 48, "runner.acme.harness.eth", None, SKY, "#0b2130", size=12.5, r=9)
 logo("ens", NX + NW - 30, NY + 20, 22)
-
-panel(BX + NW + 34, BY + 60, BW - NW - 58, 62, "AgentResolver", "computed, stores none",
-      SKY, "#0b2130", size=14)
-panel(BX + NW + 34, BY + 132, BW - NW - 58, 62, "AllowanceExecutor", "runs the call",
-      SKY, "#0b2130", size=14)
 
 # --- bottom left: the mesh, and the machines on it ------------------------
 CX, CY = AX, AY + AH + 44
@@ -146,7 +148,8 @@ zone(HX, HY, HW, HH, "THE HOST · ONE VM", VIOLET, dash="7 6", r=14)
 
 # Two tenants, side by side, each sealed off from the other.
 MW, MH = 246, 152
-for i, name in enumerate(("ACME.HARNESS.ETH", "LEO.HARNESS.ETH")):
+for i, (name, agent) in enumerate((("ACME.HARNESS.ETH", "claude"),
+                                   ("LEO.HARNESS.ETH", "openai"))):
     MX, MY = HX + 22 + i * (MW + 22), HY + 34
     zone(MX, MY, MW, MH, name, VIOLET, dash="4 5", r=12)
     panel(MX + 16, MY + 44, MW - 32, 46, "runner", "a key with no authority",
@@ -157,8 +160,8 @@ for i, name in enumerate(("ACME.HARNESS.ETH", "LEO.HARNESS.ETH")):
     add(f'<rect x="{KX}" y="{KY}" width="{KW}" height="{KH}" rx="10" fill="none" stroke="{VIOLET}" '
         f'stroke-opacity="0.4" stroke-width="1.2" stroke-dasharray="3 4"/>')
     text(KX + 14, KY + 26, "KNOWS", VIOLET, 10.5, 600, "start", 0.72, spacing=1.5)
-    for j, m in enumerate(("claude", "openai", "github")):
-        logo(m, KX + KW - 96 + j * 34, KY + KH / 2, 19)
+    for j, m in enumerate((agent, "github")):
+        logo(m, KX + KW - 62 + j * 34, KY + KH / 2, 19)
 
 # --- bottom right: a terminal ---------------------------------------------
 TX, TY = CX + CW + 56, CY + 44
@@ -212,23 +215,26 @@ add(f'<text x="{GATE}" y="{AY + 116}" fill="{AMBER}" fill-opacity="0.9" font-siz
 arrow([(AX + 88, AY + AH + 2), (AX + 88, CY - 2)], AMBER,
       "seals what the agent knows", (AX + 102, CY - 16), "start", step="3")
 
-# The channel between the host and the terminal, where the host's questions run.
+# The channel between the host and the chain, where the host's questions run.
+# Bands run low-to-high left-to-right, so no label ever crosses another line.
 CH1, CH2 = CX + CW + 22, CX + CW + 46
-L1, L2, L3 = BY + BH + 26, BY + BH + 50, BY + BH + 74
-arrow([(CX + CW + 2, HY + 62), (CH1, MY + 56), (CH1, L1), (BX + 116, L1), (BX + 116, BY + BH + 2)],
-      VIOLET)
-text(BX + 128, L1 - 8, "4  is this fingerprint admitted?", VIOLET, 12.4, 400, "start", 0.92)
-arrow([(CX + CW + 2, HY + 152), (CH2, MY + 144), (CH2, L2), (BX + 292, L2), (BX + 292, BY + BH + 2)],
-      VIOLET)
-text(BX + 304, L2 - 8, "5  spends, against the ceiling", VIOLET, 12.4, 400, "start", 0.92)
+L1, L2, L3 = BY + BH + 22, BY + BH + 48, BY + BH + 74
 
-# The name, asked by whoever is reaching for the machine.
-arrow([(TX + TW - 54, TY - 2), (TX + TW - 54, BY + BH + 2)], TEAL)
-text(TX + TW - 66, L3 - 8, "6  resolve — an address, or nothing", TEAL, 12.4, 400, "end", 0.92)
+arrow([(CX + CW + 2, HY + 62), (CH1, HY + 62), (CH1, L1), (NX + 60, L1), (NX + 60, BY + BH + 2)],
+      VIOLET)
+text(NX + 72, L1 - 8, "4  is this fingerprint admitted?", VIOLET, 12.4, 400, "start", 0.92)
+
+arrow([(CX + CW + 2, HY + 152), (CH2, HY + 152), (CH2, L2), (BX + 170, L2), (BX + 170, BY + BH + 2)],
+      VIOLET)
+text(BX + 182, L2 - 8, "5  spends, against the ceiling", VIOLET, 12.4, 400, "start", 0.92)
+
+# The nameserver is only ever a reader: it asks the resolver for an address.
+arrow([(CX + 476, CY + 58), (CX + 476, L3), (BX + 70, L3), (BX + 70, BY + BH + 2)], TEAL)
+text(BX + 64, L3 - 8, "6  resolve — an address, or nothing", TEAL, 12.4, 400, "end", 0.92)
 
 # Revoke: one bool, and everything above answers differently.
 arrow([(BX + BW - 16, BY + BH + 2), (BX + BW - 16, TY - 2)], "#e2615f")
-text(BX + BW - 8, L3 - 8, "revoke", "#e2615f", 12.4, 400, "start", 0.95)
+text(BX + BW - 24, L2 - 8, "revoke", "#e2615f", 12.4, 400, "end", 0.95)
 
 # The loop, round the outside.
 LOOP_X, LOOP_TOP = FX + FW + 72, 58
