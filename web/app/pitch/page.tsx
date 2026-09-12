@@ -3,7 +3,6 @@
 import { Deck } from "./Deck";
 import { LiveTerminal } from "./Terminal";
 import { Cascade } from "./Cascade";
-import { Architecture } from "./Architecture";
 import { Agent } from "@/components/tenants/Agent";
 
 /**
@@ -281,8 +280,13 @@ function Built() {
       </Rise>
 
       <Rise at={160}>
-        <div className="mt-9">
-          <Architecture />
+        <div className="mt-8">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/diagrams/architecture.svg"
+            alt="Harness architecture"
+            className="w-full"
+          />
         </div>
       </Rise>
 
