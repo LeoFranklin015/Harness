@@ -3,6 +3,7 @@
 import { Deck } from "./Deck";
 import { LiveTerminal } from "./Terminal";
 import { Cascade } from "./Cascade";
+import { Architecture } from "./Architecture";
 import { Agent } from "@/components/tenants/Agent";
 
 /**
@@ -15,7 +16,13 @@ import { Agent } from "@/components/tenants/Agent";
 export default function Pitch() {
   return (
     <Deck
-      slides={[<What key="1" />, <Why key="2" />, <Cool key="3" />, <How key="4" />]}
+      slides={[
+        <What key="1" />,
+        <Why key="2" />,
+        <Cool key="3" />,
+        <Built key="4" />,
+        <How key="5" />,
+      ]}
     />
   );
 }
@@ -260,6 +267,36 @@ function Cool() {
 }
 
 // --- 4 ---------------------------------------------------------------------
+
+function Built() {
+  return (
+    <div>
+      <Rise at={0}>
+        <div className="flex flex-wrap items-baseline justify-between gap-4">
+          <h2 className="text-[clamp(1.6rem,3.2vw,2.2rem)] font-medium tracking-[-0.03em] text-neutral-50">
+            One tap writes the grant. The machine is built around it.
+          </h2>
+          <p className="font-mono text-[11px] text-neutral-700">live on Sepolia</p>
+        </div>
+      </Rise>
+
+      <Rise at={160}>
+        <div className="mt-9">
+          <Architecture />
+        </div>
+      </Rise>
+
+      <Rise at={340}>
+        <p className="mt-8 border-t border-neutral-900 pt-5 text-[14px] leading-relaxed text-neutral-500">
+          The name is minted by the machine&apos;s own registry, so we cannot
+          issue one under your machine — the contract refuses anyone but your
+          device. The resolver stores no records; it computes every answer from
+          the same rows the door and the spend path read.
+        </p>
+      </Rise>
+    </div>
+  );
+}
 
 function How() {
   return (
