@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="Harness">
+  <title>Harness</title>
+  <!-- The submission avatar: the mark on the app's own ground, with enough
+       margin that it survives being cropped to a circle. -->
+  <rect width="512" height="512" rx="112" fill="#08090a"/>
+  <g transform="translate(256 256) scale(5.2) translate(-32 -32)">
+    <path d="M32 6 L54 17 L32 28 L10 17 Z" fill="#e0a769"/>
+    <path d="M32 21 L54 32 L32 43 L10 32 Z" fill="#f3f4f6" fill-opacity="0.82"/>
+    <path d="M32 36 L54 47 L32 58 L10 47 Z" fill="#9ca3af" fill-opacity="0.5"/>
+  </g>
+</svg>
