@@ -89,3 +89,4 @@ dns/harness-dns
 # Agent's key, ceiling and window, and a clone should not come with a roster.
 x402/grants/
 web/p.mjs
+web/shot.mjs
