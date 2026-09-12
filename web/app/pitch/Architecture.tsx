@@ -1,164 +1,197 @@
 "use client";
 
 /**
- * How it is built, arranged as a loop.
+ * The architecture, laid out as drawn.
  *
- * Four quadrants inside one frame, and a return path underneath. Read it
- * clockwise: you grant, the chain records, the machine runs, you reach it —
- * and the only way back into the top-left is a person.
- *
- * Deliberately short on words. The detailed drawing lives in docs/; this one
- * has to land in the time it takes to say one sentence over it.
+ * One outer frame. Four regions inside it: the authority path top-left, the
+ * chain top-right with the resolver and the name tree nested, the host
+ * bottom-left holding the agent and what it runs on, the terminal
+ * bottom-right. And a loop that leaves the terminal, goes round the outside,
+ * and comes back down into the authority path — because a person is the only
+ * way back in.
  */
 
-function Zone({
-  n,
+function Region({
   label,
-  tone,
-  children,
+  tone = "grey",
   className = "",
+  children,
 }: {
-  /** Reading order. Without it the four quadrants are a list, not a loop. */
-  n: number;
-  label: string;
-  tone: "amber" | "sky" | "violet" | "teal";
-  children: React.ReactNode;
+  label?: string;
+  tone?: "grey" | "amber" | "sky" | "violet" | "teal";
   className?: string;
+  children: React.ReactNode;
 }) {
   const edge = {
-    amber: "border-amber-900/50",
-    sky: "border-sky-900/50",
-    violet: "border-violet-900/50",
-    teal: "border-teal-900/50",
+    grey: "border-neutral-800",
+    amber: "border-amber-900/60",
+    sky: "border-sky-900/60",
+    violet: "border-violet-900/60",
+    teal: "border-teal-900/60",
   }[tone];
   const ink = {
+    grey: "text-neutral-600",
     amber: "text-amber-400/70",
     sky: "text-sky-400/70",
     violet: "text-violet-400/70",
     teal: "text-teal-400/70",
   }[tone];
   return (
-    <div className={`rounded-xl border ${edge} bg-neutral-950/50 p-4 ${className}`}>
-      <div className="flex items-center gap-2">
-        <span
-          className={`flex h-[18px] w-[18px] items-center justify-center rounded-full border text-[10px] ${edge} ${ink}`}
-        >
-          {n}
-        </span>
-        <p className={`text-[9.5px] font-semibold tracking-[0.16em] ${ink}`}>{label}</p>
-      </div>
-      <div className="mt-3.5">{children}</div>
+    <div className={`rounded-2xl border ${edge} bg-neutral-950/40 p-4 ${className}`}>
+      {label && (
+        <p className={`mb-3 text-[9.5px] font-semibold tracking-[0.16em] ${ink}`}>{label}</p>
+      )}
+      {children}
     </div>
   );
 }
 
-/** A named thing. One line, no explanation. */
-function Chip({ children }: { children: React.ReactNode }) {
+function Cell({
+  children,
+  tone = "grey",
+  className = "",
+}: {
+  children: React.ReactNode;
+  tone?: "grey" | "sky" | "violet";
+  className?: string;
+}) {
+  const edge = { grey: "border-neutral-800", sky: "border-sky-900/50", violet: "border-violet-900/50" }[tone];
   return (
-    <span className="rounded-md border border-neutral-800 bg-neutral-900/60 px-2.5 py-1.5 text-[12px] text-neutral-300">
+    <div className={`flex items-center justify-center rounded-xl border ${edge} bg-neutral-900/40 px-3 py-3 text-center ${className}`}>
       {children}
-    </span>
+    </div>
   );
 }
 
-function Logo({ src, alt, h = 18 }: { src: string; alt: string; h?: number }) {
+function Logo({ src, alt, h = 20 }: { src: string; alt: string; h?: number }) {
   // eslint-disable-next-line @next/next/no-img-element
   return <img src={src} alt={alt} style={{ height: h }} className="w-auto" />;
 }
 
-function Caret() {
-  return (
-    <svg width="14" height="10" viewBox="0 0 14 10" aria-hidden className="shrink-0">
-      <path d="M1 5 H11 M8 2 L12 5 L8 8" fill="none" stroke="#6b7280" strokeWidth="1.4" strokeLinecap="round" />
-    </svg>
-  );
-}
-
 export function Architecture() {
   return (
-    <div className="rounded-2xl border border-neutral-900 p-4 sm:p-5">
-      <div className="grid gap-4 sm:grid-cols-2">
-        {/* 1 — where authority comes from */}
-        <Zone n={1} label="YOU" tone="amber">
-          <div className="flex flex-wrap items-center gap-2">
-            <Logo src="/logos/ledger.svg" alt="Ledger" h={15} />
-            <Caret />
-            <Chip>browser</Chip>
-            <Caret />
-            <Chip>broker</Chip>
-          </div>
-          <p className="mt-3 text-[11px] text-neutral-600">one tap writes the grant</p>
-        </Zone>
+    // Room above and to the right for the loop to travel in.
+    <div className="relative pr-16 pt-12 sm:pr-24 sm:pt-14">
+      {/* The loop, round the outside. Drawn stretched, with the stroke held
+          at a constant width so it does not thin out on a wide screen. */}
+      <svg
+        aria-hidden
+        className="pointer-events-none absolute inset-0 h-full w-full"
+        viewBox="0 0 100 100"
+        preserveAspectRatio="none"
+      >
+        <path
+          d="M 90.5 76 H 97 V 3 H 15 V 16"
+          fill="none"
+          stroke="#e8a33d"
+          strokeOpacity="0.55"
+          strokeWidth="1.4"
+          vectorEffect="non-scaling-stroke"
+        />
+      </svg>
+      {/* The head, unstretched, where the loop lands. */}
+      <svg
+        aria-hidden
+        className="pointer-events-none absolute"
+        style={{ left: "15%", top: "calc(16% - 1px)" }}
+        width="13"
+        height="10"
+        viewBox="0 0 13 10"
+      >
+        <path d="M1.5 1 L6.5 8 L11.5 1" fill="none" stroke="#e8a33d" strokeOpacity="0.75" strokeWidth="1.5" strokeLinecap="round" />
+      </svg>
+      <p className="pointer-events-none absolute right-0 top-1/2 origin-center -translate-y-1/2 translate-x-1/2 rotate-90 text-[11px] tracking-wide text-amber-400/70">
+        human in the loop
+      </p>
 
-        {/* 2 — where it is recorded */}
-        <Zone n={2} label="ON CHAIN" tone="sky">
-          <div className="flex flex-wrap gap-2">
-            <Chip>AgentResolver</Chip>
-            <Chip>AllowanceExecutor</Chip>
-          </div>
-          <div className="mt-3 rounded-lg border border-sky-900/40 bg-sky-950/20 px-3 py-2 font-mono text-[11px] leading-relaxed text-sky-200/70">
-            harness.eth
-            <br />
-            <span className="pl-3">└ acme.harness.eth</span>
-            <br />
-            <span className="pl-7">└ runner</span>
-          </div>
-        </Zone>
+      {/* The frame. */}
+      <div className="rounded-[22px] border border-neutral-800 p-4 sm:p-5">
+        <div className="grid gap-4 lg:grid-cols-[1.15fr_0.85fr]">
+          {/* top left — where authority comes from */}
+          <Region tone="amber" className="flex items-center justify-center">
+            <div className="flex flex-wrap items-center justify-center gap-3 py-6">
+              <Logo src="/logos/ledger.svg" alt="Ledger" h={17} />
+              <span className="text-neutral-700">·</span>
+              <span className="text-[15px] text-neutral-300">browser</span>
+              <span className="text-neutral-700">·</span>
+              <span className="text-[15px] text-neutral-300">broker</span>
+            </div>
+          </Region>
 
-        {/* 3 — where it runs */}
-        <Zone n={3} label="THE MACHINE" tone="violet">
-          <div className="flex flex-wrap items-center gap-2">
-            <Chip>agent</Chip>
-            <span className="flex items-center gap-2.5 rounded-md border border-neutral-800 bg-neutral-900/60 px-2.5 py-1.5">
-              <Logo src="/logos/claude.svg" alt="Claude" h={15} />
-              <Logo src="/logos/openai.svg" alt="OpenAI" h={15} />
-            </span>
-          </div>
-          <div className="mt-2 flex flex-wrap gap-2">
-            <Chip>sshd</Chip>
-            <Chip>sealed secrets</Chip>
-          </div>
-          <p className="mt-3 text-[11px] text-neutral-600">
-            its own container · no public address
-          </p>
-        </Zone>
+          {/* top right — the chain */}
+          <Region tone="sky" label="ON CHAIN">
+            <div className="grid grid-cols-[1fr_1fr] gap-2.5">
+              <div className="space-y-2.5">
+                <Cell tone="sky">
+                  <span className="text-[12px] text-neutral-200">AgentResolver</span>
+                </Cell>
+                <Cell tone="sky">
+                  <span className="text-[12px] text-neutral-200">AllowanceExecutor</span>
+                </Cell>
+              </div>
+              <div className="rounded-xl border border-sky-900/50 bg-sky-950/25 p-2.5">
+                <Logo src="/logos/ens.svg" alt="ENS" h={22} />
+                <p className="mt-2 font-mono text-[10px] leading-relaxed text-sky-200/70">
+                  harness.eth
+                  <br />
+                  <span className="pl-2">└ acme</span>
+                  <br />
+                  <span className="pl-4">└ runner</span>
+                </p>
+              </div>
+            </div>
+          </Region>
+        </div>
 
-        {/* 4 — how you reach it */}
-        <Zone n={4} label="TERMINAL" tone="teal">
-          <p className="font-mono text-[12px] text-neutral-300">ssh runner@acme.harness.eth</p>
-          <div className="mt-3.5 flex items-center gap-4 text-neutral-600">
-            <Laptop />
-            <Phone />
-            <Watch />
-            <span className="text-[11px]">laptop · phone · watch</span>
-          </div>
-        </Zone>
-      </div>
+        <div className="mt-4 grid gap-4 lg:grid-cols-[1.4fr_0.75fr]">
+          {/* bottom left — the host */}
+          <Region tone="violet" label="THE HOST">
+            <div className="grid grid-cols-2 gap-2.5">
+              <Cell tone="violet">
+                <span className="text-[12px] text-neutral-300">sshd</span>
+              </Cell>
+              <Cell tone="violet">
+                <span className="text-[12px] text-neutral-300">sealed secrets</span>
+              </Cell>
+              <Cell tone="violet" className="gap-3">
+                <Logo src="/logos/claude.svg" alt="Claude" h={19} />
+                <Logo src="/logos/openai.svg" alt="OpenAI" h={19} />
+              </Cell>
+              <Cell tone="violet" className="gap-2.5">
+                <Logo src="/logos/tailscale.svg" alt="Tailscale" h={16} />
+                <span className="text-[11px] text-neutral-500">its own network</span>
+              </Cell>
+            </div>
+          </Region>
 
-      {/* The way back in. The only one. */}
-      <div className="mt-4 flex items-center gap-3 rounded-xl border border-dashed border-amber-900/40 bg-amber-950/10 px-4 py-2.5">
-        <svg width="30" height="10" viewBox="0 0 30 10" aria-hidden className="shrink-0">
-          <path d="M29 5 H2 M6 1 L1.5 5 L6 9" fill="none" stroke="#e8a33d" strokeOpacity="0.7" strokeWidth="1.4" strokeLinecap="round" />
-        </svg>
-        <p className="text-[12px] text-amber-400/70">
-          human in the loop — over the ceiling, the agent stops and sends the
-          payment back to the device
-        </p>
+          {/* bottom right — how you reach it */}
+          <div>
+            <Region tone="teal" className="flex h-[calc(100%-26px)] items-center justify-center">
+              <div className="py-4 text-center">
+                <p className="text-[13px] text-neutral-200">Terminal</p>
+                <p className="mt-1.5 font-mono text-[10px] text-neutral-600">
+                  runner@acme.harness.eth
+                </p>
+              </div>
+            </Region>
+            <div className="mt-2 flex items-center justify-center gap-3 text-neutral-700">
+              <Laptop />
+              <Phone />
+              <Watch />
+              <span className="text-[10px]">mobile · watch · laptop</span>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );
 }
 
-const dev = {
-  fill: "none" as const,
-  stroke: "currentColor",
-  strokeWidth: 1.4,
-  strokeLinejoin: "round" as const,
-};
+const dev = { fill: "none" as const, stroke: "currentColor", strokeWidth: 1.4 };
 
 function Laptop() {
   return (
-    <svg width="26" height="20" viewBox="0 0 34 26" aria-hidden {...dev}>
+    <svg width="22" height="17" viewBox="0 0 34 26" aria-hidden {...dev}>
       <rect x="5" y="3" width="24" height="15" rx="2" />
       <path d="M1 22 H33" strokeLinecap="round" />
     </svg>
@@ -166,14 +199,14 @@ function Laptop() {
 }
 function Phone() {
   return (
-    <svg width="14" height="20" viewBox="0 0 18 26" aria-hidden {...dev}>
+    <svg width="12" height="17" viewBox="0 0 18 26" aria-hidden {...dev}>
       <rect x="3" y="2" width="12" height="21" rx="2.5" />
     </svg>
   );
 }
 function Watch() {
   return (
-    <svg width="14" height="20" viewBox="0 0 18 26"  aria-hidden {...dev}>
+    <svg width="12" height="17" viewBox="0 0 18 26" aria-hidden {...dev}>
       <rect x="4" y="7" width="10" height="11" rx="2.5" />
       <path d="M7 7 V3.5 M11 7 V3.5 M7 18 V21.5 M11 18 V21.5" strokeLinecap="round" />
     </svg>
