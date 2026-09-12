@@ -4,37 +4,37 @@
 <marker id="m5fb3e0" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#5fb3e0"/></marker>
 <marker id="m9b8cf5" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#9b8cf5"/></marker>
 <marker id="m4fd1c0" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#4fd1c0"/></marker>
+<marker id="me2615f" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#e2615f"/></marker>
 </defs>
 <rect width="1400" height="840" fill="#08090a"/>
 <rect x="56" y="118" width="1130" height="672" rx="26" fill="none" stroke="#3a414c" stroke-width="1.8"/>
-<rect x="84" y="146" width="604" height="232" rx="16" fill="none" stroke="#e8a33d" stroke-opacity="0.5" stroke-width="1.4" stroke-dasharray="7 6"/>
+<rect x="84" y="146" width="500" height="232" rx="16" fill="none" stroke="#e8a33d" stroke-opacity="0.5" stroke-width="1.4" stroke-dasharray="7 6"/>
 <text x="108" y="178" fill="#e8a33d" font-size="13" font-weight="600" letter-spacing="1.7">THE RING · ONCE</text>
 <text x="108" y="198" fill="#e8a33d" fill-opacity="0.58" font-size="11.5">the key never leaves the device</text>
-<svg x="157.1" y="277.0" width="65.8" height="22" viewBox="0 0 383 128" fill="none">
+<svg x="139.1" y="277.0" width="65.8" height="22" viewBox="0 0 383 128" fill="none">
 <path d="M327.262 119.94V127.998H382.57V91.6548H374.511V119.94H327.262ZM327.262 0V8.05844H374.511V36.3452H382.57V0H327.262ZM298.74 62.3411V43.6158H311.382C317.546 43.6158 319.758 45.6696 319.758 51.2803V54.5982C319.758 60.3657 317.624 62.3411 311.382 62.3411H298.74ZM318.808 65.6589C324.575 64.1578 328.604 58.7842 328.604 52.3856C328.604 48.3564 327.025 44.7211 324.023 41.7972C320.23 38.1619 315.172 36.3452 308.615 36.3452H290.838V91.6529H298.74V69.6097H310.592C316.675 69.6097 319.125 72.1378 319.125 78.4599V91.6548H327.184V79.7239C327.184 71.0325 325.13 67.7147 318.808 66.7662V65.6589ZM252.282 67.4756H276.618V60.207H252.282V43.6139H278.988V36.3452H244.222V91.6529H280.173V84.3842H252.282V67.4756ZM225.812 70.3995V74.1916C225.812 82.1717 222.888 84.78 215.541 84.78H213.803C206.454 84.78 202.899 82.4088 202.899 71.4264V56.5717C202.899 45.5109 206.613 43.2181 213.96 43.2181H215.539C222.73 43.2181 225.021 45.9048 225.099 53.3322H233.791C233.001 42.4283 225.732 35.5555 214.828 35.5555C209.535 35.5555 205.11 37.2153 201.792 40.3745C196.814 45.0367 194.049 52.9383 194.049 63.9991C194.049 74.6659 196.42 82.5675 201.318 87.4649C204.636 90.7044 209.219 92.4426 213.723 92.4426C218.463 92.4426 222.81 90.5456 225.021 86.438H226.126V91.6529H233.395V63.1309H211.983V70.3995H225.812ZM156.126 43.6139H164.739C172.878 43.6139 177.303 45.6677 177.303 56.7304V71.2677C177.303 82.3285 172.878 84.3842 164.739 84.3842H156.126V43.6139ZM165.449 91.6548C180.541 91.6548 186.149 80.1982 186.149 64.001C186.149 47.5666 180.145 36.3471 165.29 36.3471H148.223V91.6548H165.449ZM110.063 67.4756H134.399V60.207H110.063V43.6139H136.768V36.3452H102.002V91.6529H137.954V84.3842H110.063V67.4756ZM63.4464 36.3452H55.3879V91.6529H91.7332V84.3842H63.4464V36.3452ZM0 91.6548V128H55.3076V119.94H8.05844V91.6548H0ZM0 0V36.3452H8.05844V8.05844H55.3076V0H0Z" fill="#ffffff"/>
 </svg>
-<text x="190" y="330" fill="#8d97a6" fill-opacity="0.72" font-size="12" font-weight="400" text-anchor="middle">holds the seed</text>
-<rect x="320" y="258" width="164" height="60" rx="11" fill="#2a1d08" stroke="#e8a33d" stroke-opacity="0.75" stroke-width="1.3"/>
-<text x="402" y="285" fill="#eef2f8" font-size="16" font-weight="600" text-anchor="middle">browser</text>
-<text x="402" y="330" fill="#8d97a6" fill-opacity="0.72" font-size="12" font-weight="400" text-anchor="middle">carries bytes, reads none</text>
-<rect x="504" y="258" width="164" height="60" rx="11" fill="#2a1d08" stroke="#e8a33d" stroke-opacity="0.75" stroke-width="1.3"/>
-<text x="586" y="285" fill="#eef2f8" font-size="16" font-weight="600" text-anchor="middle">broker</text>
-<text x="586" y="330" fill="#8d97a6" fill-opacity="0.72" font-size="12" font-weight="400" text-anchor="middle">speaks LKRP</text>
-<path d="M 236 288 L 314 288" fill="none" stroke="#e8a33d" stroke-opacity="0.9" stroke-width="1.8" stroke-linejoin="round" marker-end="url(#me8a33d)"/>
-<text x="275" y="270" fill="#e8a33d" fill-opacity="0.92" font-size="12.4" text-anchor="middle">1  opens it</text>
-<path d="M 486 288 L 502 288" fill="none" stroke="#e8a33d" stroke-opacity="0.9" stroke-width="1.8" stroke-linejoin="round" marker-end="url(#me8a33d)"/>
-<text x="494" y="270" fill="#e8a33d" fill-opacity="0.92" font-size="12.4" text-anchor="middle">2  relays</text>
-<rect x="716" y="146" width="442" height="232" rx="16" fill="none" stroke="#5fb3e0" stroke-opacity="0.5" stroke-width="1.4" stroke-dasharray="7 6"/>
-<text x="740" y="178" fill="#5fb3e0" font-size="13" font-weight="600" letter-spacing="1.7">ON CHAIN · ENSv2</text>
-<text x="740" y="198" fill="#5fb3e0" fill-opacity="0.58" font-size="11.5">read at request time, never copied</text>
-<rect x="740" y="212" width="196" height="58" rx="11" fill="#0b2130" stroke="#5fb3e0" stroke-opacity="0.75" stroke-width="1.3"/>
-<text x="838" y="238" fill="#eef2f8" font-size="14.5" font-weight="600" text-anchor="middle">AgentResolver</text>
-<text x="838" y="259" fill="#5fb3e0" fill-opacity="0.8" font-size="12.2" text-anchor="middle">computed, stores none</text>
-<rect x="740" y="282" width="196" height="58" rx="11" fill="#0b2130" stroke="#5fb3e0" stroke-opacity="0.75" stroke-width="1.3"/>
-<text x="838" y="308" fill="#eef2f8" font-size="14.5" font-weight="600" text-anchor="middle">AllowanceExecutor</text>
-<text x="838" y="329" fill="#5fb3e0" fill-opacity="0.8" font-size="12.2" text-anchor="middle">runs the call</text>
-<rect x="956" y="212" width="178" height="128" rx="11" fill="#0b2130" stroke="#5fb3e0" stroke-opacity="0.6" stroke-width="1.3"/>
-<svg x="977.8" y="232.0" width="24.3" height="28" viewBox="0 0 80 92" fill="none">
+<text x="172" y="330" fill="#8d97a6" fill-opacity="0.72" font-size="12" font-weight="400" text-anchor="middle">holds the seed</text>
+<rect x="260" y="258" width="140" height="60" rx="11" fill="#2a1d08" stroke="#e8a33d" stroke-opacity="0.75" stroke-width="1.3"/>
+<text x="330" y="285" fill="#eef2f8" font-size="16" font-weight="600" text-anchor="middle">browser</text>
+<text x="330" y="330" fill="#8d97a6" fill-opacity="0.72" font-size="12" font-weight="400" text-anchor="middle">carries bytes</text>
+<rect x="416" y="258" width="140" height="60" rx="11" fill="#2a1d08" stroke="#e8a33d" stroke-opacity="0.75" stroke-width="1.3"/>
+<text x="486" y="285" fill="#eef2f8" font-size="16" font-weight="600" text-anchor="middle">broker</text>
+<text x="486" y="330" fill="#8d97a6" fill-opacity="0.72" font-size="12" font-weight="400" text-anchor="middle">speaks LKRP</text>
+<path d="M 210 288 L 256 288" fill="none" stroke="#e8a33d" stroke-opacity="0.9" stroke-width="1.8" stroke-linejoin="round" marker-end="url(#me8a33d)"/>
+<text x="233" y="248" fill="#e8a33d" fill-opacity="0.92" font-size="12.4" text-anchor="middle">1  opens it</text>
+<path d="M 402 288 L 414 288" fill="none" stroke="#e8a33d" stroke-opacity="0.9" stroke-width="1.8" stroke-linejoin="round" marker-end="url(#me8a33d)"/>
+<text x="408" y="248" fill="#e8a33d" fill-opacity="0.92" font-size="12.4" text-anchor="middle">2  relays</text>
+<rect x="612" y="146" width="546" height="232" rx="16" fill="none" stroke="#5fb3e0" stroke-opacity="0.5" stroke-width="1.4" stroke-dasharray="7 6"/>
+<text x="636" y="178" fill="#5fb3e0" font-size="13" font-weight="600" letter-spacing="1.7">ON CHAIN · ENSv2</text>
+<text x="636" y="198" fill="#5fb3e0" fill-opacity="0.58" font-size="11.5">read at request time, never copied</text>
+<rect x="634" y="206" width="252" height="152" rx="12" fill="none" stroke="#5fb3e0" stroke-opacity="0.5" stroke-width="1.4" stroke-dasharray="5 5"/>
+<text x="658" y="238" fill="#5fb3e0" font-size="13" font-weight="600" letter-spacing="1.7">harness.eth</text>
+<rect x="648" y="246" width="224" height="98" rx="11" fill="none" stroke="#5fb3e0" stroke-opacity="0.5" stroke-width="1.4" stroke-dasharray="4 5"/>
+<text x="672" y="278" fill="#5fb3e0" font-size="13" font-weight="600" letter-spacing="1.7">acme.harness.eth</text>
+<rect x="662" y="282" width="196" height="48" rx="9" fill="#0b2130" stroke="#5fb3e0" stroke-opacity="0.75" stroke-width="1.3"/>
+<text x="760" y="303" fill="#eef2f8" font-size="12.5" font-weight="600" text-anchor="middle">runner.acme.harness.eth</text>
+<svg x="846.4" y="215.0" width="19.1" height="22" viewBox="0 0 80 92" fill="none">
 <g id="Group 2243409">
 <path id="Vector" d="M38.9515 0.848681L13.7395 42.3331C13.5418 42.6584 13.0824 42.6947 12.8372 42.4035C10.6176 39.7681 2.3486 28.5562 12.5807 18.3372C21.9175 9.01238 33.8099 2.36398 38.2174 0.0661478C38.7175 -0.194552 39.2442 0.367137 38.9515 0.848681Z" fill="#CEE1E8"/>
 <path id="Vector_2" d="M37.5575 91.1735C38.0606 91.5257 38.6807 90.9251 38.3434 90.4122C32.712 81.8469 13.9923 53.3481 11.4064 49.0701C8.85586 44.8504 3.83929 37.8378 3.4208 31.8381C3.37904 31.2391 2.55081 31.1175 2.34247 31.6808C2.00646 32.5892 1.64873 33.6734 1.31533 34.912C-2.89355 50.5471 3.21904 67.138 16.4943 76.4302L37.5575 91.1736V91.1735Z" fill="#CEE1E8"/>
@@ -42,46 +42,54 @@
 <path id="Vector_4" d="M42.4425 0.105463C41.9394 -0.246724 41.3194 0.35389 41.6566 0.866798C47.288 9.43208 66.0077 37.9309 68.5936 42.2089C71.1442 46.4286 76.1607 53.4412 76.5792 59.4409C76.621 60.0398 77.4492 60.1614 77.6576 59.5982C77.9936 58.6898 78.3513 57.6056 78.6847 56.367C82.8936 40.7319 76.781 24.141 63.5057 14.8488L42.4425 0.105463Z" fill="#CEE1E8"/>
 </g>
 </svg>
-<text x="1018" y="242" fill="#5fb3e0" fill-opacity="0.88" font-size="11.5" font-weight="400" text-anchor="start" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">harness.eth</text>
-<text x="1030" y="264" fill="#5fb3e0" fill-opacity="0.88" font-size="11.5" font-weight="400" text-anchor="start" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">└ acme.harness.eth</text>
-<text x="1044" y="286" fill="#5fb3e0" fill-opacity="0.88" font-size="11.5" font-weight="400" text-anchor="start" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">└ runner</text>
-<rect x="84" y="422" width="604" height="340" rx="16" fill="none" stroke="#9b8cf5" stroke-opacity="0.5" stroke-width="1.4" stroke-dasharray="7 6"/>
+<rect x="898" y="206" width="236" height="62" rx="11" fill="#0b2130" stroke="#5fb3e0" stroke-opacity="0.75" stroke-width="1.3"/>
+<text x="1016" y="234" fill="#eef2f8" font-size="14" font-weight="600" text-anchor="middle">AgentResolver</text>
+<text x="1016" y="255" fill="#5fb3e0" fill-opacity="0.8" font-size="12.2" text-anchor="middle">computed, stores none</text>
+<rect x="898" y="278" width="236" height="62" rx="11" fill="#0b2130" stroke="#5fb3e0" stroke-opacity="0.75" stroke-width="1.3"/>
+<text x="1016" y="306" fill="#eef2f8" font-size="14" font-weight="600" text-anchor="middle">AllowanceExecutor</text>
+<text x="1016" y="327" fill="#5fb3e0" fill-opacity="0.8" font-size="12.2" text-anchor="middle">runs the call</text>
+<rect x="84" y="422" width="560" height="340" rx="16" fill="none" stroke="#9b8cf5" stroke-opacity="0.5" stroke-width="1.4" stroke-dasharray="7 6"/>
 <text x="108" y="454" fill="#9b8cf5" font-size="13" font-weight="600" letter-spacing="1.7">THE HOST · ON THE MESH</text>
 <text x="108" y="474" fill="#9b8cf5" fill-opacity="0.58" font-size="11.5">no public address, no neighbours</text>
-<rect x="108" y="490" width="556" height="248" rx="13" fill="none" stroke="#9b8cf5" stroke-opacity="0.5" stroke-width="1.4" stroke-dasharray="4 5"/>
+<rect x="108" y="490" width="512" height="248" rx="13" fill="none" stroke="#9b8cf5" stroke-opacity="0.5" stroke-width="1.4" stroke-dasharray="4 5"/>
 <text x="132" y="522" fill="#9b8cf5" font-size="13" font-weight="600" letter-spacing="1.7">ACME.HARNESS.ETH</text>
 <text x="132" y="542" fill="#9b8cf5" fill-opacity="0.58" font-size="11.5">its own container, its own network</text>
-<rect x="130" y="566" width="512" height="62" rx="11" fill="#191630" stroke="#9b8cf5" stroke-opacity="0.75" stroke-width="1.3"/>
-<text x="386" y="594" fill="#eef2f8" font-size="16" font-weight="600" text-anchor="middle">runner</text>
-<text x="386" y="615" fill="#9b8cf5" fill-opacity="0.8" font-size="12.2" text-anchor="middle">a key with no authority</text>
-<rect x="130" y="646" width="512" height="74" rx="11" fill="none" stroke="#9b8cf5" stroke-opacity="0.4" stroke-width="1.2" stroke-dasharray="4 5"/>
+<rect x="130" y="566" width="468" height="62" rx="11" fill="#191630" stroke="#9b8cf5" stroke-opacity="0.75" stroke-width="1.3"/>
+<text x="364" y="594" fill="#eef2f8" font-size="16" font-weight="600" text-anchor="middle">runner</text>
+<text x="364" y="615" fill="#9b8cf5" fill-opacity="0.8" font-size="12.2" text-anchor="middle">a key with no authority</text>
+<rect x="130" y="646" width="468" height="74" rx="11" fill="none" stroke="#9b8cf5" stroke-opacity="0.4" stroke-width="1.2" stroke-dasharray="4 5"/>
 <text x="148" y="668" fill="#9b8cf5" fill-opacity="0.72" font-size="10.5" font-weight="600" text-anchor="start" letter-spacing="1.5">WHAT IT KNOWS</text>
-<svg x="312.0" y="684.0" width="24.0" height="24" viewBox="0 0 24 24" fill="#D97757"><path d="m4.7144 15.9555 4.7174-2.6471.079-.2307-.079-.1275h-.2307l-.7893-.0486-2.6956-.0729-2.3375-.0971-2.2646-.1214-.5707-.1215-.5343-.7042.0546-.3522.4797-.3218.686.0608 1.5179.1032 2.2767.1578 1.6514.0972 2.4468.255h.3886l.0546-.1579-.1336-.0971-.1032-.0972L6.973 9.8356l-2.55-1.6879-1.3356-.9714-.7225-.4918-.3643-.4614-.1578-1.0078.6557-.7225.8803.0607.2246.0607.8925.686 1.9064 1.4754 2.4893 1.8336.3643.3035.1457-.1032.0182-.0728-.164-.2733-1.3539-2.4467-1.445-2.4893-.6435-1.032-.17-.6194c-.0607-.255-.1032-.4674-.1032-.7285L6.287.1335 6.6997 0l.9957.1336.419.3642.6192 1.4147 1.0018 2.2282 1.5543 3.0296.4553.8985.2429.8318.091.255h.1579v-.1457l.1275-1.706.2368-2.0947.2307-2.6957.0789-.7589.3764-.9107.7468-.4918.5828.2793.4797.686-.0668.4433-.2853 1.8517-.5586 2.9021-.3643 1.9429h.2125l.2429-.2429.9835-1.3053 1.6514-2.0643.7286-.8196.85-.9046.5464-.4311h1.0321l.759 1.1293-.34 1.1657-1.0625 1.3478-.8804 1.1414-1.2628 1.7-.7893 1.36.0729.1093.1882-.0183 2.8535-.607 1.5421-.2794 1.8396-.3157.8318.3886.091.3946-.3278.8075-1.967.4857-2.3072.4614-3.4364.8136-.0425.0304.0486.0607 1.5482.1457.6618.0364h1.621l3.0175.2247.7892.522.4736.6376-.079.4857-1.2142.6193-1.6393-.3886-3.825-.9107-1.3113-.3279h-.1822v.1093l1.0929 1.0686 2.0035 1.8092 2.5075 2.3314.1275.5768-.3218.4554-.34-.0486-2.2039-1.6575-.85-.7468-1.9246-1.621h-.1275v.17l.4432.6496 2.3436 3.5214.1214 1.0807-.17.3521-.6071.2125-.6679-.1214-1.3721-1.9246L14.38 17.959l-1.1414-1.9428-.1397.079-.674 7.2552-.3156.3703-.7286.2793-.6071-.4614-.3218-.7468.3218-1.4753.3886-1.9246.3157-1.53.2853-1.9004.17-.6314-.0121-.0425-.1397.0182-1.4328 1.9672-2.1796 2.9446-1.7243 1.8456-.4128.164-.7164-.3704.0667-.6618.4008-.5889 2.386-3.0357 1.4389-1.882.929-1.0868-.0062-.1579h-.0546l-6.3385 4.1164-1.1293.1457-.4857-.4554.0608-.7467.2307-.2429 1.9064-1.3114Z"/></svg>
-<svg x="374.0" y="684.0" width="24.0" height="24" viewBox="0 0 24 24" fill="#ffffff"><path d="M22.2819 9.8211a5.9847 5.9847 0 0 0-.5157-4.9108 6.0462 6.0462 0 0 0-6.5098-2.9A6.0651 6.0651 0 0 0 4.9807 4.1818a5.9847 5.9847 0 0 0-3.9977 2.9 6.0462 6.0462 0 0 0 .7427 7.0966 5.98 5.98 0 0 0 .511 4.9107 6.051 6.051 0 0 0 6.5146 2.9001A5.9847 5.9847 0 0 0 13.2599 24a6.0557 6.0557 0 0 0 5.7718-4.2058 5.9894 5.9894 0 0 0 3.9977-2.9001 6.0557 6.0557 0 0 0-.7475-7.0729zm-9.022 12.6081a4.4755 4.4755 0 0 1-2.8764-1.0408l.1419-.0804 4.7783-2.7582a.7948.7948 0 0 0 .3927-.6813v-6.7369l2.02 1.1686a.071.071 0 0 1 .038.052v5.5826a4.504 4.504 0 0 1-4.4945 4.4944zm-9.6607-4.1254a4.4708 4.4708 0 0 1-.5346-3.0137l.142.0852 4.783 2.7582a.7712.7712 0 0 0 .7806 0l5.8428-3.3685v2.3324a.0804.0804 0 0 1-.0332.0615L9.74 19.9502a4.4992 4.4992 0 0 1-6.1408-1.6464zM2.3408 7.8956a4.485 4.485 0 0 1 2.3655-1.9728V11.6a.7664.7664 0 0 0 .3879.6765l5.8144 3.3543-2.0201 1.1685a.0757.0757 0 0 1-.071 0l-4.8303-2.7865A4.504 4.504 0 0 1 2.3408 7.872zm16.5963 3.8558L13.1038 8.364 15.1192 7.2a.0757.0757 0 0 1 .071 0l4.8303 2.7913a4.4944 4.4944 0 0 1-.6765 8.1042v-5.6772a.79.79 0 0 0-.407-.667zm2.0107-3.0231l-.142-.0852-4.7735-2.7818a.7759.7759 0 0 0-.7854 0L9.409 9.2297V6.8974a.0662.0662 0 0 1 .0284-.0615l4.8303-2.7866a4.4992 4.4992 0 0 1 6.6802 4.66zM8.3065 12.863l-2.02-1.1638a.0804.0804 0 0 1-.038-.0567V6.0742a4.4992 4.4992 0 0 1 7.3757-3.4537l-.142.0805L8.704 5.459a.7948.7948 0 0 0-.3927.6813zm1.0976-2.3654l2.602-1.4998 2.6069 1.4998v2.9994l-2.5974 1.4997-2.6067-1.4997Z"/></svg>
-<svg x="436.0" y="684.0" width="24.0" height="24" viewBox="0 0 24 24" fill="#ffffff"><path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg>
-<rect x="716" y="474" width="442" height="230" rx="12" fill="#05070a" stroke="#4fd1c0" stroke-opacity="0.55" stroke-width="1.3"/>
-<path d="M716 508 H1158" stroke="#4fd1c0" stroke-opacity="0.25" stroke-width="1.1"/>
-<circle cx="736" cy="491" r="4" fill="#3a414c"/>
-<circle cx="751" cy="491" r="4" fill="#3a414c"/>
-<circle cx="766" cy="491" r="4" fill="#3a414c"/>
-<text x="794" y="496" fill="#8d97a6" fill-opacity="0.7" font-size="11.5" font-weight="400" text-anchor="start" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">acme.harness.eth</text>
-<text x="736" y="538" fill="#eef2f8" fill-opacity="1.0" font-size="12.5" font-weight="400" text-anchor="start" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">$ ssh runner@acme.harness.eth</text>
-<text x="736" y="564" fill="#8d97a6" fill-opacity="0.75" font-size="12.5" font-weight="400" text-anchor="start" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">resolved over DNS · ok</text>
-<text x="736" y="590" fill="#8d97a6" fill-opacity="0.75" font-size="12.5" font-weight="400" text-anchor="start" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">host key from the chain · ok</text>
-<text x="736" y="616" fill="#8d97a6" fill-opacity="0.75" font-size="12.5" font-weight="400" text-anchor="start" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">fingerprint admitted · ok</text>
-<text x="736" y="668" fill="#4fd1c0" fill-opacity="0.9" font-size="12.5" font-weight="400" text-anchor="start" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">runner@acme:~$</text>
-<rect x="854" y="657" width="8" height="14" fill="#4fd1c0" fill-opacity="0.8"/>
-<g stroke="#8d97a6" stroke-opacity="0.65" stroke-width="1.4" fill="none"><rect x="729" y="727" width="26" height="17" rx="2.5"/><path d="M724 749 H760" stroke-linecap="round"/></g>
-<g stroke="#8d97a6" stroke-opacity="0.65" stroke-width="1.4" fill="none"><rect x="776" y="726" width="12" height="23" rx="3"/></g>
-<g stroke="#8d97a6" stroke-opacity="0.65" stroke-width="1.4" fill="none"><rect x="816" y="732" width="12" height="12" rx="3"/><path d="M819 732 V726 M825 732 V726 M819 744 V750 M825 744 V750" stroke-linecap="round"/></g>
-<text x="866" y="742" fill="#8d97a6" fill-opacity="0.7" font-size="12" font-weight="400" text-anchor="start">mobile · watch · laptop</text>
-<path d="M 190 380 L 190 420" fill="none" stroke="#e8a33d" stroke-opacity="0.9" stroke-width="1.8" stroke-linejoin="round" marker-end="url(#me8a33d)"/>
-<text x="204" y="404" fill="#e8a33d" fill-opacity="0.92" font-size="12.4" text-anchor="start">3  seals what the agent knows</text>
-<path d="M 690 440 L 820 440 L 820 380" fill="none" stroke="#9b8cf5" stroke-opacity="0.9" stroke-width="1.8" stroke-linejoin="round" marker-end="url(#m9b8cf5)"/>
-<text x="704" y="428" fill="#9b8cf5" fill-opacity="0.92" font-size="12.4" text-anchor="start">4  asks, every call</text>
-<path d="M 937 472 L 937 380" fill="none" stroke="#4fd1c0" stroke-opacity="0.9" stroke-width="1.8" stroke-linejoin="round" marker-end="url(#m4fd1c0)"/>
-<text x="949" y="450" fill="#4fd1c0" fill-opacity="0.92" font-size="12.4" text-anchor="start">5  over the name</text>
-<path d="M 1160 589 L 1258 589 L 1258 58 L 190 58 L 190 142" fill="none" stroke="#e8a33d" stroke-opacity="0.9" stroke-width="1.8" stroke-linejoin="round" marker-end="url(#me8a33d)"/>
-<text x="1284" y="324" fill="#e8a33d" fill-opacity="0.9" font-size="14.5" text-anchor="middle" transform="rotate(-90 1284 324)">human in the loop</text>
+<svg x="290.0" y="684.0" width="24.0" height="24" viewBox="0 0 24 24" fill="#D97757"><path d="m4.7144 15.9555 4.7174-2.6471.079-.2307-.079-.1275h-.2307l-.7893-.0486-2.6956-.0729-2.3375-.0971-2.2646-.1214-.5707-.1215-.5343-.7042.0546-.3522.4797-.3218.686.0608 1.5179.1032 2.2767.1578 1.6514.0972 2.4468.255h.3886l.0546-.1579-.1336-.0971-.1032-.0972L6.973 9.8356l-2.55-1.6879-1.3356-.9714-.7225-.4918-.3643-.4614-.1578-1.0078.6557-.7225.8803.0607.2246.0607.8925.686 1.9064 1.4754 2.4893 1.8336.3643.3035.1457-.1032.0182-.0728-.164-.2733-1.3539-2.4467-1.445-2.4893-.6435-1.032-.17-.6194c-.0607-.255-.1032-.4674-.1032-.7285L6.287.1335 6.6997 0l.9957.1336.419.3642.6192 1.4147 1.0018 2.2282 1.5543 3.0296.4553.8985.2429.8318.091.255h.1579v-.1457l.1275-1.706.2368-2.0947.2307-2.6957.0789-.7589.3764-.9107.7468-.4918.5828.2793.4797.686-.0668.4433-.2853 1.8517-.5586 2.9021-.3643 1.9429h.2125l.2429-.2429.9835-1.3053 1.6514-2.0643.7286-.8196.85-.9046.5464-.4311h1.0321l.759 1.1293-.34 1.1657-1.0625 1.3478-.8804 1.1414-1.2628 1.7-.7893 1.36.0729.1093.1882-.0183 2.8535-.607 1.5421-.2794 1.8396-.3157.8318.3886.091.3946-.3278.8075-1.967.4857-2.3072.4614-3.4364.8136-.0425.0304.0486.0607 1.5482.1457.6618.0364h1.621l3.0175.2247.7892.522.4736.6376-.079.4857-1.2142.6193-1.6393-.3886-3.825-.9107-1.3113-.3279h-.1822v.1093l1.0929 1.0686 2.0035 1.8092 2.5075 2.3314.1275.5768-.3218.4554-.34-.0486-2.2039-1.6575-.85-.7468-1.9246-1.621h-.1275v.17l.4432.6496 2.3436 3.5214.1214 1.0807-.17.3521-.6071.2125-.6679-.1214-1.3721-1.9246L14.38 17.959l-1.1414-1.9428-.1397.079-.674 7.2552-.3156.3703-.7286.2793-.6071-.4614-.3218-.7468.3218-1.4753.3886-1.9246.3157-1.53.2853-1.9004.17-.6314-.0121-.0425-.1397.0182-1.4328 1.9672-2.1796 2.9446-1.7243 1.8456-.4128.164-.7164-.3704.0667-.6618.4008-.5889 2.386-3.0357 1.4389-1.882.929-1.0868-.0062-.1579h-.0546l-6.3385 4.1164-1.1293.1457-.4857-.4554.0608-.7467.2307-.2429 1.9064-1.3114Z"/></svg>
+<svg x="352.0" y="684.0" width="24.0" height="24" viewBox="0 0 24 24" fill="#ffffff"><path d="M22.2819 9.8211a5.9847 5.9847 0 0 0-.5157-4.9108 6.0462 6.0462 0 0 0-6.5098-2.9A6.0651 6.0651 0 0 0 4.9807 4.1818a5.9847 5.9847 0 0 0-3.9977 2.9 6.0462 6.0462 0 0 0 .7427 7.0966 5.98 5.98 0 0 0 .511 4.9107 6.051 6.051 0 0 0 6.5146 2.9001A5.9847 5.9847 0 0 0 13.2599 24a6.0557 6.0557 0 0 0 5.7718-4.2058 5.9894 5.9894 0 0 0 3.9977-2.9001 6.0557 6.0557 0 0 0-.7475-7.0729zm-9.022 12.6081a4.4755 4.4755 0 0 1-2.8764-1.0408l.1419-.0804 4.7783-2.7582a.7948.7948 0 0 0 .3927-.6813v-6.7369l2.02 1.1686a.071.071 0 0 1 .038.052v5.5826a4.504 4.504 0 0 1-4.4945 4.4944zm-9.6607-4.1254a4.4708 4.4708 0 0 1-.5346-3.0137l.142.0852 4.783 2.7582a.7712.7712 0 0 0 .7806 0l5.8428-3.3685v2.3324a.0804.0804 0 0 1-.0332.0615L9.74 19.9502a4.4992 4.4992 0 0 1-6.1408-1.6464zM2.3408 7.8956a4.485 4.485 0 0 1 2.3655-1.9728V11.6a.7664.7664 0 0 0 .3879.6765l5.8144 3.3543-2.0201 1.1685a.0757.0757 0 0 1-.071 0l-4.8303-2.7865A4.504 4.504 0 0 1 2.3408 7.872zm16.5963 3.8558L13.1038 8.364 15.1192 7.2a.0757.0757 0 0 1 .071 0l4.8303 2.7913a4.4944 4.4944 0 0 1-.6765 8.1042v-5.6772a.79.79 0 0 0-.407-.667zm2.0107-3.0231l-.142-.0852-4.7735-2.7818a.7759.7759 0 0 0-.7854 0L9.409 9.2297V6.8974a.0662.0662 0 0 1 .0284-.0615l4.8303-2.7866a4.4992 4.4992 0 0 1 6.6802 4.66zM8.3065 12.863l-2.02-1.1638a.0804.0804 0 0 1-.038-.0567V6.0742a4.4992 4.4992 0 0 1 7.3757-3.4537l-.142.0805L8.704 5.459a.7948.7948 0 0 0-.3927.6813zm1.0976-2.3654l2.602-1.4998 2.6069 1.4998v2.9994l-2.5974 1.4997-2.6067-1.4997Z"/></svg>
+<svg x="414.0" y="684.0" width="24.0" height="24" viewBox="0 0 24 24" fill="#ffffff"><path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg>
+<rect x="716" y="466" width="442" height="214" rx="12" fill="#05070a" stroke="#4fd1c0" stroke-opacity="0.55" stroke-width="1.3"/>
+<path d="M716 498 H1158" stroke="#4fd1c0" stroke-opacity="0.25" stroke-width="1.1"/>
+<circle cx="736" cy="482" r="4" fill="#3a414c"/>
+<circle cx="751" cy="482" r="4" fill="#3a414c"/>
+<circle cx="766" cy="482" r="4" fill="#3a414c"/>
+<text x="792" y="487" fill="#8d97a6" fill-opacity="0.7" font-size="11.5" font-weight="400" text-anchor="start" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">acme.harness.eth</text>
+<text x="736" y="528" fill="#eef2f8" fill-opacity="1.0" font-size="12.5" font-weight="400" text-anchor="start" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">$ ssh runner@acme.harness.eth</text>
+<text x="736" y="555" fill="#8d97a6" fill-opacity="0.75" font-size="12.5" font-weight="400" text-anchor="start" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">host key from the chain · ok</text>
+<text x="736" y="582" fill="#8d97a6" fill-opacity="0.75" font-size="12.5" font-weight="400" text-anchor="start" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">fingerprint admitted · ok</text>
+<text x="736" y="636" fill="#4fd1c0" fill-opacity="0.9" font-size="12.5" font-weight="400" text-anchor="start" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">runner@acme:~$</text>
+<rect x="854" y="625" width="8" height="14" fill="#4fd1c0" fill-opacity="0.8"/>
+<g stroke="#8d97a6" stroke-opacity="0.65" stroke-width="1.4" fill="none"><rect x="729" y="701" width="26" height="17" rx="2.5"/><path d="M724 723 H760" stroke-linecap="round"/></g>
+<g stroke="#8d97a6" stroke-opacity="0.65" stroke-width="1.4" fill="none"><rect x="776" y="700" width="12" height="23" rx="3"/></g>
+<g stroke="#8d97a6" stroke-opacity="0.65" stroke-width="1.4" fill="none"><rect x="816" y="706" width="12" height="12" rx="3"/><path d="M819 706 V700 M825 706 V700 M819 718 V724 M825 718 V724" stroke-linecap="round"/></g>
+<text x="866" y="716" fill="#8d97a6" fill-opacity="0.7" font-size="12" font-weight="400" text-anchor="start">mobile · watch · laptop</text>
+<path d="M 586 274 L 610 274" fill="none" stroke="#e8a33d" stroke-opacity="0.9" stroke-width="1.8" stroke-linejoin="round" marker-end="url(#me8a33d)"/>
+<text x="598.0" y="262" fill="#e8a33d" fill-opacity="0.9" font-size="12" text-anchor="middle" transform="rotate(-90 598.0 262)">mints the name · sets the ceiling</text>
+<path d="M 172 380 L 172 420" fill="none" stroke="#e8a33d" stroke-opacity="0.9" stroke-width="1.8" stroke-linejoin="round" marker-end="url(#me8a33d)"/>
+<text x="186" y="406" fill="#e8a33d" fill-opacity="0.92" font-size="12.4" text-anchor="start">3  seals what the agent knows</text>
+<path d="M 646 546 L 666 546 L 666 404 L 728 404 L 728 380" fill="none" stroke="#9b8cf5" stroke-opacity="0.9" stroke-width="1.8" stroke-linejoin="round" marker-end="url(#m9b8cf5)"/>
+<text x="740" y="396" fill="#9b8cf5" fill-opacity="0.92" font-size="12.4" font-weight="400" text-anchor="start">4  is this fingerprint admitted?</text>
+<path d="M 646 634 L 690 634 L 690 428 L 904 428 L 904 380" fill="none" stroke="#9b8cf5" stroke-opacity="0.9" stroke-width="1.8" stroke-linejoin="round" marker-end="url(#m9b8cf5)"/>
+<text x="916" y="420" fill="#9b8cf5" fill-opacity="0.92" font-size="12.4" font-weight="400" text-anchor="start">5  spends, against the ceiling</text>
+<path d="M 1104 464 L 1104 380" fill="none" stroke="#4fd1c0" stroke-opacity="0.9" stroke-width="1.8" stroke-linejoin="round" marker-end="url(#m4fd1c0)"/>
+<text x="1092" y="444" fill="#4fd1c0" fill-opacity="0.92" font-size="12.4" font-weight="400" text-anchor="end">6  resolve — an address, or nothing</text>
+<path d="M 1142 380 L 1142 464" fill="none" stroke="#e2615f" stroke-opacity="0.9" stroke-width="1.8" stroke-linejoin="round" marker-end="url(#me2615f)"/>
+<text x="1150" y="444" fill="#e2615f" fill-opacity="0.95" font-size="12.4" font-weight="400" text-anchor="start">revoke</text>
+<path d="M 1160 573 L 1258 573 L 1258 58 L 172 58 L 172 142" fill="none" stroke="#e8a33d" stroke-opacity="0.9" stroke-width="1.8" stroke-linejoin="round" marker-end="url(#me8a33d)"/>
+<text x="1284" y="316" fill="#e8a33d" fill-opacity="0.9" font-size="14.5" text-anchor="middle" transform="rotate(-90 1284 316)">human in the loop</text>
 <text x="928" y="44" fill="#e8a33d" fill-opacity="0.68" font-size="12.4" font-weight="400" text-anchor="middle">over the ceiling, the agent stops and asks a person</text>
 </svg>
