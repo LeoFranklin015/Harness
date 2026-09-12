@@ -287,11 +287,8 @@ function Built() {
       </Rise>
 
       <Rise at={340}>
-        <p className="mt-8 border-t border-neutral-900 pt-5 text-[14px] leading-relaxed text-neutral-500">
-          The name is minted by the machine&apos;s own registry, so we cannot
-          issue one under your machine — the contract refuses anyone but your
-          device. The resolver stores no records; it computes every answer from
-          the same rows the door and the spend path read.
+        <p className="mt-7 font-mono text-[11px] tracking-wide text-neutral-700">
+          ENSv2 · Ledger Key Ring · EIP-7702 · x402 · Tailscale · 60 contract tests
         </p>
       </Rise>
     </div>

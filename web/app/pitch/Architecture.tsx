@@ -1,112 +1,181 @@
 "use client";
 
 /**
- * How it is built, at the size of a slide.
+ * How it is built, arranged as a loop.
  *
- * There is a detailed drawing of this in docs/ with both handshakes and the
- * whole registry tree. It is a two-minute read, which is the wrong thing to
- * put on a screen for thirty seconds. This keeps only what answers the
- * question the demo just raised: where does the machine live, where does the
- * authority live, and what talks to what.
+ * Four quadrants inside one frame, and a return path underneath. Read it
+ * clockwise: you grant, the chain records, the machine runs, you reach it —
+ * and the only way back into the top-left is a person.
+ *
+ * Deliberately short on words. The detailed drawing lives in docs/; this one
+ * has to land in the time it takes to say one sentence over it.
  */
 
 function Zone({
+  n,
   label,
-  note,
   tone,
   children,
+  className = "",
 }: {
+  /** Reading order. Without it the four quadrants are a list, not a loop. */
+  n: number;
   label: string;
-  note?: string;
-  tone: "mesh" | "chain";
+  tone: "amber" | "sky" | "violet" | "teal";
   children: React.ReactNode;
+  className?: string;
 }) {
-  const skin =
-    tone === "mesh"
-      ? "border-teal-900/60"
-      : "border-sky-900/60";
-  const ink = tone === "mesh" ? "text-teal-400/80" : "text-sky-400/80";
+  const edge = {
+    amber: "border-amber-900/50",
+    sky: "border-sky-900/50",
+    violet: "border-violet-900/50",
+    teal: "border-teal-900/50",
+  }[tone];
+  const ink = {
+    amber: "text-amber-400/70",
+    sky: "text-sky-400/70",
+    violet: "text-violet-400/70",
+    teal: "text-teal-400/70",
+  }[tone];
   return (
-    <div className={`rounded-2xl border border-dashed ${skin} p-5`}>
-      <p className={`text-[10px] font-semibold tracking-[0.16em] ${ink}`}>{label}</p>
-      {note && <p className="mt-1 text-[11px] text-neutral-600">{note}</p>}
-      <div className="mt-4">{children}</div>
+    <div className={`rounded-xl border ${edge} bg-neutral-950/50 p-4 ${className}`}>
+      <div className="flex items-center gap-2">
+        <span
+          className={`flex h-[18px] w-[18px] items-center justify-center rounded-full border text-[10px] ${edge} ${ink}`}
+        >
+          {n}
+        </span>
+        <p className={`text-[9.5px] font-semibold tracking-[0.16em] ${ink}`}>{label}</p>
+      </div>
+      <div className="mt-3.5">{children}</div>
     </div>
   );
 }
 
-function Box({ name, sub, tone = "grey" }: { name: string; sub: string; tone?: "grey" | "violet" | "sky" }) {
-  const skin =
-    tone === "violet"
-      ? "border-violet-900/60 bg-violet-950/20"
-      : tone === "sky"
-        ? "border-sky-900/50 bg-sky-950/20"
-        : "border-neutral-800 bg-neutral-950/60";
+/** A named thing. One line, no explanation. */
+function Chip({ children }: { children: React.ReactNode }) {
   return (
-    <div className={`rounded-lg border ${skin} px-3.5 py-2.5`}>
-      <p className="text-[13px] font-medium text-neutral-100">{name}</p>
-      <p className="mt-0.5 font-mono text-[10px] leading-snug text-neutral-600">{sub}</p>
-    </div>
+    <span className="rounded-md border border-neutral-800 bg-neutral-900/60 px-2.5 py-1.5 text-[12px] text-neutral-300">
+      {children}
+    </span>
+  );
+}
+
+function Logo({ src, alt, h = 18 }: { src: string; alt: string; h?: number }) {
+  // eslint-disable-next-line @next/next/no-img-element
+  return <img src={src} alt={alt} style={{ height: h }} className="w-auto" />;
+}
+
+function Caret() {
+  return (
+    <svg width="14" height="10" viewBox="0 0 14 10" aria-hidden className="shrink-0">
+      <path d="M1 5 H11 M8 2 L12 5 L8 8" fill="none" stroke="#6b7280" strokeWidth="1.4" strokeLinecap="round" />
+    </svg>
   );
 }
 
 export function Architecture() {
   return (
-    <div className="grid gap-5 lg:grid-cols-[1fr_auto_1fr] lg:items-center lg:gap-7">
-      {/* Where it runs. */}
-      <Zone label="TAILSCALE MESH" note="no public address · invite is single-use" tone="mesh">
-        <div className="rounded-xl border border-dashed border-violet-900/50 p-3.5">
-          <p className="font-mono text-[11px] text-violet-300/70">acme.harness.eth</p>
-          <p className="mt-0.5 text-[10px] text-neutral-700">its own container, its own network</p>
-          <div className="mt-3 space-y-2">
-            <Box name="runner" sub="a key that can only ask the grant" tone="violet" />
-            <Box name="sshd" sub="AuthorizedKeysCommand" tone="violet" />
-            <Box name="its secrets" sub="sealed under the Key Ring" tone="violet" />
+    <div className="rounded-2xl border border-neutral-900 p-4 sm:p-5">
+      <div className="grid gap-4 sm:grid-cols-2">
+        {/* 1 — where authority comes from */}
+        <Zone n={1} label="YOU" tone="amber">
+          <div className="flex flex-wrap items-center gap-2">
+            <Logo src="/logos/ledger.svg" alt="Ledger" h={15} />
+            <Caret />
+            <Chip>browser</Chip>
+            <Caret />
+            <Chip>broker</Chip>
           </div>
-        </div>
-      </Zone>
+          <p className="mt-3 text-[11px] text-neutral-600">one tap writes the grant</p>
+        </Zone>
 
-      {/* What crosses. */}
-      <div className="flex shrink-0 flex-col items-center gap-2 py-2 lg:w-[132px]">
-        <Cross label="asks, every time" />
-        <p className="text-center text-[10px] leading-snug text-neutral-700">
-          nothing here
-          <br />
-          caches the answer
-        </p>
+        {/* 2 — where it is recorded */}
+        <Zone n={2} label="ON CHAIN" tone="sky">
+          <div className="flex flex-wrap gap-2">
+            <Chip>AgentResolver</Chip>
+            <Chip>AllowanceExecutor</Chip>
+          </div>
+          <div className="mt-3 rounded-lg border border-sky-900/40 bg-sky-950/20 px-3 py-2 font-mono text-[11px] leading-relaxed text-sky-200/70">
+            harness.eth
+            <br />
+            <span className="pl-3">└ acme.harness.eth</span>
+            <br />
+            <span className="pl-7">└ runner</span>
+          </div>
+        </Zone>
+
+        {/* 3 — where it runs */}
+        <Zone n={3} label="THE MACHINE" tone="violet">
+          <div className="flex flex-wrap items-center gap-2">
+            <Chip>agent</Chip>
+            <span className="flex items-center gap-2.5 rounded-md border border-neutral-800 bg-neutral-900/60 px-2.5 py-1.5">
+              <Logo src="/logos/claude.svg" alt="Claude" h={15} />
+              <Logo src="/logos/openai.svg" alt="OpenAI" h={15} />
+            </span>
+          </div>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <Chip>sshd</Chip>
+            <Chip>sealed secrets</Chip>
+          </div>
+          <p className="mt-3 text-[11px] text-neutral-600">
+            its own container · no public address
+          </p>
+        </Zone>
+
+        {/* 4 — how you reach it */}
+        <Zone n={4} label="TERMINAL" tone="teal">
+          <p className="font-mono text-[12px] text-neutral-300">ssh runner@acme.harness.eth</p>
+          <div className="mt-3.5 flex items-center gap-4 text-neutral-600">
+            <Laptop />
+            <Phone />
+            <Watch />
+            <span className="text-[11px]">laptop · phone · watch</span>
+          </div>
+        </Zone>
       </div>
 
-      {/* Where the authority lives. */}
-      <Zone label="ON CHAIN · ENSv2" note="read at request time, never copied" tone="chain">
-        <div className="space-y-2">
-          <Box name="harness.eth" sub="PlatformRegistry" tone="sky" />
-          <div className="ml-4 space-y-2">
-            <Box name="acme.harness.eth" sub="the machine's own registry" tone="sky" />
-            <div className="ml-4">
-              <Box name="runner.acme.harness.eth" sub="agentKey · ceiling · window · revoked" tone="sky" />
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-2 pt-1">
-            <Box name="AgentResolver" sub="ENSIP-10, computed" />
-            <Box name="AllowanceExecutor" sub="runs the call" />
-          </div>
-        </div>
-      </Zone>
+      {/* The way back in. The only one. */}
+      <div className="mt-4 flex items-center gap-3 rounded-xl border border-dashed border-amber-900/40 bg-amber-950/10 px-4 py-2.5">
+        <svg width="30" height="10" viewBox="0 0 30 10" aria-hidden className="shrink-0">
+          <path d="M29 5 H2 M6 1 L1.5 5 L6 9" fill="none" stroke="#e8a33d" strokeOpacity="0.7" strokeWidth="1.4" strokeLinecap="round" />
+        </svg>
+        <p className="text-[12px] text-amber-400/70">
+          human in the loop — over the ceiling, the agent stops and sends the
+          payment back to the device
+        </p>
+      </div>
     </div>
   );
 }
 
-/** Two arrows, both pointing the same way: outward, at the chain. */
-function Cross({ label }: { label: string }) {
+const dev = {
+  fill: "none" as const,
+  stroke: "currentColor",
+  strokeWidth: 1.4,
+  strokeLinejoin: "round" as const,
+};
+
+function Laptop() {
   return (
-    <div className="flex flex-col items-center gap-1">
-      <svg width="120" height="34" viewBox="0 0 120 34" aria-hidden>
-        <path d="M2 10 H110" stroke="#9b8cf5" strokeOpacity="0.6" strokeWidth="1.5" />
-        <path d="M104 5 L111 10 L104 15" fill="none" stroke="#9b8cf5" strokeOpacity="0.8" strokeWidth="1.5" />
-        <path d="M2 26 H110" stroke="#9b8cf5" strokeOpacity="0.6" strokeWidth="1.5" />
-        <path d="M104 21 L111 26 L104 31" fill="none" stroke="#9b8cf5" strokeOpacity="0.8" strokeWidth="1.5" />
-      </svg>
-      <p className="text-[10px] text-violet-300/60">{label}</p>
-    </div>
+    <svg width="26" height="20" viewBox="0 0 34 26" aria-hidden {...dev}>
+      <rect x="5" y="3" width="24" height="15" rx="2" />
+      <path d="M1 22 H33" strokeLinecap="round" />
+    </svg>
+  );
+}
+function Phone() {
+  return (
+    <svg width="14" height="20" viewBox="0 0 18 26" aria-hidden {...dev}>
+      <rect x="3" y="2" width="12" height="21" rx="2.5" />
+    </svg>
+  );
+}
+function Watch() {
+  return (
+    <svg width="14" height="20" viewBox="0 0 18 26"  aria-hidden {...dev}>
+      <rect x="4" y="7" width="10" height="11" rx="2.5" />
+      <path d="M7 7 V3.5 M11 7 V3.5 M7 18 V21.5 M11 18 V21.5" strokeLinecap="round" />
+    </svg>
   );
 }
