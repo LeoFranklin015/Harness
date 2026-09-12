@@ -48,6 +48,14 @@ export default function NewMachine() {
   /** 1 forward, -1 back. The step animation reads this so the motion agrees
       with the button that caused it. */
   const [dir, setDir] = useState(1);
+  /** Reported up out of the build step, so the picture lives in the same rail
+      the summary did rather than in a second grid inside the first. */
+  const [build, setBuild] = useState<{
+    stage: AssemblyStage;
+    working: boolean;
+    note: string;
+    done: boolean;
+  }>({ stage: 1, working: false, note: "", done: false });
   const go = (next: StepIndex) => {
     setDir(next > step ? 1 : -1);
     setStep(next);
@@ -170,9 +178,18 @@ export default function NewMachine() {
           <Rail step={step} onJump={(i) => i < step && go(i)} />
 
           {step === 3 && session ? (
-            <div className="mt-8">
-              <Build session={session} req={form} authority={authority} onDone={() => router.push("/")} />
-            </div>
+            // The same surface as the three steps before it. Left bare, the
+            // last screen read as the page having run out rather than as the
+            // step you had arrived at.
+            <section className="step-in mt-8 rounded-2xl border border-neutral-900 bg-neutral-950/40 p-7">
+              <Build
+                session={session}
+                req={form}
+                authority={authority}
+                onProgress={setBuild}
+                onDone={() => router.push("/")}
+              />
+            </section>
           ) : (
             <section className="mt-8 rounded-2xl border border-neutral-900 bg-neutral-950/40 p-7">
               <div key={step} className={dir > 0 ? "step-in" : "step-in step-in-back"}>
@@ -201,8 +218,25 @@ export default function NewMachine() {
           )}
         </div>
 
-        {step < 3 && <Ledgerside form={form} />}
+        {step < 3 ? (
+          <Ledgerside form={form} step={step} />
+        ) : (
+          <aside className="lg:sticky lg:top-10 lg:self-start">
+            <Assembly stage={build.stage} working={build.working} className="w-full" />
+            {build.stage >= STAGES && (
+              <p className="mt-3 text-center font-mono text-[11px] tracking-wider text-neutral-500">
+                {form.label}.harness.eth
+              </p>
+            )}
+          </aside>
+        )}
       </div>
+
+      {/* Outside the grid: it is fixed to the viewport, and an animated
+          ancestor would make it fixed to that ancestor instead. */}
+      {step === 3 && build.note && (
+        <Saying note={build.note} working={build.working} done={build.done} />
+      )}
     </Shell>
   );
 }
@@ -217,7 +251,7 @@ export default function NewMachine() {
  *
  * Nothing here is editable. It is a receipt, not a second form.
  */
-function Ledgerside({ form }: { form: ProvisionRequest }) {
+function Ledgerside({ form, step }: { form: ProvisionRequest; step: StepIndex }) {
   const machine = form.label.trim();
   const agent = form.agent.trim();
   const tokens = form.tokens ?? [];
@@ -251,11 +285,30 @@ function Ledgerside({ form }: { form: ProvisionRequest }) {
           </p>
         </div>
 
+        {/* A row appears once you have been through the screen that sets it.
+            Showing the ceiling on the naming step was stating a decision
+            nobody had made — those are defaults in a form field, not answers,
+            and a summary that reports them is lying about what has been
+            settled. */}
         <dl className="divide-y divide-neutral-900 text-[13px]">
-          <Line label="Ceiling" value={form.capUsd ? `$${form.capUsd} a day` : null} />
-          <Line label="Window" value={form.days ? `${form.days} days` : null} />
-          <Line label="Rules" value={rules ? `${rules} on the grant` : null} />
-          <Line label="Knows" value={[brain, extras ? `${extras} more` : null].filter(Boolean).join(" · ") || null} />
+          {step >= 1 && (
+            <>
+              <Line label="Ceiling" value={form.capUsd ? `$${form.capUsd} a day` : null} />
+              <Line label="Window" value={form.days ? `${form.days} days` : null} />
+              <Line label="Rules" value={rules ? `${rules} on the grant` : null} />
+            </>
+          )}
+          {step >= 2 && (
+            <Line
+              label="Knows"
+              value={[brain, extras ? `${extras} more` : null].filter(Boolean).join(" · ") || null}
+            />
+          )}
+          {step === 0 && (
+            <p className="px-5 py-4 text-[12px] leading-relaxed text-neutral-700">
+              What it may spend and what it may know come next.
+            </p>
+          )}
         </dl>
 
         <p className="border-t border-neutral-900 px-5 py-4 text-[11px] leading-relaxed text-neutral-600">
@@ -690,11 +743,19 @@ function Build({
   session,
   req,
   authority,
+  onProgress,
   onDone,
 }: {
   session: Session;
   req: ProvisionRequest;
   authority: Authority;
+  /** How far along, for the picture the page draws beside this. */
+  onProgress: (p: {
+    stage: AssemblyStage;
+    working: boolean;
+    note: string;
+    done: boolean;
+  }) => void;
   onDone: () => void;
 }) {
   const [phase, setPhase] = useState<Phase>("idle");
@@ -702,6 +763,15 @@ function Build({
   const [note, setNote] = useState("Two taps: one to make the ring, one to sign the chain.");
   const [error, setError] = useState<string | null>(null);
   const [upgraded, setUpgraded] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    onProgress({
+      stage,
+      working: phase === "ring" || phase === "chain",
+      note,
+      done: phase === "done",
+    });
+  }, [stage, phase, note, onProgress]);
 
   useEffect(() => {
     fetch(`/api/delegate?address=${authority.address}`)
@@ -765,7 +835,7 @@ function Build({
   const chainState = phase === "chain" ? "live" : stage >= STAGES ? "done" : "waiting";
 
   return (
-    <div className="grid gap-12 lg:grid-cols-[minmax(0,1fr)_360px] lg:gap-16">
+    <>
       <Section
           title="Build it"
           blurb="The ring is made once and cannot be unmade. The chain half can be retried as often as you like."
@@ -812,17 +882,7 @@ function Build({
           </div>
       </Section>
 
-      <aside className="lg:sticky lg:top-12 lg:self-start">
-        <Assembly stage={stage} working={phase === "ring" || phase === "chain"} className="w-full" />
-        {stage >= STAGES && (
-          <p className="mt-3 text-center font-mono text-[11px] tracking-wider text-neutral-500">
-            {req.label}.harness.eth
-          </p>
-        )}
-      </aside>
-
-      <Saying note={note} working={phase === "ring" || phase === "chain"} done={phase === "done"} />
-    </div>
+    </>
   );
 }
 
