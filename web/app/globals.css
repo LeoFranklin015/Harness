@@ -15,6 +15,12 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-display);
   --font-mono: var(--font-mono-code);
+
+  /* The house curves. The built-in easings are too weak to read as
+     deliberate — `ease-out` barely differs from linear at these durations.
+     These are the ones the drawings already use; now the interface does too. */
+  --ease-snap: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-travel: cubic-bezier(0.77, 0, 0.175, 1);
 }
 
 body {
@@ -405,4 +411,63 @@ body {
 
 @media (prefers-reduced-motion: reduce) {
   .hammer { animation: none; rotate: -52deg; }
+}
+
+
+/* --- pressing things ----------------------------------------------------- */
+
+/*
+ * Anything you can press answers.
+ *
+ * There was no `:active` state anywhere in this interface, which meant every
+ * button was inert under the finger: you clicked, and the only evidence was
+ * whatever happened next. A press is a question, and the answer should not
+ * wait for the network.
+ *
+ * Applied to the element rather than added class by class, because the rule is
+ * "everything", and a rule that has to be remembered is a rule that gets
+ * forgotten on the next button. Menu rows are the exception — a full-width row
+ * shrinking from its centre reads as the list moving, not as a press.
+ */
+button:not(:disabled):not([role="menuitem"]) {
+  transition: transform 150ms var(--ease-snap);
+}
+button:not(:disabled):not([role="menuitem"]):active {
+  transform: scale(0.97);
+}
+
+/* --- moving between steps ------------------------------------------------ */
+
+/*
+ * A wizard is one of the few places motion carries information rather than
+ * decoration: it says you moved, and which way. Without it the content swaps
+ * and the page reads as having reloaded under you.
+ *
+ * Short and ease-out, because the content is arriving and the user is waiting
+ * for it. The distance is small — 10px is enough to imply travel; more starts
+ * to feel like a slide deck.
+ */
+@keyframes step-in {
+  from { opacity: 0; translate: var(--step-from) 0; }
+  to   { opacity: 1; translate: 0 0; }
+}
+.step-in {
+  --step-from: 10px;
+  animation: step-in 220ms var(--ease-snap) both;
+}
+.step-in-back { --step-from: -10px; }
+
+/* --- a value arriving ----------------------------------------------------- */
+
+/* The summary beside the form fills in as you type. A value that snaps from a
+   dash to a number is a value you can miss; this is just enough to catch. */
+@keyframes value-in {
+  from { opacity: 0; translate: 0 3px; }
+  to   { opacity: 1; translate: 0 0; }
+}
+.value-in { animation: value-in 260ms var(--ease-snap) both; }
+
+@media (prefers-reduced-motion: reduce) {
+  button:not(:disabled):active { transform: none; }
+  .step-in, .value-in { animation: none; }
 }

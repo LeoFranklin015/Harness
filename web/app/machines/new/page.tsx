@@ -45,6 +45,13 @@ export default function NewMachine() {
   const [session, setSession] = useState<Session | null>(null);
   const [taken, setTaken] = useState<string[]>([]);
   const [step, setStep] = useState<StepIndex>(0);
+  /** 1 forward, -1 back. The step animation reads this so the motion agrees
+      with the button that caused it. */
+  const [dir, setDir] = useState(1);
+  const go = (next: StepIndex) => {
+    setDir(next > step ? 1 : -1);
+    setStep(next);
+  };
 
 
   const [form, setForm] = useState<ProvisionRequest>({
@@ -160,7 +167,7 @@ export default function NewMachine() {
           left a form floating in a page four times its size. */}
       <div className="mt-8 grid gap-10 lg:grid-cols-[minmax(0,1fr)_306px] lg:gap-12">
         <div className="min-w-0">
-          <Rail step={step} onJump={(i) => i < step && setStep(i)} />
+          <Rail step={step} onJump={(i) => i < step && go(i)} />
 
           {step === 3 && session ? (
             <div className="mt-8">
@@ -168,20 +175,22 @@ export default function NewMachine() {
             </div>
           ) : (
             <section className="mt-8 rounded-2xl border border-neutral-900 bg-neutral-950/40 p-7">
-              {step === 0 && <Identity form={form} set={set} error={labelError ?? agentError} />}
-              {step === 1 && <Capabilities form={form} set={set} />}
-              {step === 2 && <Secrets form={form} set={set} />}
+              <div key={step} className={dir > 0 ? "step-in" : "step-in step-in-back"}>
+                {step === 0 && <Identity form={form} set={set} error={labelError ?? agentError} />}
+                {step === 1 && <Capabilities form={form} set={set} />}
+                {step === 2 && <Secrets form={form} set={set} />}
+              </div>
 
               <div className="mt-8 flex items-center justify-between border-t border-neutral-900 pt-6">
                 <button
-                  onClick={() => setStep((s) => (s - 1) as StepIndex)}
+                  onClick={() => go((step - 1) as StepIndex)}
                   disabled={step === 0}
                   className="rounded-full border border-neutral-800 px-5 py-2 text-xs text-neutral-400 transition hover:border-neutral-700 disabled:pointer-events-none disabled:opacity-0"
                 >
                   Back
                 </button>
                 <button
-                  onClick={() => setStep((s) => (s + 1) as StepIndex)}
+                  onClick={() => go((step + 1) as StepIndex)}
                   disabled={!canLeave[step]}
                   className="rounded-full bg-neutral-50 px-6 py-2 text-xs font-medium text-neutral-950 transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-40"
                 >
@@ -263,7 +272,12 @@ function Line({ label, value }: { label: string; value: string | null }) {
   return (
     <div className="flex items-baseline justify-between gap-4 px-5 py-3">
       <dt className="text-neutral-600">{label}</dt>
-      <dd className={value ? "text-right text-neutral-300" : "text-neutral-800"}>{value ?? "—"}</dd>
+      <dd
+        key={value ?? "-"}
+        className={value ? "value-in text-right text-neutral-300" : "text-neutral-800"}
+      >
+        {value ?? "—"}
+      </dd>
     </div>
   );
 }
@@ -529,7 +543,7 @@ function Chip({
   return (
     <button
       onClick={onClick}
-      className={`rounded-lg border px-3 py-2 text-left transition ${
+      className={`rounded-lg border px-3 py-2 text-left transition-colors duration-150 ease-snap ${
         on
           ? "border-neutral-500 bg-neutral-900"
           : "border-neutral-900 bg-neutral-950/40 hover:border-neutral-700"
@@ -890,7 +904,7 @@ function Two({
 // --- furniture -------------------------------------------------------------
 
 const input =
-  "w-full rounded-lg border border-neutral-800 bg-neutral-950 px-3 py-2 text-sm text-neutral-100 outline-none transition placeholder:text-neutral-700 focus:border-neutral-600";
+  "w-full rounded-lg border border-neutral-800 bg-neutral-950 px-3 py-2 text-sm text-neutral-100 outline-none transition-colors duration-150 ease-snap placeholder:text-neutral-700 focus:border-neutral-500 focus:ring-1 focus:ring-neutral-500/60";
 
 const primary =
   "rounded-full bg-neutral-50 px-5 py-2 text-xs font-medium text-neutral-950 transition hover:bg-white";

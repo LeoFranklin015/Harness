@@ -180,9 +180,14 @@ export function Flex({ className = "" }: { className?: string }) {
                     height="24"
                     fill="#e0a769"
                     fillOpacity="0.55"
-                    width={holding ? 42 : 0}
+                    width="42"
                     style={{
-                      transition: holding ? `width ${HOLD_MS}ms linear` : "width 260ms ease-out",
+                      // Clipped rather than resized: a width change on an SVG
+                      // rect is recomputed geometry, where a clip is composited.
+                      clipPath: holding ? "inset(0 0 0 0)" : "inset(0 100% 0 0)",
+                      transition: holding
+                        ? `clip-path ${HOLD_MS}ms linear`
+                        : "clip-path 260ms cubic-bezier(0.23, 1, 0.32, 1)",
                     }}
                   />
                 </g>

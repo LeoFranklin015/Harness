@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+# Render's free tier sleeps after about fifteen minutes of quiet, and waking it
+# costs the next visitor the better part of a minute. A demo is exactly the
+# situation where that lands on the wrong person, so this keeps it warm.
+#
+# Not a health check: it neither reports nor retries. If the box is down the
+# site has nothing to serve anyway, and a cron job that emails on failure is a
+# cron job somebody disables.
+set -u
+URL="${HARNESS_PUBLIC_URL:-https://harness-rcrm.onrender.com}"
+curl -fsS --max-time 60 -o /dev/null "$URL" \
+  && printf '%s awake\n' "$(date -Is)" \
+  || printf '%s no answer\n' "$(date -Is)"
