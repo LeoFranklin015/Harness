@@ -32,6 +32,11 @@ export async function proxy(request: NextRequest) {
     return NextResponse.next();
   }
 
+  // The pitch is a page about the product, not a way into it: no device, no
+  // routes that act, nothing it can do that reading the repo could not. Open,
+  // so it can be handed to someone as a link.
+  if (pathname === "/pitch" || pathname.startsWith("/pitch/")) return NextResponse.next();
+
   // --- who may reach this box at all ------------------------------------
   //
   // The dashboard is served to the world by a front door on a host that has a
