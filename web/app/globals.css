@@ -507,3 +507,29 @@ button:not(:disabled):not([role="menuitem"]):active {
 @media (prefers-reduced-motion: reduce) {
   .ask-in, .slot-in { animation: none; }
 }
+
+/* --- the deck ------------------------------------------------------------ */
+
+/* A slide arrives from the side you came from. Longer than a UI transition,
+   because a deck is paced by a person talking rather than by a click. */
+@keyframes slide-in {
+  from { opacity: 0; translate: var(--slide-from) 0; }
+  to   { opacity: 1; translate: 0 0; }
+}
+.slide-in {
+  --slide-from: 24px;
+  animation: slide-in 420ms var(--ease-snap) both;
+}
+.slide-in-back { --slide-from: -24px; }
+
+/* Lines within a slide, in the order they are meant to be read. Staggered by
+   the slide itself, so a point can land before the next one starts. */
+@keyframes rise {
+  from { opacity: 0; translate: 0 12px; }
+  to   { opacity: 1; translate: 0 0; }
+}
+.rise { animation: rise 520ms var(--ease-snap) both; }
+
+@media (prefers-reduced-motion: reduce) {
+  .slide-in, .rise { animation: none; }
+}
