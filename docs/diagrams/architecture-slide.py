@@ -148,11 +148,11 @@ zone(HX, HY, HW, HH, "THE HOST · ONE VM", VIOLET, dash="7 6", r=14)
 
 # Two tenants, side by side, each sealed off from the other.
 MW, MH = 290, 152
-for i, (name, agent) in enumerate((("ACME.HARNESS.ETH", "claude"),
-                                   ("LEO.HARNESS.ETH", "openai"))):
+for i, (name, who, agent) in enumerate((("ACME.HARNESS.ETH", "runner", "claude"),
+                                        ("LEO.HARNESS.ETH", "builder", "openai"))):
     MX, MY = HX + 22 + i * (MW + 22), HY + 34
     zone(MX, MY, MW, MH, name, VIOLET, dash="4 5", r=12)
-    panel(MX + 16, MY + 44, MW - 32, 46, "runner", "a key with no authority",
+    panel(MX + 16, MY + 44, MW - 32, 46, who, "a key with no authority",
           VIOLET, "#191630", size=14)
 
     KX, KY = MX + 16, MY + 100
@@ -171,10 +171,10 @@ add(f'<rect x="{TX}" y="{TY}" width="{TW}" height="{TH}" rx="12" fill="#05070a" 
 add(f'<path d="M{TX} {TY + 32} H{TX + TW}" stroke="{TEAL}" stroke-opacity="0.25" stroke-width="1.1"/>')
 for i in range(3):
     add(f'<circle cx="{TX + 20 + i * 15}" cy="{TY + 16}" r="4" fill="{GREY}"/>')
-text(TX + 76, TY + 21, "acme.harness.eth", SUB, 11.5, 400, "start", 0.7, mono=True)
+text(TX + 76, TY + 21, "runner.acme.harness.eth", SUB, 11.5, 400, "start", 0.7, mono=True)
 
 for i, (t, c, o) in enumerate([
-    ("$ ssh runner@acme.harness.eth", INK, 1.0),
+    ("$ ssh runner.acme.harness.eth", INK, 1.0),
     ("host key from the chain · ok", SUB, 0.75),
     ("fingerprint admitted · ok", SUB, 0.75),
     ("", SUB, 0),
