@@ -14,6 +14,7 @@ deployer.json
 planning/
 .orca/
 CONTEXT.md
+PRODUCT.md
 Project-details.md
 SPEC.md
 *.enc.local
