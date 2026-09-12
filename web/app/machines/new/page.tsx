@@ -816,7 +816,10 @@ function Build({
       setStage(6);
       setPhase("done");
       setNote(`${req.agent}.${req.label}.harness.eth is live.`);
-      await saveTenant(authority.address, 0, {
+      // The machine exists on chain either way; this is the record that puts
+      // it on the dashboard. Failing here silently is the worst outcome —
+      // everything was built and nothing shows it — so say so.
+      const notStored = await saveTenant(authority.address, 0, {
         label: req.label,
         registry: out.registry,
         meshAddress: out.meshAddress,
@@ -825,6 +828,9 @@ function Build({
         cap: `$${req.capUsd}/day`,
         status: "live",
       });
+      if (notStored) {
+        setError(`${req.label} is live on chain, but the dashboard did not record it: ${notStored}`);
+      }
     } catch (err) {
       setPhase("failed");
       setError(err instanceof RejectedOnDevice ? "Declined on the device. Nothing was created." : explain(err));

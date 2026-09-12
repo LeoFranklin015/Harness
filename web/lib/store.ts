@@ -183,23 +183,30 @@ export async function slotAvailable(
   authority: string,
   slot: number,
   label: string,
-): Promise<{ ok: true } | { ok: false; why: string }> {
+): Promise<{ ok: true; slot: number } | { ok: false; why: string }> {
   if (!Number.isInteger(slot) || slot < 0 || slot >= MAX_SLOTS) {
     return { ok: false, why: `there are ${MAX_SLOTS} slots, numbered 0 to ${MAX_SLOTS - 1}` };
-  }
-  const held = await slotsOf(authority);
-  const sitting = held.find((t) => t.slot === slot);
-  if (sitting && sitting.label !== label) {
-    return { ok: false, why: `slot ${slot} holds ${sitting.label}; revoke it first` };
-  }
-  if (!sitting && held.length >= MAX_SLOTS) {
-    return { ok: false, why: `all ${MAX_SLOTS} slots are taken; revoke one first` };
   }
   const taken = await (await tenants()).findOne({ _id: label });
   if (taken && taken.authority !== authority.toLowerCase()) {
     return { ok: false, why: `${label} belongs to another device` };
   }
-  return { ok: true };
+
+  const held = await slotsOf(authority);
+  const mine = held.find((t) => t.label === label);
+  if (mine) return { ok: true, slot: mine.slot };
+
+  // The slot asked for is a preference, not a demand. The wizard has always
+  // sent 0, so a second machine collided with the first and was refused after
+  // its container and its Grant already existed — built, paid for, and absent
+  // from the only list that would have shown it. Anywhere free will do.
+  const occupied = new Set(held.map((t) => t.slot));
+  if (!occupied.has(slot)) return { ok: true, slot };
+
+  for (let i = 0; i < MAX_SLOTS; i++) {
+    if (!occupied.has(i)) return { ok: true, slot: i };
+  }
+  return { ok: false, why: `all ${MAX_SLOTS} slots are taken; revoke one first` };
 }
 
 export async function saveTenant(t: Omit<TenantRecord, "updatedAt">): Promise<void> {

@@ -84,7 +84,7 @@ export async function PUT(request: Request) {
     await saveTenant({
       _id: body.label,
       authority: body.authority,
-      slot: body.slot,
+      slot: room.slot,
       label: body.label,
       registry: body.registry,
       meshAddress: body.meshAddress ?? null,
