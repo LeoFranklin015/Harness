@@ -10,7 +10,7 @@ keystore/
 deployer.json
 # Notes, write-ups and dropped files stay local, all of them. Nothing here
 # goes to a remote unless it is put there deliberately.
-# docs/
+docs/
 planning/
 .orca/
 CONTEXT.md
