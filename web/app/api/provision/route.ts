@@ -34,9 +34,9 @@ import { BOX, forwardToBox } from "@/lib/box";
 const exec = promisify(execFile);
 
 const PLATFORM = (process.env.PLATFORM_REGISTRY ??
-  "0x99cdAaBE40DF542e34Fe1B201a602a0D775C2441") as Address;
+  "0x5fcAd97c29dE79b25559F452E438297208174AD5") as Address;
 const RESOLVER = (process.env.AGENT_RESOLVER ??
-  "0xd8c8928680F91e2a9823eAb925892f51E63c4189") as Address;
+  "0x1DD3e9Ed9439Fda12f16d8c4Ad66d8BED5D5e88F") as Address;
 const RUNNER_DIR = process.env.RUNNER_DIR ?? "/home/opc/hackathon/runner";
 
 const PLATFORM_ABI = [

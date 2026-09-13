@@ -81,7 +81,7 @@ microVM is not available to run.
 ## Two Tenants, 2026-09-06
 
 ```
-harness.eth                  PlatformRegistry   0x99cdAaBE…2441
+harness.eth                  PlatformRegistry   0x5fcAd97c…4AD5
 ├── leo.harness.eth          10.88.0.6          registry 0xD4f048C3…E8e4  executor 0x7c44b9c3…18F6
 │     └── research.leo.…     $10/day
 └── acme.harness.eth         10.88.0.7          registry 0x3B8c36Dc…926c  executor 0x9dB089dB…2925
