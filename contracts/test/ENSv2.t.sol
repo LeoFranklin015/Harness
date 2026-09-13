@@ -2,6 +2,8 @@
 pragma solidity ^0.8.30;
 
 import {Test} from "forge-std/Test.sol";
+import {RegistryRolesLib} from
+    "@ensdomains/contracts-v2/registry/libraries/RegistryRolesLib.sol";
 import {IPermissionedRegistry} from
     "@ensdomains/contracts-v2/registry/interfaces/IPermissionedRegistry.sol";
 import {IRegistry} from "@ensdomains/contracts-v2/registry/interfaces/IRegistry.sol";
@@ -164,6 +166,13 @@ contract ENSv2Test is Test {
         vm.expectRevert();
         root.setResolver(id, address(0xDEAD));
 
+        // Nor the Tenant, though it owns the token. It is the account spending
+        // pulls from, so it is the warmer key of the two; the device's root
+        // roles are what may repoint a resolver, and the device is the Ledger.
+        vm.prank(tenant);
+        vm.expectRevert();
+        root.setResolver(id, address(0xDEAD));
+
         assertEq(address(root.getResolver("acme")), before, "unchanged");
     }
 
@@ -192,7 +201,64 @@ contract ENSv2Test is Test {
         Grant memory g = _grant(bytes32(0), "acme", agentKey, 30 days);
         Grant memory none;
         vm.prank(stranger);
-        vm.expectRevert(AgentRegistry.NotRootDevice.selector);
+        // Refused by the role, not by an address comparison of ours.
+        vm.expectRevert(
+            abi.encodeWithSignature(
+                "EACUnauthorizedAccountRoles(uint256,uint256,address)",
+                0,
+                RegistryRolesLib.ROLE_REGISTRAR,
+                stranger
+            )
+        );
+        root.grant(g, none);
+    }
+
+    // --- the roles are the authority ----------------------------------------
+
+    /// Issuing and revoking are role checks, not an address comparison, so a
+    /// person holding the device can admit a second one. A ring has more than
+    /// one member; a tree with one irreplaceable issuer does not.
+    function test_the_device_can_admit_a_second_device() public {
+        address spare = address(0x5A4E);
+
+        // Until it is granted, the spare is a stranger.
+        Grant memory g = _grant(bytes32(0), "acme", agentKey, 30 days);
+        Grant memory none;
+        vm.prank(spare);
+        vm.expectRevert();
+        root.grant(g, none);
+
+        vm.prank(device);
+        root.grantRootRoles(
+            RegistryRolesLib.ROLE_REGISTRAR | RegistryRolesLib.ROLE_UNREGISTER, spare
+        );
+
+        vm.prank(spare);
+        bytes32 id = root.grant(g, none);
+        assertEq(root.ownerOf(root.getState(LibLabel.id("acme")).tokenId), tenant);
+
+        vm.prank(spare);
+        root.revoke(id);
+        assertEq(
+            uint8(root.getState(LibLabel.id("acme")).status),
+            uint8(IPermissionedRegistry.Status.AVAILABLE),
+            "the spare can end what it started"
+        );
+    }
+
+    /// And a device that is taken back out cannot issue any more.
+    function test_a_removed_device_stops_being_able_to_issue() public {
+        address spare = address(0x5A4E);
+        vm.prank(device);
+        root.grantRootRoles(RegistryRolesLib.ROLE_REGISTRAR, spare);
+
+        vm.prank(device);
+        root.revokeRootRoles(RegistryRolesLib.ROLE_REGISTRAR, spare);
+
+        Grant memory g = _grant(bytes32(0), "acme", agentKey, 30 days);
+        Grant memory none;
+        vm.prank(spare);
+        vm.expectRevert();
         root.grant(g, none);
     }
 

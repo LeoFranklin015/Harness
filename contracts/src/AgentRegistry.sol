@@ -53,16 +53,39 @@ contract AgentRegistry is PermissionedRegistry {
     uint256 internal constant ROOT_ROLES = RegistryRolesLib.ROLE_REGISTRAR
         | RegistryRolesLib.ROLE_UNREGISTER | RegistryRolesLib.ROLE_SET_SUBREGISTRY
         | RegistryRolesLib.ROLE_SET_RESOLVER | RegistryRolesLib.ROLE_SET_PARENT
-        | RegistryRolesLib.ROLE_RENEW;
+        | RegistryRolesLib.ROLE_RENEW
+        // The admin halves, so the device can admit a second device.
+        //
+        // A ring has more than one member by design, and a tree whose only
+        // issuer is one piece of hardware ends with that hardware: lose it and
+        // the Agents beneath it can never be revoked, only waited out. These
+        // bits are what let a person enrol a replacement while they still
+        // have the first one, which is the only moment it can be done safely.
+        //
+        // They cost nothing in the meantime. Every role below is checked
+        // against whoever holds it, so granting a second holder is a
+        // deliberate transaction on the device rather than a state the tree
+        // drifts into.
+        | RegistryRolesLib.ROLE_REGISTRAR_ADMIN | RegistryRolesLib.ROLE_UNREGISTER_ADMIN
+        | RegistryRolesLib.ROLE_SET_SUBREGISTRY_ADMIN
+        | RegistryRolesLib.ROLE_SET_RESOLVER_ADMIN | RegistryRolesLib.ROLE_SET_PARENT_ADMIN
+        | RegistryRolesLib.ROLE_RENEW_ADMIN;
 
-    /// What an Agent's owner gets over its own name.
+    /// What an Agent's owner gets over its own name: nothing.
     ///
-    /// Deliberately not `ROLE_CAN_TRANSFER_ADMIN`: an Agent's name is a
+    /// The Tenant holds the token because somebody must, but holding it confers
+    /// no power here. It used to carry `ROLE_SET_RESOLVER` and
+    /// `ROLE_SET_SUBREGISTRY`, which nothing ever called and which the device
+    /// already has through its root roles. That privilege was not harmless: the
+    /// Tenant account is the one an Agent's spending pulls from, so it is the
+    /// warmer of the two keys, and a resolver it could repoint is a resolver
+    /// that can report an ssh fingerprint the chain never admitted.
+    ///
+    /// Also deliberately not `ROLE_CAN_TRANSFER_ADMIN`: an Agent's name is a
     /// statement about delegated authority, and a transferable one could be
     /// sold to someone the Grant never mentioned. `_update` refuses a transfer
     /// without that role, so withholding it is the whole enforcement.
-    uint256 internal constant AGENT_ROLES =
-        RegistryRolesLib.ROLE_SET_RESOLVER | RegistryRolesLib.ROLE_SET_SUBREGISTRY;
+    uint256 internal constant AGENT_ROLES = 0;
 
     // --- identity of this instance -----------------------------------------
 
@@ -289,8 +312,10 @@ contract AgentRegistry is PermissionedRegistry {
     }
 
     /// @notice Names the resolver that answers for Agents beneath this registry.
-    function setChildResolver(address resolver_) external {
-        if (msg.sender != rootDevice) revert NotRootDevice();
+    function setChildResolver(address resolver_)
+        external
+        onlyRootRoles(RegistryRolesLib.ROLE_SET_RESOLVER)
+    {
         childResolver = resolver_;
     }
 
@@ -298,9 +323,9 @@ contract AgentRegistry is PermissionedRegistry {
     /// @dev Deployed as an EIP-1167 clone of this contract.
     function attachChildRegistry(bytes32 agentId, string calldata label)
         external
+        onlyRootRoles(RegistryRolesLib.ROLE_SET_SUBREGISTRY)
         returns (AgentRegistry child)
     {
-        if (msg.sender != rootDevice) revert NotRootDevice();
         Agent storage a = agents[agentId];
         if (!a.exists) revert NotAuthorised(Reason.AncestorGone);
         if (current[keccak256(bytes(label))] != agentId) revert GrantMismatch();
@@ -350,9 +375,9 @@ contract AgentRegistry is PermissionedRegistry {
     ///      system rests on, and the one thing neither prior art enforces.
     function grant(Grant calldata g, Grant calldata parentGrant)
         external
+        onlyRootRoles(RegistryRolesLib.ROLE_REGISTRAR)
         returns (bytes32 agentId)
     {
-        if (msg.sender != rootDevice) revert NotRootDevice();
         if (g.start >= g.end) revert BadWindow();
 
         // A registry issues children for exactly one Agent: itself.
@@ -407,8 +432,10 @@ contract AgentRegistry is PermissionedRegistry {
     function revoke(bytes32 agentId) external {
         Agent storage a = agents[agentId];
         if (!a.exists) revert NotAuthorised(Reason.AncestorGone);
-        // The device, or the Agent standing itself down.
-        if (msg.sender != rootDevice && msg.sender != a.agentKey) revert NotRootDevice();
+        // Whoever may unregister here, or the Agent standing itself down.
+        if (msg.sender != a.agentKey) {
+            _checkRoles(ROOT_RESOURCE, RegistryRolesLib.ROLE_UNREGISTER, msg.sender);
+        }
         a.revoked = true;
 
         // Burn the name with the authority. The token goes, the roles attached

@@ -2,6 +2,8 @@
 pragma solidity ^0.8.30;
 
 import {Test} from "forge-std/Test.sol";
+import {RegistryRolesLib} from
+    "@ensdomains/contracts-v2/registry/libraries/RegistryRolesLib.sol";
 import {AgentRegistry} from "../src/AgentRegistry.sol";
 import {GrantLib} from "../src/GrantLib.sol";
 import {Call, CallRule, Constants, Grant, Period, Reason, SpendLimit} from "../src/Types.sol";
@@ -189,7 +191,15 @@ contract NarrowingTest is Test {
         Grant memory child = _grant(rootId, "forged", childKey, TOOL, 10e6);
 
         vm.prank(address(0xBAD));
-        vm.expectRevert(AgentRegistry.NotRootDevice.selector);
+        // Refused by the role, not by an address comparison of ours.
+        vm.expectRevert(
+            abi.encodeWithSignature(
+                "EACUnauthorizedAccountRoles(uint256,uint256,address)",
+                0,
+                RegistryRolesLib.ROLE_REGISTRAR,
+                address(0xBAD)
+            )
+        );
         sub.grant(child, root);
     }
 
