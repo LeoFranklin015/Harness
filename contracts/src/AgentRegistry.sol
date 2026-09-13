@@ -184,6 +184,7 @@ contract AgentRegistry is PermissionedRegistry {
     error BadWindow();
     /// Only the Tenant's device may issue or revoke a Grant.
     error NotRootDevice();
+
     /// The batch was not signed by the Agent's key.
     error BadSignature();
     error BadNonce();
@@ -312,10 +313,8 @@ contract AgentRegistry is PermissionedRegistry {
     }
 
     /// @notice Names the resolver that answers for Agents beneath this registry.
-    function setChildResolver(address resolver_)
-        external
-        onlyRootRoles(RegistryRolesLib.ROLE_SET_RESOLVER)
-    {
+    function setChildResolver(address resolver_) external {
+        if (msg.sender != rootDevice) revert NotRootDevice();
         childResolver = resolver_;
     }
 
@@ -323,9 +322,9 @@ contract AgentRegistry is PermissionedRegistry {
     /// @dev Deployed as an EIP-1167 clone of this contract.
     function attachChildRegistry(bytes32 agentId, string calldata label)
         external
-        onlyRootRoles(RegistryRolesLib.ROLE_SET_SUBREGISTRY)
         returns (AgentRegistry child)
     {
+        if (msg.sender != rootDevice) revert NotRootDevice();
         Agent storage a = agents[agentId];
         if (!a.exists) revert NotAuthorised(Reason.AncestorGone);
         if (current[keccak256(bytes(label))] != agentId) revert GrantMismatch();
@@ -375,9 +374,9 @@ contract AgentRegistry is PermissionedRegistry {
     ///      system rests on, and the one thing neither prior art enforces.
     function grant(Grant calldata g, Grant calldata parentGrant)
         external
-        onlyRootRoles(RegistryRolesLib.ROLE_REGISTRAR)
         returns (bytes32 agentId)
     {
+        _checkRoles(ROOT_RESOURCE, RegistryRolesLib.ROLE_REGISTRAR, msg.sender);
         if (g.start >= g.end) revert BadWindow();
 
         // A registry issues children for exactly one Agent: itself.
@@ -432,10 +431,14 @@ contract AgentRegistry is PermissionedRegistry {
     function revoke(bytes32 agentId) external {
         Agent storage a = agents[agentId];
         if (!a.exists) revert NotAuthorised(Reason.AncestorGone);
-        // Whoever may unregister here, or the Agent standing itself down.
-        if (msg.sender != a.agentKey) {
-            _checkRoles(ROOT_RESOURCE, RegistryRolesLib.ROLE_UNREGISTER, msg.sender);
-        }
+        // The device, or the Agent standing itself down.
+        //
+        // Deliberately not narrowed to a role the way `grant` is. Issuing
+        // authority is the act worth gating; taking it back is the one that
+        // must never be harder to reach than handing it out. A role that can
+        // be revoked in a manager UI is exactly the wrong thing to stand
+        // between somebody and their off switch.
+        if (msg.sender != rootDevice && msg.sender != a.agentKey) revert NotRootDevice();
         a.revoked = true;
 
         // Burn the name with the authority. The token goes, the roles attached

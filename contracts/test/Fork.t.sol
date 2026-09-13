@@ -86,14 +86,16 @@ contract ForkTest is Test {
         // The name is real and owned by the Tenant.
         assertEq(reg.ownerOf(reg.getState(LibLabel.id("runner")).tokenId), OWNER);
 
-        // A second device can be admitted, and can revoke.
+        // A second device can be admitted, and can then issue.
         address spare = address(0x5A4E);
-        reg.grantRootRoles(RegistryRolesLib.ROLE_UNREGISTER, spare);
+        reg.grantRootRoles(RegistryRolesLib.ROLE_REGISTRAR, spare);
         vm.stopPrank();
 
+        Grant memory g2 = g;
+        g2.label = "second";
         vm.prank(spare);
-        reg.revoke(id);
-        console.log("revoked by the spare device");
+        reg.grant(g2, none);
+        console.log("the spare device issued an Agent");
 
         vm.stopPrank();
     }

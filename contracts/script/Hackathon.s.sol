@@ -78,6 +78,10 @@ contract Hackathon is Script {
             _commit(pk, owner);
         } else if (keccak256(bytes(stage)) == keccak256("redeploy")) {
             _redeploy(pk, owner);
+        } else if (keccak256(bytes(stage)) == keccak256("stage")) {
+            _stage(pk, owner);
+        } else if (keccak256(bytes(stage)) == keccak256("cutover")) {
+            _cutover(pk);
         } else {
             _register(pk, owner);
         }
@@ -151,6 +155,48 @@ contract Hackathon is Script {
         console.log("RESOLVER=%s", address(resolver));
         console.log("DEMO=%s", address(demo));
         console.log("EXECUTOR=%s", address(executor));
+    }
+
+    /// Stand the new tree up beside the live one, without touching `harness.eth`.
+    ///
+    /// The same work as `_redeploy` minus the one line that cuts over, so the
+    /// contracts can be exercised directly before any name points at them. A
+    /// deployment that is wrong is cheap to discover here and expensive to
+    /// discover after the name has moved.
+    function _stage(uint256 pk, address owner) internal {
+        vm.startBroadcast(pk);
+
+        AgentRegistry agentImpl = new AgentRegistry(
+            LABEL_STORE, bytes32(0), owner, owner, IExecutor(address(0)), AgentRegistry(address(0))
+        );
+        PlatformRegistry platform = new PlatformRegistry(LABEL_STORE, owner, address(agentImpl));
+        AgentResolver resolver = new AgentResolver(IAgentReadable(address(platform)), ZONE);
+
+        AgentRegistry demo =
+            platform.onboardTenant("demo", owner, owner, IExecutor(address(0)), address(resolver));
+        AllowanceExecutor executor = new AllowanceExecutor(address(demo));
+        demo.setExecutor(IExecutor(address(executor)));
+        demo.setHost(bytes4(hex"8d94d14d"), HOST_KEY, OPERATOR);
+
+        vm.stopBroadcast();
+
+        console.log("PLATFORM=%s", address(platform));
+        console.log("RESOLVER=%s", address(resolver));
+        console.log("AGENT_IMPL=%s", address(agentImpl));
+        console.log("DEMO=%s", address(demo));
+        console.log("EXECUTOR=%s", address(executor));
+        console.log("harness.eth still points at the old tree. STAGE=cutover when ready.");
+    }
+
+    /// Point `harness.eth` at a staged PlatformRegistry. One transaction.
+    function _cutover(uint256 pk) internal {
+        address platform = vm.envAddress("PLATFORM");
+        vm.startBroadcast(pk);
+        ISubregistrySetter(address(ETH_REGISTRY)).setSubregistry(
+            LibLabel.id("harness"), IRegistry(platform)
+        );
+        vm.stopBroadcast();
+        console.log("harness.eth -> %s", platform);
     }
 
     /// Reveal the commitment, then onboard a Tenant and give it one Agent.

@@ -215,9 +215,12 @@ contract ENSv2Test is Test {
 
     // --- the roles are the authority ----------------------------------------
 
-    /// Issuing and revoking are role checks, not an address comparison, so a
-    /// person holding the device can admit a second one. A ring has more than
-    /// one member; a tree with one irreplaceable issuer does not.
+    /// Issuing is a role check, not an address comparison, so a person holding
+    /// the device can admit a second one. A ring has more than one member; a
+    /// tree with one irreplaceable issuer does not.
+    ///
+    /// Revoking is deliberately left alone — see `revoke`. The off switch
+    /// should never be gated on something a manager UI can take away.
     function test_the_device_can_admit_a_second_device() public {
         address spare = address(0x5A4E);
 
@@ -229,20 +232,18 @@ contract ENSv2Test is Test {
         root.grant(g, none);
 
         vm.prank(device);
-        root.grantRootRoles(
-            RegistryRolesLib.ROLE_REGISTRAR | RegistryRolesLib.ROLE_UNREGISTER, spare
-        );
+        root.grantRootRoles(RegistryRolesLib.ROLE_REGISTRAR, spare);
 
         vm.prank(spare);
         bytes32 id = root.grant(g, none);
         assertEq(root.ownerOf(root.getState(LibLabel.id("acme")).tokenId), tenant);
 
-        vm.prank(spare);
+        // The original device can still end what the spare started.
+        vm.prank(device);
         root.revoke(id);
         assertEq(
             uint8(root.getState(LibLabel.id("acme")).status),
-            uint8(IPermissionedRegistry.Status.AVAILABLE),
-            "the spare can end what it started"
+            uint8(IPermissionedRegistry.Status.AVAILABLE)
         );
     }
 
