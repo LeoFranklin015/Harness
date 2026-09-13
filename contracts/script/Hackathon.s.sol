@@ -82,6 +82,8 @@ contract Hackathon is Script {
             _stage(pk, owner);
         } else if (keccak256(bytes(stage)) == keccak256("cutover")) {
             _cutover(pk);
+        } else if (keccak256(bytes(stage)) == keccak256("agent")) {
+            _agent(pk);
         } else {
             _register(pk, owner);
         }
@@ -197,6 +199,20 @@ contract Hackathon is Script {
         );
         vm.stopBroadcast();
         console.log("harness.eth -> %s", platform);
+    }
+
+    /// The one Agent the README asks anyone to verify, under an existing Tenant.
+    function _agent(uint256 pk) internal {
+        AgentRegistry demo = AgentRegistry(vm.envAddress("DEMO"));
+        address agentKey = vm.addr(uint256(keccak256("research-agent-key")));
+        Grant memory none;
+
+        vm.startBroadcast(pk);
+        bytes32 id = demo.grant(_grant(bytes32(0), "research", agentKey, 10e6), none);
+        vm.stopBroadcast();
+
+        console.log("research agent key: ", agentKey);
+        console.logBytes32(id);
     }
 
     /// Reveal the commitment, then onboard a Tenant and give it one Agent.

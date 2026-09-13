@@ -14,11 +14,11 @@ not see each other's names.
 
 | Ours | |
 |---|---|
-| `PlatformRegistry` — what `harness.eth` points at | `0xbDF56e17F8956268Fc018B77Dac2ebEa7b3928F7` |
-| `AgentResolver` | `0x2D5D8575A6CfaD38EB6a901Dbc41f9F827C53991` |
-| `AgentRegistry` implementation (cloned per Tenant) | `0x74dBF4a7a2C2b46b7a1C3F0e1F4d8B0aD5fC2E11` |
-| `demo`'s registry | `0xfE21595f2A1D586B8d098117799c62619707BE59` |
-| `demo`'s executor | `0x923C84Fb1A012eB8B45EC086500A7E194C895953` |
+| `PlatformRegistry` — what `harness.eth` points at | `0x99cdAaBE40DF542e34Fe1B201a602a0D775C2441` |
+| `AgentResolver` | `0xd8c8928680F91e2a9823eAb925892f51E63c4189` |
+| `AgentRegistry` implementation (cloned per Tenant) | `0x09773DDcF8d528b45C840a10b326cD66659704AB` |
+| `demo`'s registry | `0x6f7c74752801f57778881314EBd3667060058e8a` |
+| `demo`'s executor | `0x195b4B1afb0d66C602c3DD1b0AfEc39357cFF344` |
 | owner / root device | `0xE08224B2CfaF4f27E2DC7cB3f6B99AcC68Cf06c0` |
 | `research` Agent Key | `0xD98eC6253526E9b690597bD3B5f871eF7200086E` |
 
