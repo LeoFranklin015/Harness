@@ -19,6 +19,8 @@ not see each other's names.
 | `AgentRegistry` implementation (cloned per Tenant) | `0x09773DDcF8d528b45C840a10b326cD66659704AB` |
 | `demo`'s registry | `0x6f7c74752801f57778881314EBd3667060058e8a` |
 | `demo`'s executor | `0x195b4B1afb0d66C602c3DD1b0AfEc39357cFF344` |
+| `acme`'s registry | `0xfd1d82E8EedC475c4842cfA900A1BEcaD70A5452` |
+| `acme`'s executor | `0x0E90F3081FA063699c8665375419909fCFA5c631` |
 | owner / root device | `0xE08224B2CfaF4f27E2DC7cB3f6B99AcC68Cf06c0` |
 | `research` Agent Key | `0xD98eC6253526E9b690597bD3B5f871eF7200086E` |
 

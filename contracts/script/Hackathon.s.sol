@@ -84,6 +84,8 @@ contract Hackathon is Script {
             _cutover(pk);
         } else if (keccak256(bytes(stage)) == keccak256("agent")) {
             _agent(pk);
+        } else if (keccak256(bytes(stage)) == keccak256("tenant")) {
+            _tenant(pk, owner);
         } else {
             _register(pk, owner);
         }
@@ -200,6 +202,31 @@ contract Hackathon is Script {
         vm.stopBroadcast();
         console.log("harness.eth -> %s", platform);
     }
+
+    /// Onboard one more Tenant into a platform that is already live.
+    function _tenant(uint256 pk, address owner) internal {
+        PlatformRegistry platform = PlatformRegistry(vm.envAddress("PLATFORM"));
+        address resolver = vm.envAddress("RESOLVER");
+        string memory label = vm.envString("LABEL");
+
+        vm.startBroadcast(pk);
+        AgentRegistry reg =
+            platform.onboardTenant(label, owner, owner, IExecutor(address(0)), resolver);
+        AllowanceExecutor executor = new AllowanceExecutor(address(reg));
+        reg.setExecutor(IExecutor(address(executor)));
+        reg.setHost(bytes4(hex"8d94d14d"), HOST_KEY, OPERATOR);
+        bytes32 id = reg.grant(
+            _grant(bytes32(0), "runner", vm.addr(uint256(keccak256("runner-agent-key"))), 10e6),
+            _empty()
+        );
+        vm.stopBroadcast();
+
+        console.log("%s registry %s", label, address(reg));
+        console.log("executor %s", address(executor));
+        console.logBytes32(id);
+    }
+
+    function _empty() internal pure returns (Grant memory g) {}
 
     /// The one Agent the README asks anyone to verify, under an existing Tenant.
     function _agent(uint256 pk) internal {
