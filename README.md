@@ -1,7 +1,10 @@
+
 # Harness
 
 **Every AI agent gets a container with limits your Ledger sets, and you ssh to
 it by its ENS name.**
+
+<img width="1440" height="717" alt="Screenshot 2026-09-13 at 7 58 41 AM" src="https://github.com/user-attachments/assets/b6d48265-d737-4d0e-b369-17a5c0a20236" />
 
 Harness gives every AI agent its own machine, its own name, and a spending
 limit it cannot go past.
