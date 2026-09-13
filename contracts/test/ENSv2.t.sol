@@ -144,6 +144,50 @@ contract ENSv2Test is Test {
         assertEq(root.ownerOf(tokenId), tenant, "still the Tenant's");
     }
 
+    /// The records an Agent is admitted by are not the Agent's to change.
+    ///
+    /// This is the claim the ssh story rests on: sshd asks ENS for the
+    /// fingerprint, so an Agent that could repoint its own name at a resolver
+    /// of its choosing could admit any key it liked. EAC is what stops it —
+    /// the name is registered to the Tenant, and the Agent's key is granted
+    /// `ROLE_UNREGISTER` on that one name and nothing else.
+    function test_an_agent_cannot_repoint_its_own_resolver() public {
+        _issue("acme", 30 days);
+        uint256 id = LibLabel.id("acme");
+        address before = address(root.getResolver("acme"));
+
+        vm.prank(agentKey);
+        vm.expectRevert();
+        root.setResolver(id, address(0xDEAD));
+
+        vm.prank(stranger);
+        vm.expectRevert();
+        root.setResolver(id, address(0xDEAD));
+
+        assertEq(address(root.getResolver("acme")), before, "unchanged");
+    }
+
+    /// The one power an Agent does hold over its own name: ending it.
+    function test_an_agent_may_only_unregister_its_own_name() public {
+        _issue("acme", 30 days);
+
+        // A different Agent, with a key of its own.
+        Grant memory g = _grant(bytes32(0), "other", address(0x2002), 30 days);
+        Grant memory none;
+        vm.prank(device);
+        root.grant(g, none);
+
+        vm.prank(agentKey);
+        vm.expectRevert();
+        root.unregister(LibLabel.id("other"));
+
+        assertEq(
+            uint8(root.getState(LibLabel.id("other")).status),
+            uint8(IPermissionedRegistry.Status.REGISTERED),
+            "the sibling is untouched"
+        );
+    }
+
     function test_a_stranger_cannot_register_a_name() public {
         Grant memory g = _grant(bytes32(0), "acme", agentKey, 30 days);
         Grant memory none;
