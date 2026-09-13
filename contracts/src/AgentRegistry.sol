@@ -48,28 +48,24 @@ import {IExecutor} from "./interfaces/IExecutor.sol";
 /// The authority layer sits on top: narrowing, spend limits, and the walk up to
 /// ancestors, none of which ENSv2 can express.
 contract AgentRegistry is PermissionedRegistry {
-    /// What this registry may do to itself: register Agents, unregister them,
-    /// and point names at subregistries and resolvers.
+    /// What this registry may do to itself, and nothing besides.
+    ///
+    /// Three roles, each because something here would stop working without it:
+    /// `REGISTRAR` is what `grant` is gated on, `UNREGISTER` is what revoking
+    /// a name needs, and `SET_SUBREGISTRY` is what gives an Agent a registry
+    /// of its own. `SET_RESOLVER`, `SET_PARENT` and `RENEW` were granted too
+    /// and were never once used: the resolver is set at registration, the
+    /// parent edge is written directly by whoever creates the registry, and a
+    /// name here expires exactly when its Grant does, so there is nothing to
+    /// renew. Holding a role you never exercise is not free — it is a power
+    /// somebody else gets if that key is lost.
+    ///
+    /// The admin halves cover only the two a replacement device would need,
+    /// so the Admin column says something rather than repeating the Manager
+    /// one: issuing and revoking can be handed on, the rest cannot.
     uint256 internal constant ROOT_ROLES = RegistryRolesLib.ROLE_REGISTRAR
         | RegistryRolesLib.ROLE_UNREGISTER | RegistryRolesLib.ROLE_SET_SUBREGISTRY
-        | RegistryRolesLib.ROLE_SET_RESOLVER | RegistryRolesLib.ROLE_SET_PARENT
-        | RegistryRolesLib.ROLE_RENEW
-        // The admin halves, so the device can admit a second device.
-        //
-        // A ring has more than one member by design, and a tree whose only
-        // issuer is one piece of hardware ends with that hardware: lose it and
-        // the Agents beneath it can never be revoked, only waited out. These
-        // bits are what let a person enrol a replacement while they still
-        // have the first one, which is the only moment it can be done safely.
-        //
-        // They cost nothing in the meantime. Every role below is checked
-        // against whoever holds it, so granting a second holder is a
-        // deliberate transaction on the device rather than a state the tree
-        // drifts into.
-        | RegistryRolesLib.ROLE_REGISTRAR_ADMIN | RegistryRolesLib.ROLE_UNREGISTER_ADMIN
-        | RegistryRolesLib.ROLE_SET_SUBREGISTRY_ADMIN
-        | RegistryRolesLib.ROLE_SET_RESOLVER_ADMIN | RegistryRolesLib.ROLE_SET_PARENT_ADMIN
-        | RegistryRolesLib.ROLE_RENEW_ADMIN;
+        | RegistryRolesLib.ROLE_REGISTRAR_ADMIN | RegistryRolesLib.ROLE_UNREGISTER_ADMIN;
 
     /// What an Agent's owner gets over its own name: nothing.
     ///
